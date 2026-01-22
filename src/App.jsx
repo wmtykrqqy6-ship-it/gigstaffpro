@@ -280,27 +280,153 @@ const GigStaffPro = () => {
 </html>
       `;
 
-      // Send email via serverless function
-      const response = await fetch('/api/send-email', {
+  // Send assignment email notification
+  const sendAssignmentEmail = async (worker, event, assignment, calculation) => {
+    try {
+      // Get Resend API key from settings
+      const { data: apiKeyData } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', 'resend_api_key')
+        .single();
+      
+      if (!apiKeyData || !apiKeyData.setting_value) {
+        console.log('No Resend API key configured - email not sent');
+        return false;
+      }
+
+      const resendApiKey = apiKeyData.setting_value;
+      
+      // Format date nicely
+      const eventDate = new Date(event.date);
+      const dateString = eventDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+
+      // Build email HTML
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #7f1d1d 0%, #000000 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+    .event-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7f1d1d; }
+    .detail-row { margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+    .detail-label { font-weight: bold; color: #7f1d1d; display: inline-block; width: 120px; }
+    .payment-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #3b82f6; }
+    .payment-total { font-size: 24px; font-weight: bold; color: #1e40af; text-align: center; margin-top: 10px; }
+    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0;">🎰 You're Assigned!</h1>
+      <p style="margin: 10px 0 0 0; font-size: 18px;">${event.name}</p>
+    </div>
+    <div class="content">
+      <p>Hi ${worker.name},</p>
+      <p>Great news! You've been assigned to work at an upcoming event.</p>
+      
+      <div class="event-details">
+        <h2 style="margin-top: 0; color: #7f1d1d;">Event Details</h2>
+        <div class="detail-row">
+          <span class="detail-label">📅 Date:</span>
+          <span>${dateString}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🕐 Time:</span>
+          <span>${event.time}${event.end_time ? ` - ${event.end_time}` : ''}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🎯 Position:</span>
+          <span>${assignment.position}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">📍 Location:</span>
+          <span>${event.venue}${event.room ? ` - ${event.room}` : ''}</span>
+        </div>
+        ${event.address ? `
+        <div class="detail-row">
+          <span class="detail-label">🗺️ Address:</span>
+          <span>${event.address}</span>
+        </div>
+        ` : ''}
+        ${event.dress_code ? `
+        <div class="detail-row">
+          <span class="detail-label">👔 Dress Code:</span>
+          <span>${event.dress_code}</span>
+        </div>
+        ` : ''}
+        ${event.parking ? `
+        <div class="detail-row">
+          <span class="detail-label">🅿️ Parking:</span>
+          <span>${event.parking}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      ${calculation ? `
+      <div class="payment-box">
+        <h3 style="margin-top: 0; color: #1e40af;">💰 Payment Details</h3>
+        <div style="font-size: 14px;">
+          <div style="margin: 8px 0;">Base Pay (${assignment.hours} hrs × $${(calculation.basePay / assignment.hours).toFixed(2)}/hr): <strong>$${calculation.basePay.toFixed(2)}</strong></div>
+          <div style="margin: 8px 0;">Travel Pay (${assignment.miles} miles): <strong>$${calculation.travelPay.toFixed(2)}</strong></div>
+          ${assignment.is_lake_geneva ? `<div style="margin: 8px 0;">Lake Geneva Bonus: <strong>$${calculation.lakeGenevaBonus.toFixed(2)}</strong></div>` : ''}
+          ${assignment.is_holiday ? `<div style="margin: 8px 0;">Holiday Multiplier: <strong>${calculation.holidayMultiplier}×</strong></div>` : ''}
+        </div>
+        <div class="payment-total">Total: $${calculation.totalPay.toFixed(2)}</div>
+      </div>
+      ` : ''}
+
+      ${event.notes ? `
+      <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+        <strong>📝 Important Notes:</strong>
+        <p style="margin: 10px 0 0 0;">${event.notes}</p>
+      </div>
+      ` : ''}
+
+      <p style="margin-top: 30px;">We look forward to seeing you at the event!</p>
+      <p>If you have any questions, please contact us.</p>
+      
+      <p style="margin-top: 20px;">Best regards,<br><strong>GigStaffPro Team</strong></p>
+    </div>
+    <div class="footer">
+      <p>This is an automated notification from GigStaffPro</p>
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+      // Call Resend API directly
+      const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          to: worker.email,
+          from: 'GigStaffPro <onboarding@resend.dev>',
+          to: [worker.email],
           subject: `You're Assigned! ${event.name} - ${dateString}`,
-          html: emailHtml,
-          resendApiKey: resendApiKey
+          html: emailHtml
         })
       });
 
       const data = await response.json();
       
-      if (data.success) {
+      if (response.ok) {
         console.log('Email sent successfully to', worker.email);
         return true;
       } else {
-        console.error('Failed to send email:', data.error);
+        console.error('Failed to send email:', data.message);
         return false;
       }
     } catch (error) {
