@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; test
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Navigation2, Copy, Home, Briefcase, User } from 'lucide-react';
 
