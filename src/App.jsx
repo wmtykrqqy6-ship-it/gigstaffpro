@@ -111,7 +111,7 @@ const GigStaffPro = () => {
     };
   };
 
-  // Calculate distance between two addresses using Google Maps
+  // Calculate distance between two addresses using Google Maps via serverless function
   const calculateDistance = async (originAddress, destinationAddress) => {
     try {
       // Get API key from settings
@@ -128,18 +128,25 @@ const GigStaffPro = () => {
 
       const apiKey = apiKeyData.setting_value;
       
-      // Call Google Maps Distance Matrix API
-      const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(originAddress)}&destinations=${encodeURIComponent(destinationAddress)}&units=imperial&key=${apiKey}`;
+      // Call Vercel serverless function instead of direct API call
+      const response = await fetch('/api/calculate-distance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          origin: originAddress,
+          destination: destinationAddress,
+          apiKey: apiKey
+        })
+      });
       
-      const response = await fetch(url);
       const data = await response.json();
       
-      if (data.status === 'OK' && data.rows[0].elements[0].status === 'OK') {
-        const distanceInMeters = data.rows[0].elements[0].distance.value;
-        const distanceInMiles = Math.round(distanceInMeters / 1609.34); // Convert meters to miles
-        return distanceInMiles;
+      if (data.success) {
+        return data.miles;
       } else {
-        console.error('Distance Matrix API error:', data.status, data.error_message);
+        console.error('Distance calculation error:', data.error, data.details);
         return null;
       }
     } catch (error) {
