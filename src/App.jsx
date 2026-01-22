@@ -155,6 +155,160 @@ const GigStaffPro = () => {
     }
   };
 
+  // Send assignment email notification
+  const sendAssignmentEmail = async (worker, event, assignment, calculation) => {
+    try {
+      // Get Resend API key from settings
+      const { data: apiKeyData } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', 'resend_api_key')
+        .single();
+      
+      if (!apiKeyData || !apiKeyData.setting_value) {
+        console.log('No Resend API key configured - email not sent');
+        return false;
+      }
+
+      const resendApiKey = apiKeyData.setting_value;
+      
+      // Format date nicely
+      const eventDate = new Date(event.date);
+      const dateString = eventDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+
+      // Build email HTML
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #7f1d1d 0%, #000000 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+    .event-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7f1d1d; }
+    .detail-row { margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+    .detail-label { font-weight: bold; color: #7f1d1d; display: inline-block; width: 120px; }
+    .payment-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #3b82f6; }
+    .payment-total { font-size: 24px; font-weight: bold; color: #1e40af; text-align: center; margin-top: 10px; }
+    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0;">🎰 You're Assigned!</h1>
+      <p style="margin: 10px 0 0 0; font-size: 18px;">${event.name}</p>
+    </div>
+    <div class="content">
+      <p>Hi ${worker.name},</p>
+      <p>Great news! You've been assigned to work at an upcoming event.</p>
+      
+      <div class="event-details">
+        <h2 style="margin-top: 0; color: #7f1d1d;">Event Details</h2>
+        <div class="detail-row">
+          <span class="detail-label">📅 Date:</span>
+          <span>${dateString}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🕐 Time:</span>
+          <span>${event.time}${event.end_time ? ` - ${event.end_time}` : ''}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🎯 Position:</span>
+          <span>${assignment.position}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">📍 Location:</span>
+          <span>${event.venue}${event.room ? ` - ${event.room}` : ''}</span>
+        </div>
+        ${event.address ? `
+        <div class="detail-row">
+          <span class="detail-label">🗺️ Address:</span>
+          <span>${event.address}</span>
+        </div>
+        ` : ''}
+        ${event.dress_code ? `
+        <div class="detail-row">
+          <span class="detail-label">👔 Dress Code:</span>
+          <span>${event.dress_code}</span>
+        </div>
+        ` : ''}
+        ${event.parking ? `
+        <div class="detail-row">
+          <span class="detail-label">🅿️ Parking:</span>
+          <span>${event.parking}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      ${calculation ? `
+      <div class="payment-box">
+        <h3 style="margin-top: 0; color: #1e40af;">💰 Payment Details</h3>
+        <div style="font-size: 14px;">
+          <div style="margin: 8px 0;">Base Pay (${assignment.hours} hrs × $${(calculation.basePay / assignment.hours).toFixed(2)}/hr): <strong>$${calculation.basePay.toFixed(2)}</strong></div>
+          <div style="margin: 8px 0;">Travel Pay (${assignment.miles} miles): <strong>$${calculation.travelPay.toFixed(2)}</strong></div>
+          ${assignment.is_lake_geneva ? `<div style="margin: 8px 0;">Lake Geneva Bonus: <strong>$${calculation.lakeGenevaBonus.toFixed(2)}</strong></div>` : ''}
+          ${assignment.is_holiday ? `<div style="margin: 8px 0;">Holiday Multiplier: <strong>${calculation.holidayMultiplier}×</strong></div>` : ''}
+        </div>
+        <div class="payment-total">Total: $${calculation.totalPay.toFixed(2)}</div>
+      </div>
+      ` : ''}
+
+      ${event.notes ? `
+      <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+        <strong>📝 Important Notes:</strong>
+        <p style="margin: 10px 0 0 0;">${event.notes}</p>
+      </div>
+      ` : ''}
+
+      <p style="margin-top: 30px;">We look forward to seeing you at the event!</p>
+      <p>If you have any questions, please contact us.</p>
+      
+      <p style="margin-top: 20px;">Best regards,<br><strong>GigStaffPro Team</strong></p>
+    </div>
+    <div class="footer">
+      <p>This is an automated notification from GigStaffPro</p>
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+      // Send email via serverless function
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: worker.email,
+          subject: `You're Assigned! ${event.name} - ${dateString}`,
+          html: emailHtml,
+          resendApiKey: resendApiKey
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('Email sent successfully to', worker.email);
+        return true;
+      } else {
+        console.error('Failed to send email:', data.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      return false;
+    }
+  };
+
   const loadAssignments = async () => {
     try {
       const { data, error } = await supabase
@@ -2066,11 +2220,24 @@ const GigStaffPro = () => {
         
         const worker = workers.find(w => w.id === assignmentPaymentData.workerId);
         
+        // Send assignment email notification
+        const emailSent = await sendAssignmentEmail(worker, selectedEvent, {
+          position: assignmentPaymentData.position,
+          hours: hours,
+          miles: miles,
+          is_lake_geneva: isLakeGeneva,
+          is_holiday: isHoliday
+        }, calculation);
+        
         loadAssignments();
         setShowPaymentModal(false);
         setAssignmentPaymentData(null);
         
-        alert(`${worker.name} assigned to ${assignmentPaymentData.position}\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
+        if (emailSent) {
+          alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n✓ Email notification sent to ${worker.email}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
+        } else {
+          alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n⚠ Email notification failed (check Resend API key in Settings)\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
+        }
       } catch (error) {
         console.error('Error creating assignment:', error);
         alert('Error creating assignment: ' + error.message);
@@ -2910,10 +3077,13 @@ const GigStaffPro = () => {
     const [loadingWarehouse, setLoadingWarehouse] = useState(true);
     const [googleMapsApiKey, setGoogleMapsApiKey] = useState('');
     const [loadingApiKey, setLoadingApiKey] = useState(true);
+    const [resendApiKey, setResendApiKey] = useState('');
+    const [loadingResendKey, setLoadingResendKey] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
       loadGoogleMapsApiKey();
+      loadResendApiKey();
     }, []);
 
     const loadWarehouseAddress = async () => {
@@ -2989,6 +3159,63 @@ const GigStaffPro = () => {
         alert('Google Maps API key saved successfully!');
       } catch (error) {
         console.error('Error saving API key:', error);
+        alert('Error saving API key: ' + error.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const loadResendApiKey = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'resend_api_key')
+          .single();
+        
+        if (!error && data) {
+          setResendApiKey(data.setting_value || '');
+        }
+      } catch (error) {
+        console.error('Error loading Resend API key:', error);
+      } finally {
+        setLoadingResendKey(false);
+      }
+    };
+
+    const saveResendApiKey = async () => {
+      setSaving(true);
+      try {
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'resend_api_key')
+          .single();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ 
+              setting_value: resendApiKey,
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'resend_api_key');
+          
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'resend_api_key',
+              setting_value: resendApiKey
+            }]);
+          
+          if (error) throw error;
+        }
+
+        alert('Resend API key saved successfully! Workers will now receive email notifications.');
+      } catch (error) {
+        console.error('Error saving Resend API key:', error);
         alert('Error saving API key: ' + error.message);
       } finally {
         setSaving(false);
@@ -3328,6 +3555,61 @@ const GigStaffPro = () => {
               >
                 {saving ? 'Saving...' : 'Save API Key'}
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Resend API Key for Email Notifications */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Email Notifications (Resend API)</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure email notifications to automatically notify workers when they're assigned to events.
+          </p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-green-900 font-semibold mb-2">How to get your Resend API key:</p>
+            <ol className="text-sm text-green-800 space-y-1 list-decimal list-inside">
+              <li>Go to <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">Resend.com API Keys</a></li>
+              <li>Sign up (free - 3,000 emails/month)</li>
+              <li>Create an API key</li>
+              <li>Paste the key below</li>
+            </ol>
+          </div>
+          
+          {loadingResendKey ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Resend API Key</label>
+                <input
+                  type="password"
+                  value={resendApiKey}
+                  onChange={(e) => setResendApiKey(e.target.value)}
+                  placeholder="re_..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
+                  disabled={saving}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {resendApiKey ? '✓ Email notifications enabled' : 'No API key - email notifications disabled'}
+                </p>
+              </div>
+              <button
+                onClick={saveResendApiKey}
+                disabled={saving || !resendApiKey}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save API Key'}
+              </button>
+              {resendApiKey && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
+                  <strong>✓ Email notifications active!</strong> Workers will receive emails when:
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Assigned to an event (with all event details and payment info)</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
