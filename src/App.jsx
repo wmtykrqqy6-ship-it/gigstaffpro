@@ -2,19 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Navigation2, Copy, Home, Briefcase, User } from 'lucide-react';
 
-const GigStaffPro = () => {
+const  GigStaffPro = () => {
   const [userRole, setUserRole] = useState('admin');
   const [currentView, setCurrentView] = useState('dashboard');
   const [workers, setWorkers] = useState([]);
   const [events, setEvents] = useState([]);
   const [positions, setPositions] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [payRates, setPayRates] = useState({});
+  const [travelTiers, setTravelTiers] = useState([]);
+  const [bonuses, setBonuses] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddWorker, setShowAddWorker] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showEditWorker, setShowEditWorker] = useState(false);
+  const [showEditEvent, setShowEditEvent] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedWorkerForEdit, setSelectedWorkerForEdit] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [assignmentPaymentData, setAssignmentPaymentData] = useState(null);
+  const [eventPaymentSettings, setEventPaymentSettings] = useState({});
 
   // Load workers from Supabase
   useEffect(() => {
@@ -22,7 +31,102 @@ const GigStaffPro = () => {
     loadEvents();
     loadSettings();
     loadAssignments();
+    loadPaymentConfig();
   }, []);
+
+  const loadPaymentConfig = async () => {
+    try {
+      // Load pay rates
+      const { data: ratesData, error: ratesError } = await supabase
+        .from('pay_rates')
+        .select('*');
+      
+      if (!ratesError && ratesData) {
+        const ratesMap = {};
+        ratesData.forEach(rate => {
+          ratesMap[rate.position] = rate.hourly_rate;
+        });
+        setPayRates(ratesMap);
+      }
+
+      // Load travel tiers
+      const { data: tiersData, error: tiersError } = await supabase
+        .from('travel_tiers')
+        .select('*')
+        .order('min_miles', { ascending: true });
+      
+      if (!tiersError && tiersData) {
+        setTravelTiers(tiersData);
+      }
+
+      // Load bonuses
+      const { data: bonusesData, error: bonusesError } = await supabase
+        .from('bonuses')
+        .select('*');
+      
+      if (!bonusesError && bonusesData) {
+        const bonusesMap = {};
+        bonusesData.forEach(bonus => {
+          bonusesMap[bonus.bonus_name] = bonus.bonus_amount;
+        });
+        setBonuses(bonusesMap);
+      }
+    } catch (error) {
+      console.error('Error loading payment config:', error);
+    }
+  };
+
+  // Payment calculation function based on PRD
+  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday) => {
+    // Step 1: Calculate base pay
+    const hourlyRate = payRates[position] || 0;
+    const basePay = hours * hourlyRate;
+
+    // Step 2: Calculate travel pay
+    let travelPay = 0;
+    for (const tier of travelTiers) {
+      if (miles >= tier.min_miles && miles <= tier.max_miles) {
+        travelPay = tier.pay_amount;
+        break;
+      }
+    }
+
+    // Step 3: Add Lake Geneva bonus
+    const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
+
+    // Step 4: Calculate subtotal
+    const subtotal = basePay + travelPay + lakeGenevaBonus;
+
+    // Step 5: Apply holiday multiplier
+    const holidayMultiplier = isHoliday ? (bonuses['Holiday Multiplier'] || 1.5) : 1.0;
+    const totalPay = subtotal * holidayMultiplier;
+
+    return {
+      basePay: parseFloat(basePay.toFixed(2)),
+      travelPay: parseFloat(travelPay.toFixed(2)),
+      lakeGenevaBonus: parseFloat(lakeGenevaBonus.toFixed(2)),
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      holidayMultiplier: parseFloat(holidayMultiplier.toFixed(2)),
+      totalPay: parseFloat(totalPay.toFixed(2))
+    };
+  };
+
+  // Calculate distance between two addresses
+  const calculateDistance = async (address1, address2) => {
+    try {
+      // Note: This uses a simple estimation. For production, integrate Google Maps Distance Matrix API
+      // For now, we'll return null and let user enter manually
+      // In production, you'd do:
+      // const response = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(address1)}&destinations=${encodeURIComponent(address2)}&key=YOUR_API_KEY`);
+      // const data = await response.json();
+      // return Math.round(data.rows[0].elements[0].distance.value / 1609.34); // Convert meters to miles
+      
+      return null; // User will enter manually for now
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      return null;
+    }
+  };
 
   const loadAssignments = async () => {
     try {
@@ -54,6 +158,18 @@ const GigStaffPro = () => {
       } else {
         const sortedPositions = (data.setting_value || []).sort();
         setPositions(sortedPositions);
+      }
+
+      // Load warehouse address
+      const { data: warehouseData, error: warehouseError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'warehouse_address')
+        .single();
+      
+      if (!warehouseError && warehouseData) {
+        // Warehouse address loaded, stored in settings
+        console.log('Warehouse address loaded');
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -194,6 +310,194 @@ const GigStaffPro = () => {
                 <span>{label}</span>
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const EditWorkerModal = () => {
+    const [formData, setFormData] = useState({
+      name: '',
+      email: '',
+      phone: '',
+      skills: [],
+      rank: 1,
+      reliability: 5.0
+    });
+
+    useEffect(() => {
+      if (selectedWorkerForEdit) {
+        setFormData({
+          name: selectedWorkerForEdit.name || '',
+          email: selectedWorkerForEdit.email || '',
+          phone: selectedWorkerForEdit.phone || '',
+          skills: selectedWorkerForEdit.skills || [],
+          rank: selectedWorkerForEdit.rank || 1,
+          reliability: selectedWorkerForEdit.reliability || 5.0
+        });
+      }
+    }, [selectedWorkerForEdit]);
+
+    // Use positions from settings as available skills
+    const skillOptions = positions;
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      
+      if (formData.skills.length === 0) {
+        alert('Please select at least one skill');
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('workers')
+          .update(formData)
+          .eq('id', selectedWorkerForEdit.id);
+        
+        if (error) throw error;
+        
+        alert('Worker updated successfully!');
+        setShowEditWorker(false);
+        setSelectedWorkerForEdit(null);
+        loadWorkers();
+      } catch (error) {
+        console.error('Error updating worker:', error);
+        alert('Error updating worker: ' + error.message);
+      }
+    };
+
+    const toggleSkill = (skill) => {
+      setFormData(prev => ({
+        ...prev,
+        skills: prev.skills.includes(skill)
+          ? prev.skills.filter(s => s !== skill)
+          : [...prev.skills, skill]
+      }));
+    };
+
+    if (!showEditWorker || !selectedWorkerForEdit) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Edit Worker</h3>
+              <button 
+                onClick={() => {
+                  setShowEditWorker(false);
+                  setSelectedWorkerForEdit(null);
+                }} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="john@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                <input
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Skills *</label>
+                <div className="flex flex-wrap gap-2">
+                  {skillOptions.map(skill => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => toggleSkill(skill)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        formData.skills.includes(skill)
+                          ? 'bg-red-900 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rank Level</label>
+                <select
+                  value={formData.rank}
+                  onChange={(e) => setFormData({...formData, rank: parseInt(e.target.value)})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                >
+                  {[1,2,3,4,5].map(level => (
+                    <option key={level} value={level}>Level {level}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reliability Rating</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={formData.reliability}
+                  onChange={(e) => setFormData({...formData, reliability: parseFloat(e.target.value)})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
+                >
+                  Update Worker
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditWorker(false);
+                    setSelectedWorkerForEdit(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -510,11 +814,383 @@ const GigStaffPro = () => {
     );
   };
 
+  const EditEventModal = () => {
+    const [formData, setFormData] = useState({
+      name: '',
+      client: '',
+      client_contact: '',
+      date: '',
+      time: '',
+      end_time: '',
+      venue: '',
+      room: '',
+      address: '',
+      positions: [],
+      dress_code: '',
+      parking: '',
+      notes: '',
+      status: 'confirmed'
+    });
+
+    useEffect(() => {
+      if (selectedEvent) {
+        setFormData({
+          name: selectedEvent.name || '',
+          client: selectedEvent.client || '',
+          client_contact: selectedEvent.client_contact || '',
+          date: selectedEvent.date || '',
+          time: selectedEvent.time || '',
+          end_time: selectedEvent.end_time || '',
+          venue: selectedEvent.venue || '',
+          room: selectedEvent.room || '',
+          address: selectedEvent.address || '',
+          positions: selectedEvent.positions || [],
+          dress_code: selectedEvent.dress_code || '',
+          parking: selectedEvent.parking || '',
+          notes: selectedEvent.notes || '',
+          status: selectedEvent.status || 'confirmed'
+        });
+      }
+    }, [selectedEvent]);
+
+    const positionOptions = positions;
+
+    const updatePositionCount = (position, count) => {
+      setFormData(prev => {
+        const existing = prev.positions.find(p => p.name === position);
+        if (count === 0) {
+          return {
+            ...prev,
+            positions: prev.positions.filter(p => p.name !== position)
+          };
+        }
+        if (existing) {
+          return {
+            ...prev,
+            positions: prev.positions.map(p => 
+              p.name === position ? { name: position, count: parseInt(count) } : p
+            )
+          };
+        }
+        return {
+          ...prev,
+          positions: [...prev.positions, { name: position, count: parseInt(count) }]
+        };
+      });
+    };
+
+    const getPositionCount = (position) => {
+      const found = formData.positions.find(p => p.name === position);
+      return found ? found.count : 0;
+    };
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      
+      if (formData.positions.length === 0) {
+        alert('Please specify at least one staff position needed');
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('events')
+          .update(formData)
+          .eq('id', selectedEvent.id);
+        
+        if (error) throw error;
+        
+        alert('Event updated successfully!');
+        setShowEditEvent(false);
+        setSelectedEvent(null);
+        loadEvents();
+      } catch (error) {
+        console.error('Error updating event:', error);
+        alert('Error updating event: ' + error.message);
+      }
+    };
+
+    if (!showEditEvent || !selectedEvent) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+        <div className="min-h-screen flex items-center justify-center p-4 py-8">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full">
+            <div className="p-6 max-h-[85vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Edit Event</h3>
+                <button 
+                  onClick={() => {
+                    setShowEditEvent(false);
+                    setSelectedEvent(null);
+                  }} 
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Event Details */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Event Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                        <input
+                          type="time"
+                          required
+                          value={formData.time}
+                          onChange={(e) => setFormData({...formData, time: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <input
+                          type="time"
+                          value={formData.end_time}
+                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client Information */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Client Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.client}
+                        onChange={(e) => setFormData({...formData, client: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Client Contact</label>
+                      <input
+                        type="text"
+                        value={formData.client_contact}
+                        onChange={(e) => setFormData({...formData, client_contact: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Location</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.venue}
+                          onChange={(e) => setFormData({...formData, venue: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Room/Area</label>
+                        <input
+                          type="text"
+                          value={formData.room}
+                          onChange={(e) => setFormData({...formData, room: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
+                      <input
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Staffing Requirements */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Staffing Requirements</h4>
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600">Specify how many staff needed for each position:</p>
+                    {positionOptions.map(position => (
+                      <div key={position} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <label className="text-sm font-medium text-gray-700">{position}</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={getPositionCount(position)}
+                          onChange={(e) => updatePositionCount(position, e.target.value)}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Additional Details */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Additional Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Dress Code</label>
+                      <input
+                        type="text"
+                        value={formData.dress_code}
+                        onChange={(e) => setFormData({...formData, dress_code: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Parking Info</label>
+                      <input
+                        type="text"
+                        value={formData.parking}
+                        onChange={(e) => setFormData({...formData, parking: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
+                  >
+                    Update Event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditEvent(false);
+                      setSelectedEvent(null);
+                    }}
+                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const AssignWorkersModal = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+    const [showEventPaymentSettings, setShowEventPaymentSettings] = useState(false);
+    const [eventHours, setEventHours] = useState(0);
+    const [eventMiles, setEventMiles] = useState(0);
+    const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
+    const [eventIsHoliday, setEventIsHoliday] = useState(false);
     
     if (!showAssignModal || !selectedEvent) return null;
+
+    // Initialize event payment settings from event or calculate defaults
+    useEffect(() => {
+      if (selectedEvent && !eventPaymentSettings[selectedEvent.id]) {
+        // Calculate default hours
+        let defaultHours = 4;
+        if (selectedEvent.time && selectedEvent.end_time) {
+          const parseTime = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours + minutes / 60;
+          };
+          const startHours = parseTime(selectedEvent.time);
+          const endHours = parseTime(selectedEvent.end_time);
+          defaultHours = endHours - startHours;
+          if (defaultHours < 0) defaultHours += 24;
+        }
+        
+        setEventHours(defaultHours);
+        setEventMiles(0);
+        setEventIsLakeGeneva(false);
+        setEventIsHoliday(false);
+      } else if (eventPaymentSettings[selectedEvent.id]) {
+        // Load saved settings
+        const settings = eventPaymentSettings[selectedEvent.id];
+        setEventHours(settings.hours);
+        setEventMiles(settings.miles);
+        setEventIsLakeGeneva(settings.isLakeGeneva);
+        setEventIsHoliday(settings.isHoliday);
+      }
+    }, [selectedEvent]);
+
+    const saveEventPaymentSettings = () => {
+      if (eventHours <= 0) {
+        alert('Hours must be greater than 0');
+        return;
+      }
+      
+      setEventPaymentSettings({
+        ...eventPaymentSettings,
+        [selectedEvent.id]: {
+          hours: eventHours,
+          miles: eventMiles,
+          isLakeGeneva: eventIsLakeGeneva,
+          isHoliday: eventIsHoliday
+        }
+      });
+      
+      setShowEventPaymentSettings(false);
+      alert('Payment settings saved! All new assignments will use these settings.');
+    };
 
     const eventAssignments = assignments.filter(a => a.event_id === selectedEvent.id);
     
@@ -537,13 +1213,57 @@ const GigStaffPro = () => {
       try {
         const worker = workers.find(w => w.id === workerId);
         
+        // Check for time conflicts with other events
+        const workerOtherAssignments = assignments.filter(a => 
+          a.worker_id === workerId && 
+          a.event_id !== selectedEvent.id
+        );
+        
+        if (workerOtherAssignments.length > 0) {
+          const conflicts = workerOtherAssignments.filter(assignment => {
+            const otherEvent = events.find(e => e.id === assignment.event_id);
+            if (!otherEvent) return false;
+            if (otherEvent.date !== selectedEvent.date) return false;
+            
+            const parseTime = (timeStr) => {
+              if (!timeStr) return null;
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              return hours * 60 + minutes;
+            };
+            
+            const thisStart = parseTime(selectedEvent.time);
+            const thisEnd = parseTime(selectedEvent.end_time);
+            const otherStart = parseTime(otherEvent.time);
+            const otherEnd = parseTime(otherEvent.end_time);
+            
+            if (!thisEnd || !otherEnd) return false;
+            
+            const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+            return hasOverlap;
+          });
+          
+          if (conflicts.length > 0) {
+            const conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+            const conflictPosition = conflicts[0].position;
+            
+            alert(
+              `⚠️ Time Conflict!\n\n` +
+              `${worker.name} is already assigned to:\n` +
+              `"${conflictEvent.name}"\n` +
+              `${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
+              `Position: ${conflictPosition}\n\n` +
+              `This overlaps with "${selectedEvent.name}" (${selectedEvent.time}${selectedEvent.end_time ? ` - ${selectedEvent.end_time}` : ''})`
+            );
+            return;
+          }
+        }
+        
         // If worker is already assigned to a different position, confirm reassignment
         if (existingAssignment) {
           if (!confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`)) {
             return;
           }
           
-          // Delete the old assignment
           const { error: deleteError } = await supabase
             .from('assignments')
             .delete()
@@ -558,27 +1278,31 @@ const GigStaffPro = () => {
           return;
         }
 
-        const { error } = await supabase
-          .from('assignments')
-          .insert([{
-            event_id: selectedEvent.id,
-            worker_id: workerId,
-            position: position,
-            status: 'assigned'
-          }]);
-        
-        if (error) throw error;
-        
-        loadAssignments();
-        
-        if (existingAssignment) {
-          alert(`${worker.name} moved from ${existingAssignment.position} to ${position}`);
-        } else {
-          alert(`${worker.name} assigned to ${position}`);
+        // Calculate default hours from event times
+        let defaultHours = 4;
+        if (selectedEvent.time && selectedEvent.end_time) {
+          const parseTime = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours + minutes / 60;
+          };
+          const startHours = parseTime(selectedEvent.time);
+          const endHours = parseTime(selectedEvent.end_time);
+          defaultHours = endHours - startHours;
+          if (defaultHours < 0) defaultHours += 24; // Handle overnight events
         }
+
+        // Prompt for payment details
+        setAssignmentPaymentData({
+          workerId,
+          position,
+          existingAssignment,
+          defaultHours
+        });
+        setShowPaymentModal(true);
+
       } catch (error) {
-        console.error('Error assigning worker:', error);
-        alert('Error assigning worker: ' + error.message);
+        console.error('Error in assignment process:', error);
+        alert('Error in assignment process: ' + error.message);
       }
     };
 
@@ -613,6 +1337,89 @@ const GigStaffPro = () => {
                 <button onClick={() => setShowAssignModal(false)} className="text-gray-400 hover:text-gray-600">
                   <X size={24} />
                 </button>
+              </div>
+
+              {/* Event Payment Settings */}
+              <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-gray-900">Event Payment Settings</h4>
+                  <button
+                    onClick={() => setShowEventPaymentSettings(!showEventPaymentSettings)}
+                    className="text-sm text-green-700 hover:text-green-900 font-medium"
+                  >
+                    {showEventPaymentSettings ? 'Hide' : eventPaymentSettings[selectedEvent.id] ? 'Edit Settings' : 'Set Payment Details'}
+                  </button>
+                </div>
+                
+                {eventPaymentSettings[selectedEvent.id] && !showEventPaymentSettings && (
+                  <div className="text-sm text-gray-700">
+                    <p>✓ Payment configured: {eventPaymentSettings[selectedEvent.id].hours} hrs, {eventPaymentSettings[selectedEvent.id].miles} miles
+                      {eventPaymentSettings[selectedEvent.id].isLakeGeneva && ', Lake Geneva'}
+                      {eventPaymentSettings[selectedEvent.id].isHoliday && ', Holiday'}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">New assignments will automatically use these settings</p>
+                  </div>
+                )}
+
+                {!eventPaymentSettings[selectedEvent.id] && !showEventPaymentSettings && (
+                  <p className="text-sm text-gray-600">
+                    Set payment details once for this event - all assignments will use the same settings
+                  </p>
+                )}
+
+                {showEventPaymentSettings && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Hours *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={eventHours}
+                          onChange={(e) => setEventHours(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Miles *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={eventMiles}
+                          onChange={(e) => setEventMiles(parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={eventIsLakeGeneva}
+                          onChange={(e) => setEventIsLakeGeneva(e.target.checked)}
+                          className="rounded border-gray-300 text-green-700 focus:ring-green-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Lake Geneva (+$15)</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={eventIsHoliday}
+                          onChange={(e) => setEventIsHoliday(e.target.checked)}
+                          className="rounded border-gray-300 text-green-700 focus:ring-green-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Holiday (1.5×)</span>
+                      </label>
+                    </div>
+                    <button
+                      onClick={saveEventPaymentSettings}
+                      className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium"
+                    >
+                      Save Payment Settings
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Search and Filter Controls */}
@@ -793,19 +1600,77 @@ const GigStaffPro = () => {
                                 const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== pos.name);
                                 const isAvailable = !otherAssignment;
                                 
+                                // Check for time conflicts with other events on the same day
+                                const workerOtherAssignments = assignments.filter(a => 
+                                  a.worker_id === worker.id && 
+                                  a.event_id !== selectedEvent.id
+                                );
+                                
+                                let hasTimeConflict = false;
+                                let conflictEvent = null;
+                                
+                                if (workerOtherAssignments.length > 0) {
+                                  const conflicts = workerOtherAssignments.filter(assignment => {
+                                    const otherEvent = events.find(e => e.id === assignment.event_id);
+                                    if (!otherEvent || otherEvent.date !== selectedEvent.date) return false;
+                                    
+                                    const parseTime = (timeStr) => {
+                                      if (!timeStr) return null;
+                                      const [hours, minutes] = timeStr.split(':').map(Number);
+                                      return hours * 60 + minutes;
+                                    };
+                                    
+                                    const thisStart = parseTime(selectedEvent.time);
+                                    const thisEnd = parseTime(selectedEvent.end_time);
+                                    const otherStart = parseTime(otherEvent.time);
+                                    const otherEnd = parseTime(otherEvent.end_time);
+                                    
+                                    if (!thisEnd || !otherEnd) return false;
+                                    
+                                    return (thisStart < otherEnd) && (thisEnd > otherStart);
+                                  });
+                                  
+                                  if (conflicts.length > 0) {
+                                    hasTimeConflict = true;
+                                    conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+                                  }
+                                }
+                                
                                 return (
                                   <div key={worker.id} className={`flex items-center justify-between p-3 rounded ${
-                                    isAvailable ? 'bg-gray-50 hover:bg-gray-100' : 'bg-orange-50 border border-orange-200'
+                                    hasTimeConflict
+                                      ? 'bg-red-50 border-2 border-red-300'
+                                      : isAvailable 
+                                      ? 'bg-gray-50 hover:bg-gray-100' 
+                                      : 'bg-orange-50 border border-orange-200'
                                   }`}>
                                     <div className="flex-1">
-                                      <p className={`font-medium ${isAvailable ? 'text-gray-900' : 'text-orange-900'}`}>
-                                        {worker.name}
-                                        {otherAssignment && (
-                                          <span className="ml-2 text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded">
+                                      <div className="flex items-center space-x-2">
+                                        <p className={`font-medium ${
+                                          hasTimeConflict 
+                                            ? 'text-red-900' 
+                                            : isAvailable 
+                                            ? 'text-gray-900' 
+                                            : 'text-orange-900'
+                                        }`}>
+                                          {worker.name}
+                                        </p>
+                                        {hasTimeConflict && (
+                                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
+                                            TIME CONFLICT
+                                          </span>
+                                        )}
+                                        {otherAssignment && !hasTimeConflict && (
+                                          <span className="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded">
                                             Currently: {otherAssignment.position}
                                           </span>
                                         )}
-                                      </p>
+                                      </div>
+                                      {hasTimeConflict && conflictEvent && (
+                                        <p className="text-xs text-red-700 mt-1">
+                                          Conflicts with: {conflictEvent.name} ({conflictEvent.time}-{conflictEvent.end_time})
+                                        </p>
+                                      )}
                                       <div className="flex flex-wrap gap-1 mt-1">
                                         {Array.isArray(worker.skills) && worker.skills.slice(0, 3).map((skill, idx) => (
                                           <span key={idx} className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
@@ -816,13 +1681,16 @@ const GigStaffPro = () => {
                                     </div>
                                     <button
                                       onClick={() => assignWorker(worker.id, pos.name, otherAssignment)}
+                                      disabled={hasTimeConflict}
                                       className={`ml-3 px-3 py-1 rounded text-sm ${
-                                        isAvailable 
+                                        hasTimeConflict
+                                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                          : isAvailable 
                                           ? 'bg-red-900 text-white hover:bg-red-800' 
                                           : 'bg-orange-600 text-white hover:bg-orange-700'
                                       }`}
                                     >
-                                      {isAvailable ? 'Assign' : 'Reassign'}
+                                      {hasTimeConflict ? 'Blocked' : isAvailable ? 'Assign' : 'Reassign'}
                                     </button>
                                   </div>
                                 );
@@ -895,7 +1763,8 @@ const GigStaffPro = () => {
       total_gigs: 0
     });
 
-    const skillOptions = ['Dealer', 'Poker', 'Blackjack', 'Roulette', 'Craps', 'Texas Holdem', 'Host', 'Bartender', 'Mixology', 'Customer Service'];
+    // Use positions from settings as available skills
+    const skillOptions = positions;
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -1036,64 +1905,581 @@ const GigStaffPro = () => {
     );
   };
 
+  const PaymentCalculatorModal = () => {
+    const [hours, setHours] = useState(0);
+    const [miles, setMiles] = useState(0);
+    const [isLakeGeneva, setIsLakeGeneva] = useState(false);
+    const [isHoliday, setIsHoliday] = useState(false);
+    const [calculation, setCalculation] = useState(null);
+
+    useEffect(() => {
+      if (assignmentPaymentData) {
+        // Check if event has payment settings configured
+        if (eventPaymentSettings[selectedEvent.id]) {
+          const settings = eventPaymentSettings[selectedEvent.id];
+          setHours(settings.hours);
+          setMiles(settings.miles);
+          setIsLakeGeneva(settings.isLakeGeneva);
+          setIsHoliday(settings.isHoliday);
+        } else {
+          setHours(assignmentPaymentData.defaultHours || 0);
+          setMiles(0);
+          setIsLakeGeneva(false);
+          setIsHoliday(false);
+        }
+      }
+    }, [assignmentPaymentData]);
+
+    useEffect(() => {
+      if (assignmentPaymentData && hours > 0) {
+        const calc = calculatePay(
+          assignmentPaymentData.position,
+          hours,
+          miles,
+          isLakeGeneva,
+          isHoliday
+        );
+        setCalculation(calc);
+      }
+    }, [hours, miles, isLakeGeneva, isHoliday, assignmentPaymentData]);
+
+    const handleConfirm = async () => {
+      if (!assignmentPaymentData || !calculation) return;
+      
+      if (hours <= 0) {
+        alert('Hours must be greater than 0');
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .insert([{
+            event_id: selectedEvent.id,
+            worker_id: assignmentPaymentData.workerId,
+            position: assignmentPaymentData.position,
+            status: 'assigned',
+            hours: hours,
+            miles: miles,
+            is_lake_geneva: isLakeGeneva,
+            is_holiday: isHoliday,
+            base_pay: calculation.basePay,
+            travel_pay: calculation.travelPay,
+            lake_geneva_bonus: calculation.lakeGenevaBonus,
+            subtotal: calculation.subtotal,
+            holiday_multiplier: calculation.holidayMultiplier,
+            total_pay: calculation.totalPay,
+            payment_status: 'pending'
+          }]);
+        
+        if (error) throw error;
+        
+        const worker = workers.find(w => w.id === assignmentPaymentData.workerId);
+        
+        loadAssignments();
+        setShowPaymentModal(false);
+        setAssignmentPaymentData(null);
+        
+        alert(`${worker.name} assigned to ${assignmentPaymentData.position}\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
+      } catch (error) {
+        console.error('Error creating assignment:', error);
+        alert('Error creating assignment: ' + error.message);
+      }
+    };
+
+    if (!showPaymentModal || !assignmentPaymentData) return null;
+
+    const worker = workers.find(w => w.id === assignmentPaymentData.workerId);
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Calculate Payment</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {worker?.name} • {assignmentPaymentData.position}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setAssignmentPaymentData(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Notice if using event settings */}
+              {eventPaymentSettings[selectedEvent.id] && (
+                <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    ✓ Using event payment settings. You can adjust these values if needed for this specific assignment.
+                  </p>
+                </div>
+              )}
+
+              {/* Input Section */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                <h4 className="font-semibold text-gray-900">Event Details</h4>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hours Worked *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={hours}
+                    onChange={(e) => setHours(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Miles from Warehouse *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={miles}
+                    onChange={(e) => setMiles(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="lakeGeneva"
+                    checked={isLakeGeneva}
+                    onChange={(e) => setIsLakeGeneva(e.target.checked)}
+                    className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                  />
+                  <label htmlFor="lakeGeneva" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Lake Geneva Event (+$15)
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="holiday"
+                    checked={isHoliday}
+                    onChange={(e) => setIsHoliday(e.target.checked)}
+                    className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                  />
+                  <label htmlFor="holiday" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Holiday Pay (1.5× multiplier)
+                  </label>
+                </div>
+              </div>
+
+              {/* Calculation Breakdown */}
+              {calculation && hours > 0 && (
+                <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-3">Payment Breakdown</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-700">Base Pay ({hours} hrs × ${payRates[assignmentPaymentData.position] || 0}/hr):</span>
+                      <span className="font-semibold text-gray-900">${calculation.basePay.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-700">Travel Pay ({miles} miles):</span>
+                      <span className="font-semibold text-gray-900">${calculation.travelPay.toFixed(2)}</span>
+                    </div>
+                    {isLakeGeneva && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-700">Lake Geneva Bonus:</span>
+                        <span className="font-semibold text-gray-900">${calculation.lakeGenevaBonus.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-blue-300">
+                      <span className="text-gray-700">Subtotal:</span>
+                      <span className="font-semibold text-gray-900">${calculation.subtotal.toFixed(2)}</span>
+                    </div>
+                    {isHoliday && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Holiday Multiplier:</span>
+                          <span className="font-semibold text-gray-900">{calculation.holidayMultiplier}×</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t-2 border-blue-400">
+                          <span className="text-gray-900 font-bold">Total Pay:</span>
+                          <span className="font-bold text-blue-600 text-lg">${calculation.totalPay.toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    {!isHoliday && (
+                      <div className="flex justify-between pt-2 border-t-2 border-blue-400">
+                        <span className="text-gray-900 font-bold">Total Pay:</span>
+                        <span className="font-bold text-blue-600 text-lg">${calculation.totalPay.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={handleConfirm}
+                  disabled={hours <= 0}
+                  className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  Confirm Assignment
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setAssignmentPaymentData(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const DashboardView = () => {
     const upcomingEvents = events.filter(e => e.status !== 'completed' && e.status !== 'cancelled').length;
-    const needStaffing = events.filter(e => e.status === 'needs-staff').length;
+    const needStaffing = events.filter(e => {
+      const eventAssignments = assignments.filter(a => a.event_id === e.id);
+      const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
+      const filled = eventAssignments.length;
+      return filled < totalNeeded && totalNeeded > 0;
+    }).length;
+
+    // Get recent activity
+    const getRecentActivity = () => {
+      const activities = [];
+      
+      // Recent events (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      events.forEach(event => {
+        const eventDate = new Date(event.created_at);
+        if (eventDate >= sevenDaysAgo) {
+          activities.push({
+            type: 'event_created',
+            date: event.created_at,
+            message: `Event created: ${event.name}`,
+            icon: Calendar,
+            color: 'blue'
+          });
+        }
+      });
+
+      // Recent assignments (last 7 days)
+      assignments.forEach(assignment => {
+        const assignmentDate = new Date(assignment.created_at);
+        if (assignmentDate >= sevenDaysAgo) {
+          const worker = workers.find(w => w.id === assignment.worker_id);
+          const event = events.find(e => e.id === assignment.event_id);
+          if (worker && event) {
+            activities.push({
+              type: 'assignment',
+              date: assignment.created_at,
+              message: `${worker.name} assigned to ${event.name} as ${assignment.position}`,
+              icon: Users,
+              color: 'green'
+            });
+          }
+        }
+      });
+
+      // Sort by date (newest first) and take top 10
+      return activities
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10);
+    };
+
+    const recentActivity = getRecentActivity();
+
+    // Navigate to events filtered by status
+    const viewEventsByFilter = (filter) => {
+      setCurrentView('events');
+      // In a full implementation, you'd pass the filter to EventsView
+      // For now, just navigate to events
+    };
 
     return (
       <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setShowAddEvent(true)}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
+            >
+              <Plus size={18} />
+              <span>New Event</span>
+            </button>
+            <button
+              onClick={() => setShowAddWorker(true)}
+              className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center space-x-2 text-sm"
+            >
+              <Plus size={18} />
+              <span>New Worker</span>
+            </button>
+          </div>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-red-600">
+          <button
+            onClick={() => setCurrentView('events')}
+            className="bg-white p-6 rounded-lg shadow border-l-4 border-red-600 hover:shadow-lg transition-shadow text-left"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Upcoming Events</p>
                 <p className="text-3xl font-bold text-gray-900">{upcomingEvents}</p>
+                <p className="text-xs text-red-600 mt-1">Click to view all →</p>
               </div>
               <Calendar className="text-red-600" size={40} />
             </div>
-          </div>
+          </button>
           
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+          <button
+            onClick={() => viewEventsByFilter('needs-staff')}
+            className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500 hover:shadow-lg transition-shadow text-left"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Need Staffing</p>
                 <p className="text-3xl font-bold text-gray-900">{needStaffing}</p>
+                <p className="text-xs text-yellow-600 mt-1">Click to view →</p>
               </div>
               <AlertCircle className="text-yellow-500" size={40} />
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600">
+          <button
+            onClick={() => setCurrentView('staff')}
+            className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600 hover:shadow-lg transition-shadow text-left"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Active Workers</p>
                 <p className="text-3xl font-bold text-gray-900">{workers.length}</p>
+                <p className="text-xs text-green-600 mt-1">Click to manage →</p>
               </div>
               <Users className="text-green-600" size={40} />
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600">
+          <button
+            onClick={() => setCurrentView('schedule')}
+            className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600 hover:shadow-lg transition-shadow text-left"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Total Events</p>
                 <p className="text-3xl font-bold text-gray-900">{events.length}</p>
+                <p className="text-xs text-blue-600 mt-1">View schedule →</p>
               </div>
               <DollarSign className="text-blue-600" size={40} />
             </div>
+          </button>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={() => setShowAddEvent(true)}
+              className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all group"
+            >
+              <div className="bg-red-100 p-2 rounded group-hover:bg-red-200">
+                <Calendar className="text-red-600" size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-gray-900">Create Event</p>
+                <p className="text-xs text-gray-600">Add new casino party</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setShowAddWorker(true)}
+              className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all group"
+            >
+              <div className="bg-green-100 p-2 rounded group-hover:bg-green-200">
+                <Users className="text-green-600" size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-gray-900">Add Worker</p>
+                <p className="text-xs text-gray-600">Onboard new staff</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('schedule')}
+              className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group"
+            >
+              <div className="bg-blue-100 p-2 rounded group-hover:bg-blue-200">
+                <Clock className="text-blue-600" size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-gray-900">View Schedule</p>
+                <p className="text-xs text-gray-600">Calendar overview</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('settings')}
+              className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all group"
+            >
+              <div className="bg-purple-100 p-2 rounded group-hover:bg-purple-200">
+                <Settings className="text-purple-600" size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-gray-900">Settings</p>
+                <p className="text-xs text-gray-600">Manage positions</p>
+              </div>
+            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-2">
-            <p className="text-gray-700">Your casino party staffing platform is ready to use!</p>
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-green-600 font-semibold">Database connected - {workers.length} workers loaded</p>
-              <p className="text-blue-600 text-sm mt-2">Click "Events" tab to create and manage casino party events!</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Activity */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
+              <span className="text-xs text-gray-500">Last 7 days</span>
             </div>
+            
+            {recentActivity.length === 0 ? (
+              <div className="text-center py-8">
+                <History size={48} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-gray-600">No recent activity</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {recentActivity.map((activity, index) => {
+                  const Icon = activity.icon;
+                  const colorClasses = {
+                    blue: 'bg-blue-100 text-blue-600',
+                    green: 'bg-green-100 text-green-600',
+                    red: 'bg-red-100 text-red-600',
+                    yellow: 'bg-yellow-100 text-yellow-600'
+                  };
+                  
+                  return (
+                    <div key={index} className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded">
+                      <div className={`p-2 rounded ${colorClasses[activity.color]}`}>
+                        <Icon size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900">{activity.message}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(activity.date).toLocaleString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Upcoming Events Today/This Week */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">This Week's Events</h3>
+            {(() => {
+              const today = new Date();
+              const endOfWeek = new Date();
+              endOfWeek.setDate(today.getDate() + 7);
+              
+              const weekEvents = events
+                .filter(event => {
+                  const eventDate = new Date(event.date);
+                  return eventDate >= today && eventDate <= endOfWeek;
+                })
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .slice(0, 5);
+
+              if (weekEvents.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-600">No events this week</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {weekEvents.map(event => {
+                    const eventAssignments = assignments.filter(a => a.event_id === event.id);
+                    const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
+                    const filled = eventAssignments.length;
+                    const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
+                    
+                    const eventDate = new Date(event.date);
+                    const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+                    
+                    return (
+                      <div 
+                        key={event.id} 
+                        className="p-3 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => {
+                          setSelectedEvent(event);
+                          setShowAssignModal(true);
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold text-gray-900">{event.name}</h4>
+                            {daysUntil === 0 && (
+                              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded font-semibold">
+                                TODAY
+                              </span>
+                            )}
+                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {filled}/{totalNeeded}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-4 text-xs text-gray-600">
+                          <span className="flex items-center space-x-1">
+                            <Calendar size={12} />
+                            <span>{eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <Clock size={12} />
+                            <span>{event.time}</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <MapPin size={12} />
+                            <span>{event.venue}</span>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1195,7 +2581,10 @@ const GigStaffPro = () => {
                         <span>Assign Staff</span>
                       </button>
                       <button 
-                        onClick={() => alert('Edit feature coming soon!')}
+                        onClick={() => {
+                          setSelectedEvent(event);
+                          setShowEditEvent(true);
+                        }}
                         className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded transition-colors"
                         title="Edit event"
                       >
@@ -1393,7 +2782,10 @@ const GigStaffPro = () => {
                       <td className="py-4 px-4">
                         <div className="flex space-x-2">
                           <button 
-                            onClick={() => alert('Edit feature coming soon!')}
+                            onClick={() => {
+                              setSelectedWorkerForEdit(worker);
+                              setShowEditWorker(true);
+                            }}
                             className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
                             title="Edit worker"
                           >
@@ -1424,6 +2816,73 @@ const GigStaffPro = () => {
     const [editingPosition, setEditingPosition] = useState(null);
     const [editValue, setEditValue] = useState('');
     const [saving, setSaving] = useState(false);
+    const [warehouseAddress, setWarehouseAddress] = useState('');
+    const [loadingWarehouse, setLoadingWarehouse] = useState(true);
+
+    useEffect(() => {
+      loadWarehouseAddress();
+    }, []);
+
+    const loadWarehouseAddress = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'warehouse_address')
+          .single();
+        
+        if (!error && data) {
+          setWarehouseAddress(data.setting_value || '');
+        } else {
+          // Set default for Vegas on Wheels
+          setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
+        }
+      } catch (error) {
+        console.error('Error loading warehouse address:', error);
+        setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
+      } finally {
+        setLoadingWarehouse(false);
+      }
+    };
+
+    const saveWarehouseAddress = async () => {
+      setSaving(true);
+      try {
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'warehouse_address')
+          .single();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ 
+              setting_value: warehouseAddress,
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'warehouse_address');
+          
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'warehouse_address',
+              setting_value: warehouseAddress
+            }]);
+          
+          if (error) throw error;
+        }
+
+        alert('Warehouse address saved successfully!');
+      } catch (error) {
+        console.error('Error saving warehouse address:', error);
+        alert('Error saving warehouse address: ' + error.message);
+      } finally {
+        setSaving(false);
+      }
+    };
 
     const savePositions = async (updatedPositions) => {
       setSaving(true);
@@ -1532,7 +2991,15 @@ const GigStaffPro = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-4">Position Types</h3>
           <p className="text-sm text-gray-600 mb-4">
-            Customize the staff positions available when creating events. These will appear in the staffing requirements section.
+            Customize the positions available in your system. These positions will be used for:
+          </p>
+          <ul className="text-sm text-gray-600 mb-4 list-disc list-inside space-y-1">
+            <li><strong>Event Staffing:</strong> When creating events, you'll select how many of each position you need</li>
+            <li><strong>Worker Skills:</strong> When adding/editing workers, these become the available skills they can have</li>
+            <li><strong>Assignment Matching:</strong> Workers are automatically matched to positions based on their skills</li>
+          </ul>
+          <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded mb-4">
+            💡 Tip: When you add a new position like "Baccarat Dealer", it immediately becomes available both as an event position AND a worker skill.
           </p>
 
           {/* Add New Position */}
@@ -1632,6 +3099,41 @@ const GigStaffPro = () => {
           )}
         </div>
 
+        {/* Warehouse Address */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Warehouse Address</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            This address is used to automatically calculate travel distance for payment calculations.
+          </p>
+          
+          {loadingWarehouse ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                <input
+                  type="text"
+                  value={warehouseAddress}
+                  onChange={(e) => setWarehouseAddress(e.target.value)}
+                  placeholder="123 Main St, City, State ZIP"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  disabled={saving}
+                />
+              </div>
+              <button
+                onClick={saveWarehouseAddress}
+                disabled={saving || !warehouseAddress}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Address'}
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Future Settings Sections */}
         <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">More Settings Coming Soon</h3>
@@ -1643,10 +3145,721 @@ const GigStaffPro = () => {
     );
   };
 
+  const ScheduleView = () => {
+    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedWorker, setSelectedWorker] = useState(null);
+
+    // Get events for a specific date
+    const getEventsForDate = (date) => {
+      const dateStr = date.toISOString().split('T')[0];
+      return events.filter(event => event.date === dateStr);
+    };
+
+    // Get all assignments for a specific worker
+    const getWorkerAssignments = (workerId) => {
+      return assignments.filter(a => a.worker_id === workerId).map(assignment => {
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, event };
+      }).filter(a => a.event); // Only include assignments with valid events
+    };
+
+    // Generate calendar days for current month
+    const generateCalendarDays = () => {
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDayOfWeek = firstDay.getDay();
+      
+      const days = [];
+      
+      // Add empty cells for days before month starts
+      for (let i = 0; i < startingDayOfWeek; i++) {
+        days.push(null);
+      }
+      
+      // Add days of the month
+      for (let day = 1; day <= daysInMonth; day++) {
+        days.push(new Date(year, month, day));
+      }
+      
+      return days;
+    };
+
+    const changeMonth = (direction) => {
+      const newDate = new Date(selectedDate);
+      newDate.setMonth(newDate.getMonth() + direction);
+      setSelectedDate(newDate);
+    };
+
+    const formatMonthYear = (date) => {
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    const isToday = (date) => {
+      if (!date) return false;
+      const today = new Date();
+      return date.toDateString() === today.toDateString();
+    };
+
+    const CalendarView = () => {
+      const days = generateCalendarDays();
+      const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+      return (
+        <div className="bg-white rounded-lg shadow p-6">
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-900">{formatMonthYear(selectedDate)}</h3>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => changeMonth(-1)}
+                className="p-2 hover:bg-gray-100 rounded"
+              >
+                <ChevronDown size={20} className="transform rotate-90" />
+              </button>
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => changeMonth(1)}
+                className="p-2 hover:bg-gray-100 rounded"
+              >
+                <ChevronDown size={20} className="transform -rotate-90" />
+              </button>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {/* Week day headers */}
+            {weekDays.map(day => (
+              <div key={day} className="text-center font-semibold text-gray-700 py-2">
+                {day}
+              </div>
+            ))}
+            
+            {/* Calendar days */}
+            {days.map((date, index) => {
+              if (!date) {
+                return <div key={`empty-${index}`} className="min-h-24 p-2 bg-gray-50 rounded"></div>;
+              }
+              
+              const dayEvents = getEventsForDate(date);
+              const hasEvents = dayEvents.length > 0;
+              
+              return (
+                <div
+                  key={date.toISOString()}
+                  className={`min-h-24 p-2 border rounded cursor-pointer transition-colors ${
+                    isToday(date)
+                      ? 'bg-red-50 border-red-300 ring-2 ring-red-200'
+                      : hasEvents
+                      ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                      : 'bg-white hover:bg-gray-50'
+                  }`}
+                  onClick={() => {
+                    setSelectedDate(date);
+                    if (hasEvents) {
+                      setViewMode('list');
+                    }
+                  }}
+                >
+                  <div className="text-sm font-semibold text-gray-900 mb-1">
+                    {date.getDate()}
+                  </div>
+                  {dayEvents.slice(0, 2).map(event => {
+                    const eventAssignments = assignments.filter(a => a.event_id === event.id);
+                    const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
+                    const filled = eventAssignments.length;
+                    const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className={`text-xs p-1 rounded mb-1 truncate ${
+                          isFullyStaffed ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
+                        }`}
+                        title={event.name}
+                      >
+                        {event.name}
+                      </div>
+                    );
+                  })}
+                  {dayEvents.length > 2 && (
+                    <div className="text-xs text-gray-600 font-medium">
+                      +{dayEvents.length - 2} more
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center space-x-4 mt-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-green-600 rounded"></div>
+              <span className="text-gray-700">Fully Staffed</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+              <span className="text-gray-700">Needs Staff</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-red-50 border-2 border-red-300 rounded"></div>
+              <span className="text-gray-700">Today</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ListView = () => {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const dayEvents = events.filter(event => event.date === dateStr);
+
+      return (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold text-gray-900">
+                {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </h3>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className="text-red-900 hover:text-red-700 flex items-center space-x-1"
+              >
+                <Calendar size={18} />
+                <span>Back to Calendar</span>
+              </button>
+            </div>
+
+            {dayEvents.length === 0 ? (
+              <div className="text-center py-12">
+                <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-gray-600">No events scheduled for this date</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {dayEvents.map(event => {
+                  const eventAssignments = assignments.filter(a => a.event_id === event.id);
+                  const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
+                  const filled = eventAssignments.length;
+                  
+                  return (
+                    <div key={event.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="text-lg font-bold text-gray-900">{event.name}</h4>
+                          <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                            <span className="flex items-center space-x-1">
+                              <Clock size={14} />
+                              <span>{event.time}{event.end_time ? ` - ${event.end_time}` : ''}</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <MapPin size={14} />
+                              <span>{event.venue}</span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            filled >= totalNeeded && totalNeeded > 0
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {filled}/{totalNeeded} Staffed
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Assigned Workers */}
+                      {eventAssignments.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-sm font-semibold text-gray-700 mb-2">Assigned Staff:</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {eventAssignments.map(assignment => {
+                              const worker = workers.find(w => w.id === assignment.worker_id);
+                              if (!worker) return null;
+                              
+                              return (
+                                <div key={assignment.id} className="flex items-center space-x-2 text-sm bg-gray-50 p-2 rounded">
+                                  <CheckCircle size={16} className="text-green-600" />
+                                  <span className="font-medium text-gray-900">{worker.name}</span>
+                                  <span className="text-gray-600">•</span>
+                                  <span className="text-gray-600">{assignment.position}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedEvent(event);
+                            setShowAssignModal(true);
+                          }}
+                          className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                        >
+                          Manage Staff
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const WorkerScheduleView = () => {
+      if (!selectedWorker) {
+        return (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Schedule</h3>
+            <p className="text-gray-600 mb-4">Select a worker to see their schedule:</p>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {workers.map(worker => {
+                const workerAssignments = getWorkerAssignments(worker.id);
+                return (
+                  <button
+                    key={worker.id}
+                    onClick={() => setSelectedWorker(worker)}
+                    className="w-full text-left p-3 hover:bg-gray-50 rounded border flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">{worker.name}</p>
+                      <p className="text-sm text-gray-600">{workerAssignments.length} upcoming events</p>
+                    </div>
+                    <ChevronDown size={20} className="transform -rotate-90 text-gray-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      const workerAssignments = getWorkerAssignments(selectedWorker.id)
+        .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
+
+      return (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">{selectedWorker.name}'s Schedule</h3>
+              <p className="text-sm text-gray-600 mt-1">{workerAssignments.length} upcoming events</p>
+            </div>
+            <button
+              onClick={() => setSelectedWorker(null)}
+              className="text-red-900 hover:text-red-700"
+            >
+              Back to Workers
+            </button>
+          </div>
+
+          {workerAssignments.length === 0 ? (
+            <div className="text-center py-12">
+              <Users size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-600">No events assigned yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {workerAssignments.map(assignment => (
+                <div key={assignment.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-bold text-gray-900">{assignment.event.name}</h4>
+                      <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                        <span className="flex items-center space-x-1">
+                          <Calendar size={14} />
+                          <span>{new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        </span>
+                        <span className="flex items-center space-x-1">
+                          <Clock size={14} />
+                          <span>{assignment.event.time}</span>
+                        </span>
+                        <span className="flex items-center space-x-1">
+                          <MapPin size={14} />
+                          <span>{assignment.event.venue}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                        {assignment.position}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-gray-900">Schedule</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+                viewMode === 'calendar'
+                  ? 'bg-red-900 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              <Calendar size={18} />
+              <span>Calendar</span>
+            </button>
+            <button
+              onClick={() => setViewMode('worker')}
+              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+                viewMode === 'worker'
+                  ? 'bg-red-900 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              <Users size={18} />
+              <span>By Worker</span>
+            </button>
+          </div>
+        </div>
+
+        {viewMode === 'calendar' && <CalendarView />}
+        {viewMode === 'list' && <ListView />}
+        {viewMode === 'worker' && <WorkerScheduleView />}
+      </div>
+    );
+  };
+
+  const WorkerPortalView = () => {
+    // For demo purposes, use first worker. In production, this would be based on logged-in user
+    const [selectedWorkerId, setSelectedWorkerId] = useState(null);
+    const [workerSelectMode, setWorkerSelectMode] = useState(true);
+
+    // Select a worker for demo
+    if (workerSelectMode) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Select Your Profile</h2>
+            <p className="text-gray-600 mb-6">
+              In production, you would be automatically logged in. For demo purposes, select a worker profile:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {workers.map(worker => (
+                <button
+                  key={worker.id}
+                  onClick={() => {
+                    setSelectedWorkerId(worker.id);
+                    setWorkerSelectMode(false);
+                  }}
+                  className="text-left p-4 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:shadow-md transition-all"
+                >
+                  <p className="font-bold text-gray-900">{worker.name}</p>
+                  <p className="text-sm text-gray-600">{worker.email}</p>
+                  <div className="flex items-center space-x-1 mt-2">
+                    <Star size={14} className="text-yellow-500 fill-yellow-500" />
+                    <span className="text-sm font-semibold">{worker.reliability}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const currentWorker = workers.find(w => w.id === selectedWorkerId);
+    if (!currentWorker) return null;
+
+    const workerAssignments = assignments
+      .filter(a => a.worker_id === currentWorker.id)
+      .map(assignment => {
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, event };
+      })
+      .filter(a => a.event);
+
+    const upcomingAssignments = workerAssignments
+      .filter(a => new Date(a.event.date) >= new Date())
+      .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
+
+    const pastAssignments = workerAssignments
+      .filter(a => new Date(a.event.date) < new Date())
+      .sort((a, b) => new Date(b.event.date) - new Date(a.event.date));
+
+    const totalEarnings = currentWorker.earnings || 0;
+
+    return (
+      <div className="space-y-6">
+        {/* Header with worker info */}
+        <div className="bg-gradient-to-r from-red-900 to-black text-white rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">Welcome, {currentWorker.name}!</h2>
+              <p className="text-red-200">Your worker portal</p>
+            </div>
+            <button
+              onClick={() => setWorkerSelectMode(true)}
+              className="text-sm bg-red-700 px-3 py-2 rounded hover:bg-red-600"
+            >
+              Switch Profile
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Upcoming Events</p>
+                <p className="text-3xl font-bold text-gray-900">{upcomingAssignments.length}</p>
+              </div>
+              <Calendar className="text-blue-600" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Total Gigs</p>
+                <p className="text-3xl font-bold text-gray-900">{currentWorker.total_gigs}</p>
+              </div>
+              <Briefcase className="text-green-600" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Reliability Rating</p>
+                <div className="flex items-center space-x-1">
+                  <p className="text-3xl font-bold text-gray-900">{currentWorker.reliability}</p>
+                  <Star size={24} className="text-yellow-500 fill-yellow-500" />
+                </div>
+              </div>
+              <Award className="text-yellow-600" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Total Earnings</p>
+                <p className="text-3xl font-bold text-gray-900">${totalEarnings.toLocaleString()}</p>
+              </div>
+              <DollarSign className="text-purple-600" size={40} />
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Info */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Your Profile</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <Mail size={16} />
+                  <span>{currentWorker.email}</span>
+                </div>
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <Phone size={16} />
+                  <span>{currentWorker.phone}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Your Skills</h4>
+              <div className="flex flex-wrap gap-2">
+                {Array.isArray(currentWorker.skills) && currentWorker.skills.map((skill, idx) => (
+                  <span key={idx} className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full font-medium">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-gray-600">Rank Level</p>
+                <p className="font-semibold text-gray-900">Level {currentWorker.rank}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">No Shows</p>
+                <p className="font-semibold text-gray-900">{currentWorker.no_shows || 0}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Last Worked</p>
+                <p className="font-semibold text-gray-900">
+                  {currentWorker.last_worked 
+                    ? new Date(currentWorker.last_worked).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-600">Member Since</p>
+                <p className="font-semibold text-gray-900">
+                  {new Date(currentWorker.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Upcoming Events */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Your Upcoming Events</h3>
+          {upcomingAssignments.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-600">No upcoming events scheduled</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {upcomingAssignments.map(assignment => {
+                const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
+                const isToday = daysUntil === 0;
+                const isTomorrow = daysUntil === 1;
+                
+                return (
+                  <div 
+                    key={assignment.id} 
+                    className={`border-l-4 p-4 rounded-r-lg ${
+                      isToday ? 'bg-red-50 border-red-500' : 
+                      isTomorrow ? 'bg-yellow-50 border-yellow-500' : 
+                      'bg-gray-50 border-blue-500'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h4 className="font-bold text-gray-900">{assignment.event.name}</h4>
+                          {isToday && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                              TODAY
+                            </span>
+                          )}
+                          {isTomorrow && (
+                            <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                              TOMORROW
+                            </span>
+                          )}
+                        </div>
+                        <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">
+                          {assignment.position}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-sm text-gray-700">
+                      <div className="flex items-center space-x-2">
+                        <Calendar size={16} className="text-gray-500" />
+                        <span>
+                          {new Date(assignment.event.date).toLocaleDateString('en-US', { 
+                            weekday: 'short',
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Clock size={16} className="text-gray-500" />
+                        <span>{assignment.event.time}{assignment.event.end_time ? ` - ${assignment.event.end_time}` : ''}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <MapPin size={16} className="text-gray-500" />
+                        <span>{assignment.event.venue}</span>
+                      </div>
+                    </div>
+
+                    {assignment.event.address && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">Address:</span> {assignment.event.address}
+                      </div>
+                    )}
+
+                    {assignment.event.dress_code && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">Dress Code:</span> {assignment.event.dress_code}
+                      </div>
+                    )}
+
+                    {assignment.event.parking && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">Parking:</span> {assignment.event.parking}
+                      </div>
+                    )}
+
+                    {assignment.event.notes && (
+                      <div className="mt-3 pt-3 border-t text-sm text-gray-600">
+                        <span className="font-medium">Notes:</span> {assignment.event.notes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Past Events */}
+        {pastAssignments.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Past Events</h3>
+            <div className="space-y-3">
+              {pastAssignments.slice(0, 5).map(assignment => (
+                <div key={assignment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{assignment.event.name}</p>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                      <span>{new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span>•</span>
+                      <span>{assignment.position}</span>
+                      <span>•</span>
+                      <span>{assignment.event.venue}</span>
+                    </div>
+                  </div>
+                  <CheckCircle size={20} className="text-green-600" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderView = () => {
+    // Worker mode - show worker portal instead of admin views
+    if (userRole === 'worker') {
+      return <WorkerPortalView />;
+    }
+    
+    // Admin views
     if (currentView === 'dashboard') return <DashboardView />;
     if (currentView === 'staff') return <StaffView />;
     if (currentView === 'events') return <EventsView />;
+    if (currentView === 'schedule') return <ScheduleView />;
     if (currentView === 'settings') return <SettingsView />;
     
     return (
@@ -1665,8 +3878,11 @@ const GigStaffPro = () => {
         {renderView()}
       </div>
       <AddWorkerModal />
+      <EditWorkerModal />
       <AddEventModal />
+      <EditEventModal />
       <AssignWorkersModal />
+      <PaymentCalculatorModal />
     </div>
   );
 };
