@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Navigation2, Copy, Home, Briefcase, User } from 'lucide-react';
 
-const  GigStaffPro = () => {
+const GigStaffPro = () => {
   const [userRole, setUserRole] = useState('admin');
   const [currentView, setCurrentView] = useState('dashboard');
   const [workers, setWorkers] = useState([]);
@@ -111,17 +111,37 @@ const  GigStaffPro = () => {
     };
   };
 
-  // Calculate distance between two addresses
-  const calculateDistance = async (address1, address2) => {
+  // Calculate distance between two addresses using Google Maps
+  const calculateDistance = async (originAddress, destinationAddress) => {
     try {
-      // Note: This uses a simple estimation. For production, integrate Google Maps Distance Matrix API
-      // For now, we'll return null and let user enter manually
-      // In production, you'd do:
-      // const response = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(address1)}&destinations=${encodeURIComponent(address2)}&key=YOUR_API_KEY`);
-      // const data = await response.json();
-      // return Math.round(data.rows[0].elements[0].distance.value / 1609.34); // Convert meters to miles
+      // Get API key from settings
+      const { data: apiKeyData } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', 'google_maps_api_key')
+        .single();
       
-      return null; // User will enter manually for now
+      if (!apiKeyData || !apiKeyData.setting_value) {
+        console.log('No Google Maps API key configured');
+        return null;
+      }
+
+      const apiKey = apiKeyData.setting_value;
+      
+      // Call Google Maps Distance Matrix API
+      const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(originAddress)}&destinations=${encodeURIComponent(destinationAddress)}&units=imperial&key=${apiKey}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status === 'OK' && data.rows[0].elements[0].status === 'OK') {
+        const distanceInMeters = data.rows[0].elements[0].distance.value;
+        const distanceInMiles = Math.round(distanceInMeters / 1609.34); // Convert meters to miles
+        return distanceInMiles;
+      } else {
+        console.error('Distance Matrix API error:', data.status, data.error_message);
+        return null;
+      }
     } catch (error) {
       console.error('Error calculating distance:', error);
       return null;
@@ -1139,8 +1159,47 @@ const  GigStaffPro = () => {
     const [eventMiles, setEventMiles] = useState(0);
     const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
     const [eventIsHoliday, setEventIsHoliday] = useState(false);
+    const [calculatingDistance, setCalculatingDistance] = useState(false);
     
     if (!showAssignModal || !selectedEvent) return null;
+
+    const autoCalculateMiles = async () => {
+      if (!selectedEvent.address) {
+        alert('Event address is required to calculate distance');
+        return;
+      }
+
+      setCalculatingDistance(true);
+      try {
+        // Get warehouse address
+        const { data: warehouseData } = await supabase
+          .from('settings')
+          .select('setting_value')
+          .eq('setting_key', 'warehouse_address')
+          .single();
+        
+        if (!warehouseData || !warehouseData.setting_value) {
+          alert('Warehouse address not set. Please configure it in Settings.');
+          setCalculatingDistance(false);
+          return;
+        }
+
+        const warehouseAddress = warehouseData.setting_value.replace(/^"|"$/g, ''); // Remove JSON quotes
+        const miles = await calculateDistance(warehouseAddress, selectedEvent.address);
+        
+        if (miles !== null) {
+          setEventMiles(miles);
+          alert(`Distance calculated: ${miles} miles`);
+        } else {
+          alert('Could not calculate distance. Please check:\n- Google Maps API key is configured in Settings\n- Event address is valid\n- API key has Distance Matrix API enabled');
+        }
+      } catch (error) {
+        console.error('Error auto-calculating miles:', error);
+        alert('Error calculating distance. Please enter manually.');
+      } finally {
+        setCalculatingDistance(false);
+      }
+    };
 
     // Initialize event payment settings from event or calculate defaults
     useEffect(() => {
@@ -1383,13 +1442,37 @@ const  GigStaffPro = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Miles *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={eventMiles}
-                          onChange={(e) => setEventMiles(parseInt(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                        />
+                        <div className="flex space-x-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={eventMiles}
+                            onChange={(e) => setEventMiles(parseInt(e.target.value) || 0)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={autoCalculateMiles}
+                            disabled={calculatingDistance || !selectedEvent.address}
+                            className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1 text-sm whitespace-nowrap"
+                            title={!selectedEvent.address ? 'Event address required' : 'Auto-calculate distance'}
+                          >
+                            {calculatingDistance ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>Calculating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Navigation2 size={16} />
+                                <span>Auto</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {!selectedEvent.address && (
+                          <p className="text-xs text-orange-600 mt-1">⚠️ Event address needed for auto-calculation</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -2818,9 +2901,12 @@ const  GigStaffPro = () => {
     const [saving, setSaving] = useState(false);
     const [warehouseAddress, setWarehouseAddress] = useState('');
     const [loadingWarehouse, setLoadingWarehouse] = useState(true);
+    const [googleMapsApiKey, setGoogleMapsApiKey] = useState('');
+    const [loadingApiKey, setLoadingApiKey] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
+      loadGoogleMapsApiKey();
     }, []);
 
     const loadWarehouseAddress = async () => {
@@ -2842,6 +2928,63 @@ const  GigStaffPro = () => {
         setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
       } finally {
         setLoadingWarehouse(false);
+      }
+    };
+
+    const loadGoogleMapsApiKey = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'google_maps_api_key')
+          .single();
+        
+        if (!error && data) {
+          setGoogleMapsApiKey(data.setting_value || '');
+        }
+      } catch (error) {
+        console.error('Error loading Google Maps API key:', error);
+      } finally {
+        setLoadingApiKey(false);
+      }
+    };
+
+    const saveGoogleMapsApiKey = async () => {
+      setSaving(true);
+      try {
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'google_maps_api_key')
+          .single();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ 
+              setting_value: googleMapsApiKey,
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'google_maps_api_key');
+          
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'google_maps_api_key',
+              setting_value: googleMapsApiKey
+            }]);
+          
+          if (error) throw error;
+        }
+
+        alert('Google Maps API key saved successfully!');
+      } catch (error) {
+        console.error('Error saving API key:', error);
+        alert('Error saving API key: ' + error.message);
+      } finally {
+        setSaving(false);
       }
     };
 
@@ -3129,6 +3272,54 @@ const  GigStaffPro = () => {
                 className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Save Address'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Google Maps API Key */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Google Maps API Key</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Add your Google Maps API key to enable automatic mileage calculation from warehouse to event locations.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-blue-900 font-semibold mb-2">How to get your API key:</p>
+            <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+              <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline">Google Cloud Console</a></li>
+              <li>Create a project and enable "Distance Matrix API"</li>
+              <li>Create credentials → API Key</li>
+              <li>Restrict the key to Distance Matrix API only (for security)</li>
+              <li>Paste the key below</li>
+            </ol>
+          </div>
+          
+          {loadingApiKey ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
+                <input
+                  type="password"
+                  value={googleMapsApiKey}
+                  onChange={(e) => setGoogleMapsApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
+                  disabled={saving}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {googleMapsApiKey ? '✓ API key configured' : 'No API key set - mileage will be manual'}
+                </p>
+              </div>
+              <button
+                onClick={saveGoogleMapsApiKey}
+                disabled={saving || !googleMapsApiKey}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save API Key'}
               </button>
             </div>
           )}
