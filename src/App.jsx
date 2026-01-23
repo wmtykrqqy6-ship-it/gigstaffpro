@@ -280,28 +280,21 @@ const GigStaffPro = () => {
 </html>
       `;
 
-      // Call Resend API directly
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'GigStaffPro <onboarding@resend.dev>',
-          to: [worker.email],
+      // Call Supabase Edge Function (no CORS issues)
+      const { data, error: functionError } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: worker.email,
           subject: `You're Assigned! ${event.name} - ${dateString}`,
-          html: emailHtml
-        })
+          html: emailHtml,
+          resendApiKey: resendApiKey
+        }
       });
-
-      const data = await response.json();
       
-      if (response.ok) {
+      if (!functionError && data?.success) {
         console.log('Email sent successfully to', worker.email);
         return true;
       } else {
-        console.error('Failed to send email:', data.message);
+        console.error('Failed to send email:', functionError || data?.error);
         return false;
       }
     } catch (error) {
