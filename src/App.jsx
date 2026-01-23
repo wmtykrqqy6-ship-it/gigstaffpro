@@ -470,6 +470,7 @@ const GigStaffPro = () => {
               { id: 'staff', label: 'Staff', icon: Users },
               { id: 'events', label: 'Events', icon: Calendar },
               { id: 'schedule', label: 'Schedule', icon: Clock },
+              { id: 'payments', label: 'Payments', icon: DollarSign },
               { id: 'settings', label: 'Settings', icon: Settings }
             ].map(({ id, label, icon: Icon }) => (
               <button
@@ -3619,6 +3620,304 @@ const GigStaffPro = () => {
     );
   };
 
+  const PaymentsView = () => {
+    const [filterStatus, setFilterStatus] = useState('all'); // all, pending, paid
+    const [filterWorker, setFilterWorker] = useState('all');
+    const [filterEvent, setFilterEvent] = useState('all');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Get all assignments with payment data
+    const assignmentsWithDetails = assignments
+      .map(assignment => {
+        const worker = workers.find(w => w.id === assignment.worker_id);
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, worker, event };
+      })
+      .filter(a => a.worker && a.event); // Only show assignments with valid worker and event
+
+    // Apply filters
+    const filteredAssignments = assignmentsWithDetails.filter(assignment => {
+      // Status filter
+      if (filterStatus !== 'all' && assignment.payment_status !== filterStatus) return false;
+      
+      // Worker filter
+      if (filterWorker !== 'all' && assignment.worker_id !== filterWorker) return false;
+      
+      // Event filter
+      if (filterEvent !== 'all' && assignment.event_id !== filterEvent) return false;
+      
+      // Search filter
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          assignment.worker.name.toLowerCase().includes(searchLower) ||
+          assignment.event.name.toLowerCase().includes(searchLower) ||
+          assignment.position.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+
+    // Calculate totals
+    const totalOwed = filteredAssignments
+      .filter(a => a.payment_status === 'pending')
+      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+
+    const totalPaid = filteredAssignments
+      .filter(a => a.payment_status === 'paid')
+      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+
+    const markAsPaid = async (assignmentId) => {
+      if (!confirm('Mark this payment as paid?')) return;
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({
+            payment_status: 'paid',
+            paid_at: new Date().toISOString()
+          })
+          .eq('id', assignmentId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Payment marked as paid!');
+      } catch (error) {
+        console.error('Error updating payment status:', error);
+        alert('Error updating payment status: ' + error.message);
+      }
+    };
+
+    const markAsPending = async (assignmentId) => {
+      if (!confirm('Mark this payment as pending (unpaid)?')) return;
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({
+            payment_status: 'pending',
+            paid_at: null
+          })
+          .eq('id', assignmentId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Payment marked as pending!');
+      } catch (error) {
+        console.error('Error updating payment status:', error);
+        alert('Error updating payment status: ' + error.message);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-gray-900">Payment Tracking</h2>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Pending Payments</p>
+                <p className="text-3xl font-bold text-gray-900">${totalOwed.toFixed(2)}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {filteredAssignments.filter(a => a.payment_status === 'pending').length} assignments
+                </p>
+              </div>
+              <AlertCircle className="text-yellow-500" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Paid Out</p>
+                <p className="text-3xl font-bold text-gray-900">${totalPaid.toFixed(2)}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {filteredAssignments.filter(a => a.payment_status === 'paid').length} assignments
+                </p>
+              </div>
+              <CheckCircle className="text-green-600" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Total Assignments</p>
+                <p className="text-3xl font-bold text-gray-900">{filteredAssignments.length}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  ${(totalOwed + totalPaid).toFixed(2)} total
+                </p>
+              </div>
+              <DollarSign className="text-blue-600" size={40} />
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-6 rounded-lg shadow space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+              <input
+                type="text"
+                placeholder="Worker, event, position..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Worker</label>
+              <select
+                value={filterWorker}
+                onChange={(e) => setFilterWorker(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Workers</option>
+                {workers.map(worker => (
+                  <option key={worker.id} value={worker.id}>{worker.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Event</label>
+              <select
+                value={filterEvent}
+                onChange={(e) => setFilterEvent(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Events</option>
+                {events.map(event => (
+                  <option key={event.id} value={event.id}>{event.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Payments Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredAssignments.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
+                      No payments found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAssignments.map(assignment => (
+                    <tr key={assignment.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{assignment.worker.name}</div>
+                        <div className="text-sm text-gray-500">{assignment.worker.phone}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{assignment.event.name}</div>
+                        <div className="text-sm text-gray-500">{assignment.event.venue}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
+                          {assignment.position}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {assignment.hours || 0} hrs
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">${(assignment.total_pay || 0).toFixed(2)}</div>
+                        {assignment.total_pay > 0 && (
+                          <div className="text-xs text-gray-500">
+                            Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {assignment.payment_status === 'paid' ? (
+                          <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded flex items-center space-x-1 w-fit">
+                            <CheckCircle size={14} />
+                            <span>Paid</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded flex items-center space-x-1 w-fit">
+                            <Clock size={14} />
+                            <span>Pending</span>
+                          </span>
+                        )}
+                        {assignment.paid_at && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {new Date(assignment.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {assignment.payment_status === 'pending' ? (
+                          <button
+                            onClick={() => markAsPaid(assignment.id)}
+                            className="text-green-600 hover:text-green-800 font-medium"
+                          >
+                            Mark Paid
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => markAsPending(assignment.id)}
+                            className="text-gray-600 hover:text-gray-800 font-medium"
+                          >
+                            Mark Pending
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const ScheduleView = () => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -4334,6 +4633,7 @@ const GigStaffPro = () => {
     if (currentView === 'staff') return <StaffView />;
     if (currentView === 'events') return <EventsView />;
     if (currentView === 'schedule') return <ScheduleView />;
+    if (currentView === 'payments') return <PaymentsView />;
     if (currentView === 'settings') return <SettingsView />;
     
     return (
