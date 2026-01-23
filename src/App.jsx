@@ -3625,6 +3625,8 @@ const GigStaffPro = () => {
     const [filterWorker, setFilterWorker] = useState('all');
     const [filterEvent, setFilterEvent] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [groupBy, setGroupBy] = useState('none'); // none, event, worker
+    const [selectedAssignments, setSelectedAssignments] = useState([]);
 
     // Get all assignments with payment data
     const assignmentsWithDetails = assignments
@@ -3712,6 +3714,124 @@ const GigStaffPro = () => {
       }
     };
 
+    const toggleSelectAssignment = (assignmentId) => {
+      setSelectedAssignments(prev => 
+        prev.includes(assignmentId)
+          ? prev.filter(id => id !== assignmentId)
+          : [...prev, assignmentId]
+      );
+    };
+
+    const toggleSelectAll = () => {
+      if (selectedAssignments.length === filteredAssignments.length) {
+        setSelectedAssignments([]);
+      } else {
+        setSelectedAssignments(filteredAssignments.map(a => a.id));
+      }
+    };
+
+    const bulkMarkAsPaid = async () => {
+      if (selectedAssignments.length === 0) {
+        alert('Please select assignments to mark as paid');
+        return;
+      }
+
+      if (!confirm(`Mark ${selectedAssignments.length} assignments as paid?`)) return;
+
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({
+            payment_status: 'paid',
+            paid_at: new Date().toISOString()
+          })
+          .in('id', selectedAssignments);
+        
+        if (error) throw error;
+        
+        setSelectedAssignments([]);
+        loadAssignments();
+        alert(`${selectedAssignments.length} payments marked as paid!`);
+      } catch (error) {
+        console.error('Error updating payments:', error);
+        alert('Error updating payments: ' + error.message);
+      }
+    };
+
+    const bulkMarkAsPending = async () => {
+      if (selectedAssignments.length === 0) {
+        alert('Please select assignments to mark as pending');
+        return;
+      }
+
+      if (!confirm(`Mark ${selectedAssignments.length} assignments as pending?`)) return;
+
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({
+            payment_status: 'pending',
+            paid_at: null
+          })
+          .in('id', selectedAssignments);
+        
+        if (error) throw error;
+        
+        setSelectedAssignments([]);
+        loadAssignments();
+        alert(`${selectedAssignments.length} payments marked as pending!`);
+      } catch (error) {
+        console.error('Error updating payments:', error);
+        alert('Error updating payments: ' + error.message);
+      }
+    };
+
+    // Group assignments by event or worker
+    const getGroupedAssignments = () => {
+      if (groupBy === 'event') {
+        const grouped = {};
+        filteredAssignments.forEach(assignment => {
+          const eventId = assignment.event_id;
+          if (!grouped[eventId]) {
+            grouped[eventId] = {
+              event: assignment.event,
+              assignments: [],
+              totalPay: 0,
+              pendingCount: 0,
+              paidCount: 0
+            };
+          }
+          grouped[eventId].assignments.push(assignment);
+          grouped[eventId].totalPay += assignment.total_pay || 0;
+          if (assignment.payment_status === 'pending') grouped[eventId].pendingCount++;
+          if (assignment.payment_status === 'paid') grouped[eventId].paidCount++;
+        });
+        return Object.values(grouped);
+      } else if (groupBy === 'worker') {
+        const grouped = {};
+        filteredAssignments.forEach(assignment => {
+          const workerId = assignment.worker_id;
+          if (!grouped[workerId]) {
+            grouped[workerId] = {
+              worker: assignment.worker,
+              assignments: [],
+              totalPay: 0,
+              pendingCount: 0,
+              paidCount: 0
+            };
+          }
+          grouped[workerId].assignments.push(assignment);
+          grouped[workerId].totalPay += assignment.total_pay || 0;
+          if (assignment.payment_status === 'pending') grouped[workerId].pendingCount++;
+          if (assignment.payment_status === 'paid') grouped[workerId].paidCount++;
+        });
+        return Object.values(grouped);
+      }
+      return null;
+    };
+
+    const groupedData = getGroupedAssignments();
+
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -3762,7 +3882,43 @@ const GigStaffPro = () => {
 
         {/* Filters */}
         <div className="bg-white p-6 rounded-lg shadow space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+            
+            {/* View Mode Toggle */}
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setGroupBy('none')}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  groupBy === 'none'
+                    ? 'bg-red-900 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                By Assignment
+              </button>
+              <button
+                onClick={() => setGroupBy('event')}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  groupBy === 'event'
+                    ? 'bg-red-900 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                By Event
+              </button>
+              <button
+                onClick={() => setGroupBy('worker')}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  groupBy === 'worker'
+                    ? 'bg-red-900 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                By Worker
+              </button>
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
@@ -3819,12 +3975,53 @@ const GigStaffPro = () => {
           </div>
         </div>
 
-        {/* Payments Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* Bulk Actions */}
+        {groupBy === 'none' && selectedAssignments.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="text-blue-600" size={20} />
+              <span className="text-sm font-medium text-blue-900">
+                {selectedAssignments.length} assignment{selectedAssignments.length !== 1 ? 's' : ''} selected
+              </span>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={bulkMarkAsPaid}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium text-sm"
+              >
+                Mark All as Paid
+              </button>
+              <button
+                onClick={bulkMarkAsPending}
+                className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 font-medium text-sm"
+              >
+                Mark All as Pending
+              </button>
+              <button
+                onClick={() => setSelectedAssignments([])}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium text-sm"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Payments Table or Grouped View */}
+        {groupBy === 'none' ? (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedAssignments.length === filteredAssignments.length && filteredAssignments.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
@@ -3845,6 +4042,14 @@ const GigStaffPro = () => {
                 ) : (
                   filteredAssignments.map(assignment => (
                     <tr key={assignment.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedAssignments.includes(assignment.id)}
+                          onChange={() => toggleSelectAssignment(assignment.id)}
+                          className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{assignment.worker.name}</div>
                         <div className="text-sm text-gray-500">{assignment.worker.phone}</div>
@@ -3914,6 +4119,111 @@ const GigStaffPro = () => {
             </table>
           </div>
         </div>
+        ) : (
+          /* Grouped View */
+          <div className="space-y-4">
+            {groupedData && groupedData.map((group, index) => (
+              <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
+                {/* Group Header */}
+                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {groupBy === 'event' ? group.event.name : group.worker.name}
+                      </h3>
+                      {groupBy === 'event' && (
+                        <p className="text-sm text-gray-600">
+                          {group.event.venue} • {new Date(group.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      )}
+                      {groupBy === 'worker' && (
+                        <p className="text-sm text-gray-600">{group.worker.phone} • {group.worker.email}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-900">${group.totalPay.toFixed(2)}</p>
+                      <div className="flex items-center space-x-2 text-sm mt-1">
+                        {group.pendingCount > 0 && (
+                          <span className="text-yellow-600">{group.pendingCount} pending</span>
+                        )}
+                        {group.paidCount > 0 && (
+                          <span className="text-green-600">{group.paidCount} paid</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Group Items */}
+                <div className="divide-y divide-gray-200">
+                  {group.assignments.map(assignment => (
+                    <div key={assignment.id} className="px-6 py-4 hover:bg-gray-50 flex justify-between items-center">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3">
+                          <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
+                            {assignment.position}
+                          </span>
+                          {assignment.payment_status === 'paid' ? (
+                            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded flex items-center space-x-1">
+                              <CheckCircle size={12} />
+                              <span>Paid</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded flex items-center space-x-1">
+                              <Clock size={12} />
+                              <span>Pending</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-900 mt-1 font-medium">
+                          {groupBy === 'event' ? assignment.worker.name : assignment.event.name}
+                        </p>
+                        {groupBy === 'worker' && (
+                          <p className="text-sm text-gray-600">
+                            {new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {assignment.event.venue}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {assignment.hours || 0} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-right flex items-center space-x-4">
+                        <div>
+                          <p className="text-lg font-bold text-gray-900">${(assignment.total_pay || 0).toFixed(2)}</p>
+                          {assignment.paid_at && (
+                            <p className="text-xs text-gray-500">
+                              Paid {new Date(assignment.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </p>
+                          )}
+                        </div>
+                        {assignment.payment_status === 'pending' ? (
+                          <button
+                            onClick={() => markAsPaid(assignment.id)}
+                            className="text-green-600 hover:text-green-800 font-medium text-sm"
+                          >
+                            Mark Paid
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => markAsPending(assignment.id)}
+                            className="text-gray-600 hover:text-gray-800 font-medium text-sm"
+                          >
+                            Mark Pending
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {groupedData && groupedData.length === 0 && (
+              <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
+                No payments found
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
