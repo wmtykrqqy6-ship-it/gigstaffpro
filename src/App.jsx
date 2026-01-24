@@ -3832,10 +3832,69 @@ const GigStaffPro = () => {
 
     const groupedData = getGroupedAssignments();
 
+    const exportToCSV = () => {
+      // Prepare CSV data
+      const csvData = filteredAssignments.map(assignment => ({
+        'Worker Name': assignment.worker.name,
+        'Worker Email': assignment.worker.email,
+        'Worker Phone': assignment.worker.phone,
+        'Event Name': assignment.event.name,
+        'Event Date': new Date(assignment.event.date).toLocaleDateString('en-US'),
+        'Venue': assignment.event.venue,
+        'Position': assignment.position,
+        'Hours': assignment.hours || 0,
+        'Miles': assignment.miles || 0,
+        'Base Pay': (assignment.base_pay || 0).toFixed(2),
+        'Travel Pay': (assignment.travel_pay || 0).toFixed(2),
+        'Lake Geneva Bonus': (assignment.lake_geneva_bonus || 0).toFixed(2),
+        'Holiday Multiplier': assignment.holiday_multiplier || 1.0,
+        'Total Pay': (assignment.total_pay || 0).toFixed(2),
+        'Payment Status': assignment.payment_status || 'pending',
+        'Paid Date': assignment.paid_at ? new Date(assignment.paid_at).toLocaleDateString('en-US') : ''
+      }));
+
+      // Convert to CSV string
+      const headers = Object.keys(csvData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header];
+            // Escape commas and quotes in values
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `payments_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-3xl font-bold text-gray-900">Payment Tracking</h2>
+          <button
+            onClick={exportToCSV}
+            disabled={filteredAssignments.length === 0}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <Download size={18} />
+            <span>Export to CSV</span>
+          </button>
         </div>
 
         {/* Summary Cards */}
