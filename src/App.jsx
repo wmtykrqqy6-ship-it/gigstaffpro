@@ -24,6 +24,7 @@ const GigStaffPro = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [assignmentPaymentData, setAssignmentPaymentData] = useState(null);
   const [eventPaymentSettings, setEventPaymentSettings] = useState({});
+  const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
 
   // Load workers from Supabase
   useEffect(() => {
@@ -32,7 +33,24 @@ const GigStaffPro = () => {
     loadSettings();
     loadAssignments();
     loadPaymentConfig();
+    loadPaymentTrackingSetting();
   }, []);
+
+  const loadPaymentTrackingSetting = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'payment_tracking_enabled')
+        .single();
+      
+      if (!error && data) {
+        setPaymentTrackingEnabled(data.setting_value === 'true' || data.setting_value === true);
+      }
+    } catch (error) {
+      console.error('Error loading payment tracking setting:', error);
+    }
+  };
 
   const loadPaymentConfig = async () => {
     try {
@@ -461,18 +479,20 @@ const GigStaffPro = () => {
   const Navigation = () => {
     if (userRole !== 'admin') return null;
     
+    const navItems = [
+      { id: 'dashboard', label: 'Dashboard', icon: Home },
+      { id: 'staff', label: 'Staff', icon: Users },
+      { id: 'events', label: 'Events', icon: Calendar },
+      { id: 'schedule', label: 'Schedule', icon: Clock },
+      ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
+      { id: 'settings', label: 'Settings', icon: Settings }
+    ];
+    
     return (
       <div className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8 overflow-x-auto">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: Home },
-              { id: 'staff', label: 'Staff', icon: Users },
-              { id: 'events', label: 'Events', icon: Calendar },
-              { id: 'schedule', label: 'Schedule', icon: Clock },
-              { id: 'payments', label: 'Payments', icon: DollarSign },
-              { id: 'settings', label: 'Settings', icon: Settings }
-            ].map(({ id, label, icon: Icon }) => (
+            {navItems.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setCurrentView(id)}
@@ -2151,6 +2171,38 @@ const GigStaffPro = () => {
     const [isHoliday, setIsHoliday] = useState(false);
     const [calculation, setCalculation] = useState(null);
 
+    // Don't show payment modal if payment tracking is disabled
+    if (!paymentTrackingEnabled) {
+      if (showPaymentModal && assignmentPaymentData) {
+        // Just assign without payment calculation
+        const assignWithoutPayment = async () => {
+          try {
+            const { error } = await supabase
+              .from('assignments')
+              .insert([{
+                event_id: selectedEvent.id,
+                worker_id: assignmentPaymentData.workerId,
+                position: assignmentPaymentData.position,
+                status: 'assigned'
+              }]);
+            
+            if (error) throw error;
+            
+            const worker = workers.find(w => w.id === assignmentPaymentData.workerId);
+            loadAssignments();
+            setShowPaymentModal(false);
+            setAssignmentPaymentData(null);
+            alert(`${worker.name} assigned to ${assignmentPaymentData.position}`);
+          } catch (error) {
+            console.error('Error creating assignment:', error);
+            alert('Error creating assignment: ' + error.message);
+          }
+        };
+        assignWithoutPayment();
+      }
+      return null;
+    }
+
     useEffect(() => {
       if (assignmentPaymentData) {
         // Check if event has payment settings configured
@@ -3074,11 +3126,14 @@ const GigStaffPro = () => {
     const [loadingApiKey, setLoadingApiKey] = useState(true);
     const [resendApiKey, setResendApiKey] = useState('');
     const [loadingResendKey, setLoadingResendKey] = useState(true);
+    const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
+    const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
       loadGoogleMapsApiKey();
       loadResendApiKey();
+      loadPaymentTrackingSetting();
     }, []);
 
     const loadWarehouseAddress = async () => {
@@ -3212,6 +3267,68 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error saving Resend API key:', error);
         alert('Error saving API key: ' + error.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const loadPaymentTrackingSetting = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'payment_tracking_enabled')
+          .single();
+        
+        if (!error && data) {
+          setPaymentTrackingEnabled(data.setting_value === 'true' || data.setting_value === true);
+        } else {
+          // Default to enabled
+          setPaymentTrackingEnabled(true);
+        }
+      } catch (error) {
+        console.error('Error loading payment tracking setting:', error);
+        setPaymentTrackingEnabled(true);
+      } finally {
+        setLoadingPaymentSetting(false);
+      }
+    };
+
+    const togglePaymentTracking = async (enabled) => {
+      setSaving(true);
+      try {
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'payment_tracking_enabled')
+          .single();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ 
+              setting_value: enabled.toString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'payment_tracking_enabled');
+          
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'payment_tracking_enabled',
+              setting_value: enabled.toString()
+            }]);
+          
+          if (error) throw error;
+        }
+
+        setPaymentTrackingEnabled(enabled);
+        alert(enabled ? 'Payment tracking enabled!' : 'Payment tracking disabled!');
+      } catch (error) {
+        console.error('Error saving payment tracking setting:', error);
+        alert('Error saving setting: ' + error.message);
       } finally {
         setSaving(false);
       }
@@ -3605,6 +3722,44 @@ const GigStaffPro = () => {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Payment Tracking Toggle */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Enable or disable payment tracking features. When disabled, the Payments tab and payment calculations will be hidden.
+          </p>
+          
+          {loadingPaymentSetting ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-semibold text-gray-900">Enable Payment Tracking</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {paymentTrackingEnabled 
+                    ? 'Payment tracking is currently enabled. Workers will see pay info on assignments.' 
+                    : 'Payment tracking is currently disabled. Payment features are hidden.'}
+                </p>
+              </div>
+              <button
+                onClick={() => togglePaymentTracking(!paymentTrackingEnabled)}
+                disabled={saving}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  paymentTrackingEnabled ? 'bg-green-600' : 'bg-gray-300'
+                } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
           )}
         </div>
