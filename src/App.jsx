@@ -4850,6 +4850,7 @@ const GigStaffPro = () => {
     const [workerSelectMode, setWorkerSelectMode] = useState(true);
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedEventModal, setSelectedEventModal] = useState(null);
 
     // Select a worker for demo
     if (workerSelectMode) {
@@ -5114,11 +5115,16 @@ const GigStaffPro = () => {
                     days.push(
                       <div
                         key={day}
+                        onClick={() => {
+                          if (dayAssignments.length > 0) {
+                            setSelectedEventModal(dayAssignments);
+                          }
+                        }}
                         className={`aspect-square border rounded-lg p-1 ${
                           isToday ? 'border-red-500 border-2 bg-red-50' :
                           isPast ? 'bg-gray-50' :
                           'border-gray-200 hover:bg-gray-50'
-                        } cursor-pointer relative`}
+                        } ${dayAssignments.length > 0 ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} relative`}
                       >
                         <div className="text-sm font-semibold text-gray-900">{day}</div>
                         {dayAssignments.length > 0 && (
@@ -5277,6 +5283,141 @@ const GigStaffPro = () => {
                   <CheckCircle size={20} className="text-green-600" />
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Event Details Modal */}
+        {selectedEventModal && selectedEventModal.length > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    Events on {new Date(selectedEventModal[0].event.date).toLocaleDateString('en-US', { 
+                      weekday: 'long',
+                      month: 'long', 
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </h3>
+                  <button 
+                    onClick={() => setSelectedEventModal(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {selectedEventModal.map((assignment, idx) => {
+                    const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
+                    const isToday = daysUntil === 0;
+                    const isTomorrow = daysUntil === 1;
+
+                    return (
+                      <div 
+                        key={idx}
+                        className={`border-l-4 p-4 rounded-r-lg ${
+                          isToday ? 'bg-red-50 border-red-500' : 
+                          isTomorrow ? 'bg-yellow-50 border-yellow-500' : 
+                          'bg-gray-50 border-blue-500'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <h4 className="font-bold text-gray-900 text-lg">{assignment.event.name}</h4>
+                              {isToday && (
+                                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                                  TODAY
+                                </span>
+                              )}
+                              {isTomorrow && (
+                                <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                                  TOMORROW
+                                </span>
+                              )}
+                            </div>
+                            <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">
+                              {assignment.position}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-sm text-gray-700">
+                          <div className="flex items-center space-x-2">
+                            <Clock size={16} className="text-gray-500" />
+                            <span className="font-medium">
+                              {assignment.event.time}{assignment.event.end_time ? ` - ${assignment.event.end_time}` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <MapPin size={16} className="text-gray-500" />
+                            <span>{assignment.event.venue}</span>
+                          </div>
+                        </div>
+
+                        {assignment.event.address && (
+                          <div className="mt-3 p-3 bg-white rounded border border-gray-200">
+                            <p className="text-sm font-semibold text-gray-700 mb-1">Address:</p>
+                            <p className="text-sm text-gray-900">{assignment.event.address}</p>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.event.address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 inline-flex items-center space-x-1"
+                            >
+                              <MapPin size={14} />
+                              <span>Open in Google Maps</span>
+                            </a>
+                          </div>
+                        )}
+
+                        {assignment.event.dress_code && (
+                          <div className="mt-2 text-sm">
+                            <span className="font-medium text-gray-700">Dress Code:</span>
+                            <span className="text-gray-900 ml-2">{assignment.event.dress_code}</span>
+                          </div>
+                        )}
+
+                        {assignment.event.parking && (
+                          <div className="mt-2 text-sm">
+                            <span className="font-medium text-gray-700">Parking:</span>
+                            <span className="text-gray-900 ml-2">{assignment.event.parking}</span>
+                          </div>
+                        )}
+
+                        {assignment.event.notes && (
+                          <div className="mt-3 pt-3 border-t text-sm">
+                            <p className="font-medium text-gray-700 mb-1">Important Notes:</p>
+                            <p className="text-gray-900">{assignment.event.notes}</p>
+                          </div>
+                        )}
+
+                        {paymentTrackingEnabled && assignment.total_pay > 0 && (
+                          <div className="mt-3 pt-3 border-t">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700">Your Pay:</span>
+                              <span className="text-lg font-bold text-green-600">${assignment.total_pay.toFixed(2)}</span>
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setSelectedEventModal(null)}
+                  className="w-full mt-6 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}
