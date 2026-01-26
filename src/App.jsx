@@ -4737,6 +4737,36 @@ const GigStaffPro = () => {
                     <MapPin size={14} className="text-gray-500" />
                     <span>{event.venue}</span>
                   </div>
+                  {event.address && (
+                    <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-700 mb-1">Address:</p>
+                      <p className="text-xs text-gray-900 mb-1">{event.address}</p>
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center space-x-1"
+                      >
+                        <MapPin size={12} />
+                        <span>Open in Google Maps</span>
+                      </a>
+                    </div>
+                  )}
+                  {paymentTrackingEnabled && eventPaymentSettings[event.id] && (
+                    <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-700">Estimated Pay:</span>
+                        <span className="text-sm font-bold text-green-700">
+                          ~${eventPaymentSettings[event.id].hours && payRates[matchingPositions[0]] 
+                            ? (eventPaymentSettings[event.id].hours * payRates[matchingPositions[0]]).toFixed(0)
+                            : '???'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {eventPaymentSettings[event.id].hours || '?'} hrs • Plus travel pay
+                      </p>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="mb-3">
