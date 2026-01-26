@@ -2874,10 +2874,19 @@ const GigStaffPro = () => {
     const [loadingWarehouse, setLoadingWarehouse] = useState(true);
     const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
     const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
+    const [rankAccessDays, setRankAccessDays] = useState({
+      1: 0,   // Rank 1 sees immediately
+      2: 7,   // Rank 2 sees 7 days before
+      3: 10,  // Rank 3 sees 10 days before
+      4: 12,  // Rank 4 sees 12 days before
+      5: 14   // Rank 5 sees 14 days before
+    });
+    const [loadingRankAccess, setLoadingRankAccess] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
       loadPaymentTrackingSetting();
+      loadRankAccessSettings();
     }, []);
 
     const loadWarehouseAddress = async () => {
@@ -2960,6 +2969,63 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error saving payment tracking setting:', error);
         alert('Error saving setting: ' + error.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const loadRankAccessSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'rank_access_days')
+          .single();
+        
+        if (!error && data && data.setting_value) {
+          setRankAccessDays(JSON.parse(data.setting_value));
+        }
+      } catch (error) {
+        console.error('Error loading rank access settings:', error);
+      } finally {
+        setLoadingRankAccess(false);
+      }
+    };
+
+    const saveRankAccessSettings = async () => {
+      setSaving(true);
+      try {
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'rank_access_days')
+          .single();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ 
+              setting_value: JSON.stringify(rankAccessDays),
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'rank_access_days');
+          
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'rank_access_days',
+              setting_value: JSON.stringify(rankAccessDays)
+            }]);
+          
+          if (error) throw error;
+        }
+
+        alert('Rank access settings saved successfully!');
+      } catch (error) {
+        console.error('Error saving rank access settings:', error);
+        alert('Error saving settings: ' + error.message);
       } finally {
         setSaving(false);
       }
@@ -3287,6 +3353,72 @@ const GigStaffPro = () => {
                     paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'
                   }`}
                 />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Rank-Based Event Access */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Event Access (Rank-Based)</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Control when workers can see and sign up for events based on their rank. Lower rank numbers (better workers) get earlier access.
+          </p>
+          
+          {loadingRankAccess ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[1, 2, 3, 4, 5].map(rank => (
+                  <div key={rank} className="border border-gray-200 rounded-lg p-4">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Rank {rank} {rank === 1 && '(Best)'}  {rank === 5 && '(New)'}
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={rankAccessDays[rank]}
+                        onChange={(e) => setRankAccessDays({
+                          ...rankAccessDays,
+                          [rank]: parseInt(e.target.value) || 0
+                        })}
+                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-600">
+                        days before event
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {rankAccessDays[rank] === 0 
+                        ? 'Can see events immediately' 
+                        : `Can see events ${rankAccessDays[rank]} days before`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <p className="text-blue-900 font-semibold mb-2">Example Timeline:</p>
+                <ul className="text-blue-800 space-y-1">
+                  <li>• Event created: Rank 1 workers see it immediately</li>
+                  <li>• {rankAccessDays[2]} days before: Rank 2 workers can sign up</li>
+                  <li>• {rankAccessDays[3]} days before: Rank 3 workers can sign up</li>
+                  <li>• {rankAccessDays[4]} days before: Rank 4 workers can sign up</li>
+                  <li>• {rankAccessDays[5]} days before: Rank 5 workers can sign up</li>
+                </ul>
+              </div>
+
+              <button
+                onClick={saveRankAccessSettings}
+                disabled={saving}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Access Settings'}
               </button>
             </div>
           )}
