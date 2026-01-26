@@ -4569,27 +4569,50 @@ const GigStaffPro = () => {
     // Calculate which events the worker can see based on rank
     const getAvailableEvents = () => {
       const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset to start of day
       const workerRank = currentWorker.rank || 5;
       const accessDays = rankAccessDays[workerRank] || 14;
       
+      console.log('Worker:', currentWorker.name, 'Rank:', workerRank, 'Access Days:', accessDays);
+      console.log('Worker Skills:', currentWorker.skills);
+      
       return events
         .filter(event => {
+          console.log('--- Checking Event:', event.name);
+          
           // Must be future event
           const eventDate = new Date(event.date);
-          if (eventDate < today) return false;
+          eventDate.setHours(0, 0, 0, 0);
+          console.log('Event Date:', eventDate, 'Today:', today, 'Is Future:', eventDate >= today);
+          if (eventDate < today) {
+            console.log('❌ Event is in the past');
+            return false;
+          }
           
           // Calculate days until event
           const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+          console.log('Days Until Event:', daysUntil, 'Access Window:', accessDays);
           
-          // Check if within access window
-          if (daysUntil > accessDays && accessDays > 0) return false;
+          // Check if within access window (Rank 1 with 0 days can see all future events)
+          if (accessDays > 0 && daysUntil > accessDays) {
+            console.log('❌ Outside access window');
+            return false;
+          }
           
           // Must have positions that match worker skills
-          const eventPositions = event.positions || positions;
+          const eventPositions = Array.isArray(event.positions) ? event.positions : [];
+          console.log('Event Positions:', eventPositions);
+          console.log('Worker Skills:', currentWorker.skills);
+          
           const hasMatchingSkill = eventPositions.some(pos => 
             currentWorker.skills && currentWorker.skills.includes(pos)
           );
-          if (!hasMatchingSkill) return false;
+          console.log('Has Matching Skill:', hasMatchingSkill);
+          
+          if (!hasMatchingSkill) {
+            console.log('❌ No matching skills');
+            return false;
+          }
           
           // Not already assigned or applied
           const alreadyAssigned = assignments.some(a => 
@@ -4597,8 +4620,14 @@ const GigStaffPro = () => {
             a.worker_id === currentWorker.id &&
             ['approved', 'pending'].includes(a.status || 'approved')
           );
-          if (alreadyAssigned) return false;
+          console.log('Already Assigned:', alreadyAssigned);
           
+          if (alreadyAssigned) {
+            console.log('❌ Already assigned');
+            return false;
+          }
+          
+          console.log('✅ Event is available!');
           return true;
         })
         .sort((a, b) => new Date(a.date) - new Date(b.date));
