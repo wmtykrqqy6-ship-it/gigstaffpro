@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Navigation2, Copy, Home, Briefcase, User } from 'lucide-react';
+import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
 
 const GigStaffPro = () => {
   const [userRole, setUserRole] = useState('admin');
@@ -25,6 +25,11 @@ const GigStaffPro = () => {
   const [assignmentPaymentData, setAssignmentPaymentData] = useState(null);
   const [eventPaymentSettings, setEventPaymentSettings] = useState({});
   const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
+  const [savingWorker, setSavingWorker] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [deletingAssignment, setDeletingAssignment] = useState(false);
+  const [assigningWorker, setAssigningWorker] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
 
   // Load workers from Supabase
   useEffect(() => {
@@ -130,197 +135,6 @@ const GigStaffPro = () => {
   };
 
   // Calculate distance between two addresses using Google Maps via serverless function
-  const calculateDistance = async (originAddress, destinationAddress) => {
-    try {
-      // Get API key from settings
-      const { data: apiKeyData } = await supabase
-        .from('settings')
-        .select('setting_value')
-        .eq('setting_key', 'google_maps_api_key')
-        .single();
-      
-      if (!apiKeyData || !apiKeyData.setting_value) {
-        console.log('No Google Maps API key configured');
-        return null;
-      }
-
-      const apiKey = apiKeyData.setting_value;
-      
-      // Call Vercel serverless function instead of direct API call
-      const response = await fetch('/api/calculate-distance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          origin: originAddress,
-          destination: destinationAddress,
-          apiKey: apiKey
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.miles;
-      } else {
-        console.error('Distance calculation error:', data.error, data.details);
-        return null;
-      }
-    } catch (error) {
-      console.error('Error calculating distance:', error);
-      return null;
-    }
-  };
-
-  // Send assignment email notification
-  const sendAssignmentEmail = async (worker, event, assignment, calculation) => {
-    try {
-      // Get Resend API key from settings
-      const { data: apiKeyData } = await supabase
-        .from('settings')
-        .select('setting_value')
-        .eq('setting_key', 'resend_api_key')
-        .single();
-      
-      if (!apiKeyData || !apiKeyData.setting_value) {
-        console.log('No Resend API key configured - email not sent');
-        return false;
-      }
-
-      const resendApiKey = apiKeyData.setting_value;
-      
-      // Format date nicely
-      const eventDate = new Date(event.date);
-      const dateString = eventDate.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        month: 'long', 
-        day: 'numeric', 
-        year: 'numeric' 
-      });
-
-      // Build email HTML
-      const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #7f1d1d 0%, #000000 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-    .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-    .event-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7f1d1d; }
-    .detail-row { margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-    .detail-label { font-weight: bold; color: #7f1d1d; display: inline-block; width: 120px; }
-    .payment-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #3b82f6; }
-    .payment-total { font-size: 24px; font-weight: bold; color: #1e40af; text-align: center; margin-top: 10px; }
-    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1 style="margin: 0;">🎰 You're Assigned!</h1>
-      <p style="margin: 10px 0 0 0; font-size: 18px;">${event.name}</p>
-    </div>
-    <div class="content">
-      <p>Hi ${worker.name},</p>
-      <p>Great news! You've been assigned to work at an upcoming event.</p>
-      
-      <div class="event-details">
-        <h2 style="margin-top: 0; color: #7f1d1d;">Event Details</h2>
-        <div class="detail-row">
-          <span class="detail-label">📅 Date:</span>
-          <span>${dateString}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">🕐 Time:</span>
-          <span>${event.time}${event.end_time ? ` - ${event.end_time}` : ''}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">🎯 Position:</span>
-          <span>${assignment.position}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">📍 Location:</span>
-          <span>${event.venue}${event.room ? ` - ${event.room}` : ''}</span>
-        </div>
-        ${event.address ? `
-        <div class="detail-row">
-          <span class="detail-label">🗺️ Address:</span>
-          <span>${event.address}</span>
-        </div>
-        ` : ''}
-        ${event.dress_code ? `
-        <div class="detail-row">
-          <span class="detail-label">👔 Dress Code:</span>
-          <span>${event.dress_code}</span>
-        </div>
-        ` : ''}
-        ${event.parking ? `
-        <div class="detail-row">
-          <span class="detail-label">🅿️ Parking:</span>
-          <span>${event.parking}</span>
-        </div>
-        ` : ''}
-      </div>
-
-      ${calculation ? `
-      <div class="payment-box">
-        <h3 style="margin-top: 0; color: #1e40af;">💰 Payment Details</h3>
-        <div style="font-size: 14px;">
-          <div style="margin: 8px 0;">Base Pay (${assignment.hours} hrs × $${(calculation.basePay / assignment.hours).toFixed(2)}/hr): <strong>$${calculation.basePay.toFixed(2)}</strong></div>
-          <div style="margin: 8px 0;">Travel Pay (${assignment.miles} miles): <strong>$${calculation.travelPay.toFixed(2)}</strong></div>
-          ${assignment.is_lake_geneva ? `<div style="margin: 8px 0;">Lake Geneva Bonus: <strong>$${calculation.lakeGenevaBonus.toFixed(2)}</strong></div>` : ''}
-          ${assignment.is_holiday ? `<div style="margin: 8px 0;">Holiday Multiplier: <strong>${calculation.holidayMultiplier}×</strong></div>` : ''}
-        </div>
-        <div class="payment-total">Total: $${calculation.totalPay.toFixed(2)}</div>
-      </div>
-      ` : ''}
-
-      ${event.notes ? `
-      <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
-        <strong>📝 Important Notes:</strong>
-        <p style="margin: 10px 0 0 0;">${event.notes}</p>
-      </div>
-      ` : ''}
-
-      <p style="margin-top: 30px;">We look forward to seeing you at the event!</p>
-      <p>If you have any questions, please contact us.</p>
-      
-      <p style="margin-top: 20px;">Best regards,<br><strong>GigStaffPro Team</strong></p>
-    </div>
-    <div class="footer">
-      <p>This is an automated notification from GigStaffPro</p>
-    </div>
-  </div>
-</body>
-</html>
-      `;
-
-      // Call Supabase Edge Function (no CORS issues)
-      const { data, error: functionError } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: worker.email,
-          subject: `You're Assigned! ${event.name} - ${dateString}`,
-          html: emailHtml,
-          resendApiKey: resendApiKey
-        }
-      });
-      
-      if (!functionError && data?.success) {
-        console.log('Email sent successfully to', worker.email);
-        return true;
-      } else {
-        console.error('Failed to send email:', functionError || data?.error);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error sending email:', error);
-      return false;
-    }
-  };
-
   const loadAssignments = async () => {
     try {
       const { data, error } = await supabase
@@ -1335,47 +1149,8 @@ const GigStaffPro = () => {
     const [eventMiles, setEventMiles] = useState(0);
     const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
     const [eventIsHoliday, setEventIsHoliday] = useState(false);
-    const [calculatingDistance, setCalculatingDistance] = useState(false);
     
     if (!showAssignModal || !selectedEvent) return null;
-
-    const autoCalculateMiles = async () => {
-      if (!selectedEvent.address) {
-        alert('Event address is required to calculate distance');
-        return;
-      }
-
-      setCalculatingDistance(true);
-      try {
-        // Get warehouse address
-        const { data: warehouseData } = await supabase
-          .from('settings')
-          .select('setting_value')
-          .eq('setting_key', 'warehouse_address')
-          .single();
-        
-        if (!warehouseData || !warehouseData.setting_value) {
-          alert('Warehouse address not set. Please configure it in Settings.');
-          setCalculatingDistance(false);
-          return;
-        }
-
-        const warehouseAddress = warehouseData.setting_value.replace(/^"|"$/g, ''); // Remove JSON quotes
-        const miles = await calculateDistance(warehouseAddress, selectedEvent.address);
-        
-        if (miles !== null) {
-          setEventMiles(miles);
-          alert(`Distance calculated: ${miles} miles`);
-        } else {
-          alert('Could not calculate distance. Please check:\n- Google Maps API key is configured in Settings\n- Event address is valid\n- API key has Distance Matrix API enabled');
-        }
-      } catch (error) {
-        console.error('Error auto-calculating miles:', error);
-        alert('Error calculating distance. Please enter manually.');
-      } finally {
-        setCalculatingDistance(false);
-      }
-    };
 
     // Initialize event payment settings from event or calculate defaults
     useEffect(() => {
@@ -1618,37 +1393,13 @@ const GigStaffPro = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Miles *</label>
-                        <div className="flex space-x-2">
-                          <input
-                            type="number"
-                            min="0"
-                            value={eventMiles}
-                            onChange={(e) => setEventMiles(parseInt(e.target.value) || 0)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={autoCalculateMiles}
-                            disabled={calculatingDistance || !selectedEvent.address}
-                            className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1 text-sm whitespace-nowrap"
-                            title={!selectedEvent.address ? 'Event address required' : 'Auto-calculate distance'}
-                          >
-                            {calculatingDistance ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                <span>Calculating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Navigation2 size={16} />
-                                <span>Auto</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        {!selectedEvent.address && (
-                          <p className="text-xs text-orange-600 mt-1">⚠️ Event address needed for auto-calculation</p>
-                        )}
+                        <input
+                          type="number"
+                          min="0"
+                          value={eventMiles}
+                          onChange={(e) => setEventMiles(parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
                       </div>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -2033,6 +1784,7 @@ const GigStaffPro = () => {
         return;
       }
       
+      setSavingWorker(true);
       try {
         const { data, error } = await supabase
           .from('workers')
@@ -2047,6 +1799,8 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error adding worker:', error);
         alert('Error adding worker: ' + error.message);
+      } finally {
+        setSavingWorker(false);
       }
     };
 
@@ -2145,14 +1899,23 @@ const GigStaffPro = () => {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
+                  disabled={savingWorker}
+                  className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
-                  Add Worker
+                  {savingWorker ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Add Worker</span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowAddWorker(false)}
-                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                  disabled={savingWorker}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
@@ -2267,24 +2030,11 @@ const GigStaffPro = () => {
         
         const worker = workers.find(w => w.id === assignmentPaymentData.workerId);
         
-        // Send assignment email notification
-        const emailSent = await sendAssignmentEmail(worker, selectedEvent, {
-          position: assignmentPaymentData.position,
-          hours: hours,
-          miles: miles,
-          is_lake_geneva: isLakeGeneva,
-          is_holiday: isHoliday
-        }, calculation);
-        
         loadAssignments();
         setShowPaymentModal(false);
         setAssignmentPaymentData(null);
         
-        if (emailSent) {
-          alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n✓ Email notification sent to ${worker.email}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
-        } else {
-          alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n⚠ Email notification failed (check Resend API key in Settings)\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
-        }
+        alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
       } catch (error) {
         console.error('Error creating assignment:', error);
         alert('Error creating assignment: ' + error.message);
@@ -3122,17 +2872,11 @@ const GigStaffPro = () => {
     const [saving, setSaving] = useState(false);
     const [warehouseAddress, setWarehouseAddress] = useState('');
     const [loadingWarehouse, setLoadingWarehouse] = useState(true);
-    const [googleMapsApiKey, setGoogleMapsApiKey] = useState('');
-    const [loadingApiKey, setLoadingApiKey] = useState(true);
-    const [resendApiKey, setResendApiKey] = useState('');
-    const [loadingResendKey, setLoadingResendKey] = useState(true);
     const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
     const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
-      loadGoogleMapsApiKey();
-      loadResendApiKey();
       loadPaymentTrackingSetting();
     }, []);
 
@@ -3158,119 +2902,6 @@ const GigStaffPro = () => {
       }
     };
 
-    const loadGoogleMapsApiKey = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('setting_key', 'google_maps_api_key')
-          .single();
-        
-        if (!error && data) {
-          setGoogleMapsApiKey(data.setting_value || '');
-        }
-      } catch (error) {
-        console.error('Error loading Google Maps API key:', error);
-      } finally {
-        setLoadingApiKey(false);
-      }
-    };
-
-    const saveGoogleMapsApiKey = async () => {
-      setSaving(true);
-      try {
-        const { data: existing } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('setting_key', 'google_maps_api_key')
-          .single();
-
-        if (existing) {
-          const { error } = await supabase
-            .from('settings')
-            .update({ 
-              setting_value: googleMapsApiKey,
-              updated_at: new Date().toISOString()
-            })
-            .eq('setting_key', 'google_maps_api_key');
-          
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('settings')
-            .insert([{
-              setting_key: 'google_maps_api_key',
-              setting_value: googleMapsApiKey
-            }]);
-          
-          if (error) throw error;
-        }
-
-        alert('Google Maps API key saved successfully!');
-      } catch (error) {
-        console.error('Error saving API key:', error);
-        alert('Error saving API key: ' + error.message);
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    const loadResendApiKey = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('setting_key', 'resend_api_key')
-          .single();
-        
-        if (!error && data) {
-          setResendApiKey(data.setting_value || '');
-        }
-      } catch (error) {
-        console.error('Error loading Resend API key:', error);
-      } finally {
-        setLoadingResendKey(false);
-      }
-    };
-
-    const saveResendApiKey = async () => {
-      setSaving(true);
-      try {
-        const { data: existing } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('setting_key', 'resend_api_key')
-          .single();
-
-        if (existing) {
-          const { error } = await supabase
-            .from('settings')
-            .update({ 
-              setting_value: resendApiKey,
-              updated_at: new Date().toISOString()
-            })
-            .eq('setting_key', 'resend_api_key');
-          
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('settings')
-            .insert([{
-              setting_key: 'resend_api_key',
-              setting_value: resendApiKey
-            }]);
-          
-          if (error) throw error;
-        }
-
-        alert('Resend API key saved successfully! Workers will now receive email notifications.');
-      } catch (error) {
-        console.error('Error saving Resend API key:', error);
-        alert('Error saving API key: ' + error.message);
-      } finally {
-        setSaving(false);
-      }
-    };
 
     const loadPaymentTrackingSetting = async () => {
       try {
@@ -3623,109 +3254,6 @@ const GigStaffPro = () => {
           )}
         </div>
 
-        {/* Google Maps API Key */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Google Maps API Key</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Add your Google Maps API key to enable automatic mileage calculation from warehouse to event locations.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <p className="text-sm text-blue-900 font-semibold mb-2">How to get your API key:</p>
-            <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-              <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline">Google Cloud Console</a></li>
-              <li>Create a project and enable "Distance Matrix API"</li>
-              <li>Create credentials → API Key</li>
-              <li>Restrict the key to Distance Matrix API only (for security)</li>
-              <li>Paste the key below</li>
-            </ol>
-          </div>
-          
-          {loadingApiKey ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
-                <input
-                  type="password"
-                  value={googleMapsApiKey}
-                  onChange={(e) => setGoogleMapsApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
-                  disabled={saving}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  {googleMapsApiKey ? '✓ API key configured' : 'No API key set - mileage will be manual'}
-                </p>
-              </div>
-              <button
-                onClick={saveGoogleMapsApiKey}
-                disabled={saving || !googleMapsApiKey}
-                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {saving ? 'Saving...' : 'Save API Key'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Resend API Key for Email Notifications */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Email Notifications (Resend API)</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Configure email notifications to automatically notify workers when they're assigned to events.
-          </p>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-            <p className="text-sm text-green-900 font-semibold mb-2">How to get your Resend API key:</p>
-            <ol className="text-sm text-green-800 space-y-1 list-decimal list-inside">
-              <li>Go to <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">Resend.com API Keys</a></li>
-              <li>Sign up (free - 3,000 emails/month)</li>
-              <li>Create an API key</li>
-              <li>Paste the key below</li>
-            </ol>
-          </div>
-          
-          {loadingResendKey ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Resend API Key</label>
-                <input
-                  type="password"
-                  value={resendApiKey}
-                  onChange={(e) => setResendApiKey(e.target.value)}
-                  placeholder="re_..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
-                  disabled={saving}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  {resendApiKey ? '✓ Email notifications enabled' : 'No API key - email notifications disabled'}
-                </p>
-              </div>
-              <button
-                onClick={saveResendApiKey}
-                disabled={saving || !resendApiKey}
-                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {saving ? 'Saving...' : 'Save API Key'}
-              </button>
-              {resendApiKey && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
-                  <strong>✓ Email notifications active!</strong> Workers will receive emails when:
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    <li>Assigned to an event (with all event details and payment info)</li>
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Payment Tracking Toggle */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
@@ -3782,6 +3310,7 @@ const GigStaffPro = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [groupBy, setGroupBy] = useState('none'); // none, event, worker
     const [selectedAssignments, setSelectedAssignments] = useState([]);
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
     // Get all assignments with payment data
     const assignmentsWithDetails = assignments
@@ -3893,6 +3422,7 @@ const GigStaffPro = () => {
 
       if (!confirm(`Mark ${selectedAssignments.length} assignments as paid?`)) return;
 
+      setBulkActionLoading(true);
       try {
         const { error } = await supabase
           .from('assignments')
@@ -3910,6 +3440,8 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error updating payments:', error);
         alert('Error updating payments: ' + error.message);
+      } finally {
+        setBulkActionLoading(false);
       }
     };
 
@@ -3921,6 +3453,7 @@ const GigStaffPro = () => {
 
       if (!confirm(`Mark ${selectedAssignments.length} assignments as pending?`)) return;
 
+      setBulkActionLoading(true);
       try {
         const { error } = await supabase
           .from('assignments')
@@ -3938,6 +3471,8 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error updating payments:', error);
         alert('Error updating payments: ' + error.message);
+      } finally {
+        setBulkActionLoading(false);
       }
     };
 
@@ -3988,54 +3523,60 @@ const GigStaffPro = () => {
     const groupedData = getGroupedAssignments();
 
     const exportToCSV = () => {
-      // Prepare CSV data
-      const csvData = filteredAssignments.map(assignment => ({
-        'Worker Name': assignment.worker.name,
-        'Worker Email': assignment.worker.email,
-        'Worker Phone': assignment.worker.phone,
-        'Event Name': assignment.event.name,
-        'Event Date': new Date(assignment.event.date).toLocaleDateString('en-US'),
-        'Venue': assignment.event.venue,
-        'Position': assignment.position,
-        'Hours': assignment.hours || 0,
-        'Miles': assignment.miles || 0,
-        'Base Pay': (assignment.base_pay || 0).toFixed(2),
-        'Travel Pay': (assignment.travel_pay || 0).toFixed(2),
-        'Lake Geneva Bonus': (assignment.lake_geneva_bonus || 0).toFixed(2),
-        'Holiday Multiplier': assignment.holiday_multiplier || 1.0,
-        'Total Pay': (assignment.total_pay || 0).toFixed(2),
-        'Payment Status': assignment.payment_status || 'pending',
-        'Paid Date': assignment.paid_at ? new Date(assignment.paid_at).toLocaleDateString('en-US') : ''
-      }));
-
-      // Convert to CSV string
-      const headers = Object.keys(csvData[0] || {});
-      const csvContent = [
-        headers.join(','),
-        ...csvData.map(row => 
-          headers.map(header => {
-            const value = row[header];
-            // Escape commas and quotes in values
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-              return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-          }).join(',')
-        )
-      ].join('\n');
-
-      // Create download link
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
+      setExportingCSV(true);
       
-      link.setAttribute('href', url);
-      link.setAttribute('download', `payments_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      try {
+        // Prepare CSV data
+        const csvData = filteredAssignments.map(assignment => ({
+          'Worker Name': assignment.worker.name,
+          'Worker Email': assignment.worker.email,
+          'Worker Phone': assignment.worker.phone,
+          'Event Name': assignment.event.name,
+          'Event Date': new Date(assignment.event.date).toLocaleDateString('en-US'),
+          'Venue': assignment.event.venue,
+          'Position': assignment.position,
+          'Hours': assignment.hours || 0,
+          'Miles': assignment.miles || 0,
+          'Base Pay': (assignment.base_pay || 0).toFixed(2),
+          'Travel Pay': (assignment.travel_pay || 0).toFixed(2),
+          'Lake Geneva Bonus': (assignment.lake_geneva_bonus || 0).toFixed(2),
+          'Holiday Multiplier': assignment.holiday_multiplier || 1.0,
+          'Total Pay': (assignment.total_pay || 0).toFixed(2),
+          'Payment Status': assignment.payment_status || 'pending',
+          'Paid Date': assignment.paid_at ? new Date(assignment.paid_at).toLocaleDateString('en-US') : ''
+        }));
+
+        // Convert to CSV string
+        const headers = Object.keys(csvData[0] || {});
+        const csvContent = [
+          headers.join(','),
+          ...csvData.map(row => 
+            headers.map(header => {
+              const value = row[header];
+              // Escape commas and quotes in values
+              if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                return `"${value.replace(/"/g, '""')}"`;
+              }
+              return value;
+            }).join(',')
+          )
+        ].join('\n');
+
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `payments_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        setTimeout(() => setExportingCSV(false), 500); // Brief delay so user sees feedback
+      }
     };
 
     return (
@@ -4044,11 +3585,20 @@ const GigStaffPro = () => {
           <h2 className="text-3xl font-bold text-gray-900">Payment Tracking</h2>
           <button
             onClick={exportToCSV}
-            disabled={filteredAssignments.length === 0}
+            disabled={filteredAssignments.length === 0 || exportingCSV}
             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            <Download size={18} />
-            <span>Export to CSV</span>
+            {exportingCSV ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <>
+                <Download size={18} />
+                <span>Export to CSV</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -4201,19 +3751,36 @@ const GigStaffPro = () => {
             <div className="flex space-x-2">
               <button
                 onClick={bulkMarkAsPaid}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium text-sm"
+                disabled={bulkActionLoading}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium text-sm disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                Mark All as Paid
+                {bulkActionLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Mark All as Paid</span>
+                )}
               </button>
               <button
                 onClick={bulkMarkAsPending}
-                className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 font-medium text-sm"
+                disabled={bulkActionLoading}
+                className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 font-medium text-sm disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                Mark All as Pending
+                {bulkActionLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Mark All as Pending</span>
+                )}
               </button>
               <button
                 onClick={() => setSelectedAssignments([])}
-                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium text-sm"
+                disabled={bulkActionLoading}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Clear Selection
               </button>
