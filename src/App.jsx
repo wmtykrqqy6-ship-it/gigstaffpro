@@ -5232,8 +5232,18 @@ const GigStaffPro = () => {
                     </div>
 
                     {assignment.event.address && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        <span className="font-medium">Address:</span> {assignment.event.address}
+                      <div className="mt-3 p-3 bg-white rounded border border-gray-200">
+                        <p className="text-sm font-semibold text-gray-700 mb-1">Address:</p>
+                        <p className="text-sm text-gray-900">{assignment.event.address}</p>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.event.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 inline-flex items-center space-x-1"
+                        >
+                          <MapPin size={14} />
+                          <span>Open in Google Maps</span>
+                        </a>
                       </div>
                     )}
 
