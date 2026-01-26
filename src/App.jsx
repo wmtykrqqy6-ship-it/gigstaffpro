@@ -4604,14 +4604,20 @@ const GigStaffPro = () => {
           console.log('Event Positions:', JSON.stringify(eventPositions));
           console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
           
-          const hasMatchingSkill = eventPositions.some(pos => 
-            currentWorker.skills && currentWorker.skills.includes(pos)
+          // Extract position names from objects (they're stored as {name: "Blackjack", count: 4})
+          const positionNames = eventPositions.map(pos => 
+            typeof pos === 'object' && pos.name ? pos.name : pos
+          );
+          console.log('Position Names:', JSON.stringify(positionNames));
+          
+          const hasMatchingSkill = positionNames.some(posName => 
+            currentWorker.skills && currentWorker.skills.includes(posName)
           );
           console.log('Has Matching Skill:', hasMatchingSkill);
           
           // DEBUG: Show which positions/skills are being compared
           console.log('Comparison breakdown:');
-          eventPositions.forEach(pos => {
+          positionNames.forEach(pos => {
             const matches = currentWorker.skills && currentWorker.skills.includes(pos);
             console.log(`  "${pos}" matches worker skills? ${matches}`);
           });
@@ -4696,9 +4702,13 @@ const GigStaffPro = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {availableEvents.map(event => {
             // Get positions that match worker skills
-            const eventPositions = event.positions || positions;
-            const matchingPositions = eventPositions.filter(pos => 
-              currentWorker.skills && currentWorker.skills.includes(pos)
+            const eventPositions = Array.isArray(event.positions) ? event.positions : [];
+            // Extract position names from objects {name: "Blackjack", count: 4}
+            const positionNames = eventPositions.map(pos => 
+              typeof pos === 'object' && pos.name ? pos.name : pos
+            );
+            const matchingPositions = positionNames.filter(posName => 
+              currentWorker.skills && currentWorker.skills.includes(posName)
             );
             
             const daysUntil = Math.ceil((new Date(event.date) - new Date()) / (1000 * 60 * 60 * 24));
