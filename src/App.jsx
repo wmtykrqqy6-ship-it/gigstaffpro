@@ -30,6 +30,9 @@ const GigStaffPro = () => {
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [assigningWorker, setAssigningWorker] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [rankAccessDays, setRankAccessDays] = useState({
+    1: 0, 2: 7, 3: 10, 4: 12, 5: 14
+  });
 
   // Load workers from Supabase
   useEffect(() => {
@@ -39,6 +42,7 @@ const GigStaffPro = () => {
     loadAssignments();
     loadPaymentConfig();
     loadPaymentTrackingSetting();
+    loadRankAccessDays();
   }, []);
 
   const loadPaymentTrackingSetting = async () => {
@@ -54,6 +58,22 @@ const GigStaffPro = () => {
       }
     } catch (error) {
       console.error('Error loading payment tracking setting:', error);
+    }
+  };
+
+  const loadRankAccessDays = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'rank_access_days')
+        .single();
+      
+      if (!error && data && data.setting_value) {
+        setRankAccessDays(JSON.parse(data.setting_value));
+      }
+    } catch (error) {
+      console.error('Error loading rank access days:', error);
     }
   };
 
@@ -4543,6 +4563,165 @@ const GigStaffPro = () => {
     );
   };
 
+  const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays }) => {
+    const [applying, setApplying] = useState(false);
+    
+    // Calculate which events the worker can see based on rank
+    const getAvailableEvents = () => {
+      const today = new Date();
+      const workerRank = currentWorker.rank || 5;
+      const accessDays = rankAccessDays[workerRank] || 14;
+      
+      return events
+        .filter(event => {
+          // Must be future event
+          const eventDate = new Date(event.date);
+          if (eventDate < today) return false;
+          
+          // Calculate days until event
+          const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+          
+          // Check if within access window
+          if (daysUntil > accessDays && accessDays > 0) return false;
+          
+          // Must have positions that match worker skills
+          const eventPositions = event.positions || positions;
+          const hasMatchingSkill = eventPositions.some(pos => 
+            currentWorker.skills && currentWorker.skills.includes(pos)
+          );
+          if (!hasMatchingSkill) return false;
+          
+          // Not already assigned or applied
+          const alreadyAssigned = assignments.some(a => 
+            a.event_id === event.id && 
+            a.worker_id === currentWorker.id &&
+            ['approved', 'pending'].includes(a.status || 'approved')
+          );
+          if (alreadyAssigned) return false;
+          
+          return true;
+        })
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    };
+    
+    const availableEvents = getAvailableEvents();
+    
+    const applyToEvent = async (event, position) => {
+      if (!confirm(`Apply for ${position} position at ${event.name}?`)) return;
+      
+      setApplying(true);
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .insert([{
+            event_id: event.id,
+            worker_id: currentWorker.id,
+            position: position,
+            status: 'pending',
+            applied_at: new Date().toISOString()
+          }]);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+      } catch (error) {
+        console.error('Error applying:', error);
+        alert('Error submitting application: ' + error.message);
+      } finally {
+        setApplying(false);
+      }
+    };
+    
+    if (availableEvents.length === 0) {
+      return (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Available Events</h3>
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-600">No events available to apply for right now.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Check back later or contact admin for more opportunities.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-900">Available Events</h3>
+          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+            {availableEvents.length} Available
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {availableEvents.map(event => {
+            // Get positions that match worker skills
+            const eventPositions = event.positions || positions;
+            const matchingPositions = eventPositions.filter(pos => 
+              currentWorker.skills && currentWorker.skills.includes(pos)
+            );
+            
+            const daysUntil = Math.ceil((new Date(event.date) - new Date()) / (1000 * 60 * 60 * 24));
+            
+            return (
+              <div key={event.id} className="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-blue-50">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-gray-900">{event.name}</h4>
+                  {daysUntil <= 7 && (
+                    <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                      Soon!
+                    </span>
+                  )}
+                </div>
+                
+                <div className="space-y-1 text-sm text-gray-700 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Calendar size={14} className="text-gray-500" />
+                    <span>{new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock size={14} className="text-gray-500" />
+                    <span>{event.time}{event.end_time ? ` - ${event.end_time}` : ''}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <MapPin size={14} className="text-gray-500" />
+                    <span>{event.venue}</span>
+                  </div>
+                </div>
+                
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Available Positions:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {matchingPositions.map(position => (
+                      <button
+                        key={position}
+                        onClick={() => applyToEvent(event, position)}
+                        disabled={applying}
+                        className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                      >
+                        Apply: {position}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {event.notes && (
+                  <p className="text-xs text-gray-600 bg-yellow-50 p-2 rounded border border-yellow-200">
+                    📝 {event.notes}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const WorkerPortalView = () => {
     // For demo purposes, use first worker. In production, this would be based on logged-in user
     const [selectedWorkerId, setSelectedWorkerId] = useState(null);
@@ -4724,6 +4903,14 @@ const GigStaffPro = () => {
             </div>
           </div>
         </div>
+
+        {/* Available Events - Events worker can apply to */}
+        <AvailableEventsSection 
+          currentWorker={currentWorker} 
+          events={events}
+          assignments={assignments}
+          rankAccessDays={rankAccessDays}
+        />
 
         {/* Upcoming Events */}
         <div className="bg-white rounded-lg shadow p-6">
