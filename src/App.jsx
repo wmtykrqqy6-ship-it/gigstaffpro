@@ -4601,13 +4601,20 @@ const GigStaffPro = () => {
           
           // Must have positions that match worker skills
           const eventPositions = Array.isArray(event.positions) ? event.positions : [];
-          console.log('Event Positions:', eventPositions);
-          console.log('Worker Skills:', currentWorker.skills);
+          console.log('Event Positions:', JSON.stringify(eventPositions));
+          console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
           
           const hasMatchingSkill = eventPositions.some(pos => 
             currentWorker.skills && currentWorker.skills.includes(pos)
           );
           console.log('Has Matching Skill:', hasMatchingSkill);
+          
+          // DEBUG: Show which positions/skills are being compared
+          console.log('Comparison breakdown:');
+          eventPositions.forEach(pos => {
+            const matches = currentWorker.skills && currentWorker.skills.includes(pos);
+            console.log(`  "${pos}" matches worker skills? ${matches}`);
+          });
           
           if (!hasMatchingSkill) {
             console.log('❌ No matching skills');
