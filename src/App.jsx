@@ -5099,6 +5099,48 @@ const GigStaffPro = () => {
     const availableEvents = getAvailableEvents();
     
     const applyToEvent = async (event, position) => {
+      // Check for time conflicts first
+      const workerAssignments = assignments.filter(a => 
+        a.worker_id === currentWorker.id && 
+        a.event_id !== event.id &&
+        ['approved', 'pending'].includes(a.status || 'approved')
+      );
+      
+      let hasTimeConflict = false;
+      let conflictEvent = null;
+      
+      if (workerAssignments.length > 0) {
+        const conflicts = workerAssignments.filter(assignment => {
+          const otherEvent = events.find(e => e.id === assignment.event_id);
+          if (!otherEvent || otherEvent.date !== event.date) return false;
+          
+          const parseTime = (timeStr) => {
+            if (!timeStr) return null;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+          
+          const thisStart = parseTime(event.time);
+          const thisEnd = parseTime(event.end_time);
+          const otherStart = parseTime(otherEvent.time);
+          const otherEnd = parseTime(otherEvent.end_time);
+          
+          if (!thisEnd || !otherEnd) return false;
+          
+          return (thisStart < otherEnd) && (thisEnd > otherStart);
+        });
+        
+        if (conflicts.length > 0) {
+          hasTimeConflict = true;
+          conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+        }
+      }
+      
+      if (hasTimeConflict && conflictEvent) {
+        alert(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${conflictEvent.time} - ${conflictEvent.end_time}\n\nThis conflicts with:\n${event.name}\n${event.time} - ${event.end_time}\n\nPlease contact admin if you need to change assignments.`);
+        return;
+      }
+      
       if (!confirm(`Apply for ${position} position at ${event.name}?`)) return;
       
       setApplying(true);
