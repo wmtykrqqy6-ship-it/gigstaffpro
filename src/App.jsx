@@ -30,22 +30,49 @@ const LoginScreen = ({ onLogin }) => {
       // Strip all non-numeric characters from phone for comparison
       const cleanPhone = phoneNumber.replace(/\D/g, '');
       
-      // Search for worker by phone - try both formatted and unformatted
-      const { data: workers, error: fetchError } = await supabase
+      console.log('Login attempt:');
+      console.log('- Phone entered:', phoneNumber);
+      console.log('- Clean phone:', cleanPhone);
+      console.log('- PIN entered:', pin);
+      
+      // Search for worker by phone - try formatted version first
+      let { data: workers, error: fetchError } = await supabase
         .from('workers')
         .select('*')
-        .or(`phone.eq.${phoneNumber},phone.eq.${cleanPhone}`)
+        .eq('phone', phoneNumber)
         .eq('is_active', true);
 
-      if (fetchError) throw fetchError;
+      console.log('First query (formatted phone):', workers);
+
+      // If not found, try unformatted
+      if (!workers || workers.length === 0) {
+        console.log('Trying unformatted phone...');
+        const result = await supabase
+          .from('workers')
+          .select('*')
+          .eq('phone', cleanPhone)
+          .eq('is_active', true);
+        
+        workers = result.data;
+        fetchError = result.error;
+        console.log('Second query (clean phone):', workers);
+      }
+
+      if (fetchError) {
+        console.error('Supabase error:', fetchError);
+        throw fetchError;
+      }
 
       if (!workers || workers.length === 0) {
+        console.log('No worker found');
         setError('Phone number not found. Contact your manager.');
         setLoading(false);
         return;
       }
 
       const worker = workers[0];
+      console.log('Worker found:', worker.name);
+      console.log('PIN hash in DB:', worker.pin_hash);
 
       // Check if PIN is set
       if (!worker.pin_hash) {
@@ -56,6 +83,9 @@ const LoginScreen = ({ onLogin }) => {
 
       // Hash entered PIN and compare
       const hashedPin = await hashPin(pin);
+      console.log('Entered PIN hash:', hashedPin);
+      console.log('Match?', hashedPin === worker.pin_hash);
+      
       if (hashedPin !== worker.pin_hash) {
         setError('Incorrect PIN. Please try again.');
         setLoading(false);
@@ -63,6 +93,7 @@ const LoginScreen = ({ onLogin }) => {
       }
 
       // Success!
+      console.log('Login successful!');
       onLogin('worker', worker);
     } catch (error) {
       console.error('Login error:', error);
