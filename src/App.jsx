@@ -2078,7 +2078,6 @@ const GigStaffPro = () => {
                           </div>
                         )}
                       </div>
-                    </div>
                   );
                 })}
               </div>
