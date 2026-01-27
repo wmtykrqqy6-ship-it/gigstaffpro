@@ -3015,7 +3015,7 @@ const GigStaffPro = () => {
                           </span>
                           <span className="flex items-center space-x-1">
                             <Clock size={12} />
-                            <span>{event.time}</span>
+                            <span>{formatTime(event.time, timeFormat)}</span>
                           </span>
                           <span className="flex items-center space-x-1">
                             <MapPin size={12} />
@@ -3155,7 +3155,7 @@ const GigStaffPro = () => {
                     </div>
                     <div className="flex items-center space-x-2 text-gray-700">
                       <Clock size={16} className="text-red-600" />
-                      <span className="text-sm">{event.time}{event.end_time ? ` - ${event.end_time}` : ''}</span>
+                      <span className="text-sm">{formatTime(event.time, timeFormat)}{event.end_time ? ` - ${formatTime(event.end_time, timeFormat)}` : ''}</span>
                     </div>
                     <div className="flex items-center space-x-2 text-gray-700">
                       <MapPin size={16} className="text-red-600" />
@@ -5040,7 +5040,7 @@ const GigStaffPro = () => {
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                             <span className="flex items-center space-x-1">
                               <Clock size={14} />
-                              <span>{event.time}{event.end_time ? ` - ${event.end_time}` : ''}</span>
+                              <span>{formatTime(event.time, timeFormat)}{event.end_time ? ` - ${formatTime(event.end_time, timeFormat)}` : ''}</span>
                             </span>
                             <span className="flex items-center space-x-1">
                               <MapPin size={14} />
@@ -5167,7 +5167,7 @@ const GigStaffPro = () => {
                         </span>
                         <span className="flex items-center space-x-1">
                           <Clock size={14} />
-                          <span>{assignment.event.time}</span>
+                          <span>{formatTime(assignment.event.time, timeFormat)}</span>
                         </span>
                         <span className="flex items-center space-x-1">
                           <MapPin size={14} />
@@ -5226,7 +5226,7 @@ const GigStaffPro = () => {
     );
   };
 
-  const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays }) => {
+  const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat }) => {
     const [applying, setApplying] = useState(false);
     
     // Calculate which events the worker can see based on rank
@@ -5350,7 +5350,7 @@ const GigStaffPro = () => {
       }
       
       if (hasTimeConflict && conflictEvent) {
-        alert(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${conflictEvent.time} - ${conflictEvent.end_time}\n\nThis conflicts with:\n${event.name}\n${event.time} - ${event.end_time}\n\nPlease contact admin if you need to change assignments.`);
+        alert(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${formatTime(conflictEvent.time, timeFormat)} - ${formatTime(conflictEvent.end_time, timeFormat)}\n\nThis conflicts with:\n${event.name}\n${formatTime(event.time, timeFormat)} - ${formatTime(event.end_time, timeFormat)}\n\nPlease contact admin if you need to change assignments.`);
         return;
       }
       
@@ -5436,7 +5436,7 @@ const GigStaffPro = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock size={14} className="text-gray-500" />
-                    <span>{event.time}{event.end_time ? ` - ${event.end_time}` : ''}</span>
+                    <span>{formatTime(event.time, timeFormat)}{event.end_time ? ` - ${formatTime(event.end_time, timeFormat)}` : ''}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin size={14} className="text-gray-500" />
@@ -5655,6 +5655,7 @@ const GigStaffPro = () => {
           events={events}
           assignments={assignments}
           rankAccessDays={rankAccessDays}
+          timeFormat={timeFormat}
         />
 
         {/* Upcoming Events */}
@@ -5767,7 +5768,7 @@ const GigStaffPro = () => {
                                 className="text-xs bg-blue-500 text-white px-1 py-0.5 rounded truncate"
                                 title={`${assignment.event.name} - ${assignment.position}`}
                               >
-                                {assignment.event.time} {assignment.position}
+                                {formatTime(assignment.event.time, timeFormat)} {assignment.position}
                               </div>
                             ))}
                             {dayAssignments.length > 2 && (
@@ -5855,7 +5856,7 @@ const GigStaffPro = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Clock size={16} className="text-gray-500" />
-                        <span>{assignment.event.time}{assignment.event.end_time ? ` - ${assignment.event.end_time}` : ''}</span>
+                        <span>{formatTime(assignment.event.time, timeFormat)}{assignment.event.end_time ? ` - ${formatTime(assignment.event.end_time, timeFormat)}` : ''}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <MapPin size={16} className="text-gray-500" />
@@ -5991,7 +5992,7 @@ const GigStaffPro = () => {
                           <div className="flex items-center space-x-2">
                             <Clock size={16} className="text-gray-500" />
                             <span className="font-medium">
-                              {assignment.event.time}{assignment.event.end_time ? ` - ${assignment.event.end_time}` : ''}
+                              {formatTime(assignment.event.time, timeFormat)}{assignment.event.end_time ? ` - ${formatTime(assignment.event.end_time, timeFormat)}` : ''}
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">
