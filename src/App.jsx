@@ -12,6 +12,23 @@ const hashPin = async (pin) => {
     .join('');
 };
 
+// Helper function to format time based on 12/24 hour preference
+const formatTime = (timeStr, format = '12') => {
+  if (!timeStr) return '';
+  
+  const [hours, minutes] = timeStr.split(':');
+  const hour = parseInt(hours);
+  
+  if (format === '24') {
+    return `${hours}:${minutes}`;
+  }
+  
+  // 12-hour format
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${hour12}:${minutes} ${period}`;
+};
+
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -372,6 +389,7 @@ const GigStaffPro = () => {
   const [rankAccessDays, setRankAccessDays] = useState({
     1: 0, 2: 7, 3: 10, 4: 12, 5: 14
   });
+  const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24' hour format
   const [loggedInWorker, setLoggedInWorker] = useState(null); // Current logged in worker
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
@@ -388,7 +406,26 @@ const GigStaffPro = () => {
     loadPaymentConfig();
     loadPaymentTrackingSetting();
     loadRankAccessDays();
+    loadTimeFormat();
   }, []);
+
+  const loadTimeFormat = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'time_format')
+        .single();
+      
+      if (!error && data && data.setting_value) {
+        setTimeFormat(data.setting_value);
+      }
+    } catch (error) {
+      console.error('Error loading time format:', error);
+      // Default to 12-hour if error
+      setTimeFormat('12');
+    }
+  };
 
   const loadPaymentTrackingSetting = async () => {
     try {
@@ -3352,11 +3389,15 @@ const GigStaffPro = () => {
       5: 14   // Rank 5 sees 14 days before
     });
     const [loadingRankAccess, setLoadingRankAccess] = useState(true);
+    const [timezone, setTimezone] = useState('America/Chicago');
+    const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24'
+    const [loadingTimeSettings, setLoadingTimeSettings] = useState(true);
 
     useEffect(() => {
       loadWarehouseAddress();
       loadPaymentTrackingSetting();
       loadRankAccessSettings();
+      loadTimeSettings();
     }, []);
 
     const loadWarehouseAddress = async () => {
@@ -3535,6 +3576,96 @@ const GigStaffPro = () => {
       } catch (error) {
         console.error('Error saving warehouse address:', error);
         alert('Error saving warehouse address: ' + error.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const loadTimeSettings = async () => {
+      try {
+        // Load timezone
+        const { data: tzData } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'timezone')
+          .single();
+        
+        if (tzData) {
+          setTimezone(tzData.setting_value || 'America/Chicago');
+        }
+
+        // Load time format
+        const { data: formatData } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'time_format')
+          .single();
+        
+        if (formatData) {
+          setTimeFormat(formatData.setting_value || '12');
+        }
+      } catch (error) {
+        console.error('Error loading time settings:', error);
+      } finally {
+        setLoadingTimeSettings(false);
+      }
+    };
+
+    const saveTimeSettings = async () => {
+      setSaving(true);
+      try {
+        // Save timezone
+        const { data: existingTz } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'timezone')
+          .single();
+
+        if (existingTz) {
+          await supabase
+            .from('settings')
+            .update({ 
+              setting_value: timezone,
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'timezone');
+        } else {
+          await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'timezone',
+              setting_value: timezone
+            }]);
+        }
+
+        // Save time format
+        const { data: existingFormat } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('setting_key', 'time_format')
+          .single();
+
+        if (existingFormat) {
+          await supabase
+            .from('settings')
+            .update({ 
+              setting_value: timeFormat,
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'time_format');
+        } else {
+          await supabase
+            .from('settings')
+            .insert([{
+              setting_key: 'time_format',
+              setting_value: timeFormat
+            }]);
+        }
+
+        alert('Time settings saved successfully!');
+      } catch (error) {
+        console.error('Error saving time settings:', error);
+        alert('Error saving time settings: ' + error.message);
       } finally {
         setSaving(false);
       }
@@ -3889,6 +4020,88 @@ const GigStaffPro = () => {
                 className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Save Access Settings'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Time & Date Settings */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Time & Date Settings</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure timezone and time display format for your organization.
+          </p>
+          
+          {loadingTimeSettings ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Timezone Setting */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Timezone
+                </label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  disabled={saving}
+                >
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Phoenix">Arizona (MST - No DST)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  All event times and dates will be displayed in this timezone
+                </p>
+              </div>
+
+              {/* Time Format Setting */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Time Format
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="12"
+                      checked={timeFormat === '12'}
+                      onChange={(e) => setTimeFormat(e.target.value)}
+                      disabled={saving}
+                      className="w-4 h-4 text-red-900 focus:ring-red-500"
+                    />
+                    <span className="text-sm">12-hour (2:30 PM)</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="24"
+                      checked={timeFormat === '24'}
+                      onChange={(e) => setTimeFormat(e.target.value)}
+                      disabled={saving}
+                      className="w-4 h-4 text-red-900 focus:ring-red-500"
+                    />
+                    <span className="text-sm">24-hour (14:30)</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose how times are displayed throughout the app
+                </p>
+              </div>
+
+              <button
+                onClick={saveTimeSettings}
+                disabled={saving}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Time Settings'}
               </button>
             </div>
           )}
@@ -5521,7 +5734,8 @@ const GigStaffPro = () => {
                   for (let day = 1; day <= daysInMonth; day++) {
                     const currentDate = new Date(year, month, day);
                     currentDate.setHours(0, 0, 0, 0);
-                    const dateStr = currentDate.toISOString().split('T')[0];
+                    // Format date as YYYY-MM-DD without timezone conversion
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     
                     const dayAssignments = workerAssignments.filter(a => 
                       a.event && a.event.date === dateStr
