@@ -1517,8 +1517,16 @@ const GigStaffPro = () => {
     const [eventMiles, setEventMiles] = useState(0);
     const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
     const [eventIsHoliday, setEventIsHoliday] = useState(false);
+    const [expandedPositions, setExpandedPositions] = useState({});
     
     if (!showAssignModal || !selectedEvent) return null;
+
+    const togglePosition = (position) => {
+      setExpandedPositions(prev => ({
+        ...prev,
+        [position]: !prev[position]
+      }));
+    };
 
     // Initialize event payment settings from event or calculate defaults
     useEffect(() => {
@@ -1840,106 +1848,118 @@ const GigStaffPro = () => {
                   const filled = posAssignments.length;
                   const needed = pos.count;
                   const isFull = filled >= needed;
+                  const isExpanded = expandedPositions[pos.name];
+
+                  // Get and sort qualified workers
+                  const qualifiedWorkers = workers
+                    .filter(worker => {
+                      if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                      if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
+                      
+                      const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
+                      const positionName = pos.name.toLowerCase();
+                      
+                      if (positionName.includes('poker')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('poker'));
+                      } else if (positionName.includes('blackjack')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('blackjack'));
+                      } else if (positionName.includes('roulette')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('roulette'));
+                      } else if (positionName.includes('craps')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('craps'));
+                      } else if (positionName.includes('baccarat')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('baccarat'));
+                      } else if (positionName.includes('host')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('host'));
+                      } else if (positionName.includes('bartender')) {
+                        return workerSkills.some(skill => skill.toLowerCase().includes('bartender') || skill.toLowerCase().includes('mixology'));
+                      } else if (positionName === 'dealer') {
+                        return workerSkills.some(skill => 
+                          skill.toLowerCase().includes('dealer') || 
+                          skill.toLowerCase().includes('poker') ||
+                          skill.toLowerCase().includes('blackjack') ||
+                          skill.toLowerCase().includes('roulette') ||
+                          skill.toLowerCase().includes('craps') ||
+                          skill.toLowerCase().includes('baccarat')
+                        );
+                      }
+                      return true;
+                    })
+                    .sort((a, b) => {
+                      // Sort by rank first (lower is better)
+                      if (a.rank !== b.rank) return a.rank - b.rank;
+                      // Then by reliability (higher is better)
+                      return b.reliability - a.reliability;
+                    });
 
                   return (
-                    <div key={idx} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
+                    <div key={idx} className="border rounded-lg overflow-hidden">
+                      {/* Collapsible Header */}
+                      <div 
+                        onClick={() => togglePosition(pos.name)}
+                        className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                      >
                         <div className="flex items-center space-x-3">
+                          <button className="text-gray-600">
+                            {isExpanded ? '▼' : '▶'}
+                          </button>
                           <h4 className="text-lg font-semibold text-gray-900">{pos.name}</h4>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                             isFull ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                           }`}>
                             {filled} / {needed} filled
                           </span>
+                          {!isFull && (
+                            <span className="text-xs text-gray-500">
+                              {qualifiedWorkers.length} available
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Assigned Workers */}
-                      {posAssignments.length > 0 && (
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Assigned:</p>
-                          <div className="space-y-2">
-                            {posAssignments.map(assignment => {
-                              const worker = workers.find(w => w.id === assignment.worker_id);
-                              if (!worker) return null;
-                              
-                              return (
-                                <div key={assignment.id} className="flex items-center justify-between bg-green-50 p-3 rounded">
-                                  <div className="flex items-center space-x-3">
-                                    <CheckCircle size={20} className="text-green-600" />
-                                    <div>
-                                      <p className="font-medium text-gray-900">{worker.name}</p>
-                                      <p className="text-xs text-gray-600">{worker.phone}</p>
+                      {/* Expandable Content */}
+                      {isExpanded && (
+                        <div className="p-4">
+                          {/* Assigned Workers */}
+                          {posAssignments.length > 0 && (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-700 mb-2">Assigned:</p>
+                              <div className="space-y-2">
+                                {posAssignments.map(assignment => {
+                                  const worker = workers.find(w => w.id === assignment.worker_id);
+                                  if (!worker) return null;
+                                  
+                                  return (
+                                    <div key={assignment.id} className="flex items-center justify-between bg-green-50 p-3 rounded">
+                                      <div className="flex items-center space-x-3">
+                                        <CheckCircle size={20} className="text-green-600" />
+                                        <div>
+                                          <p className="font-medium text-gray-900">{worker.name}</p>
+                                          <p className="text-xs text-gray-600">{worker.phone}</p>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={() => unassignWorker(assignment.id)}
+                                        className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                        title="Remove assignment"
+                                      >
+                                        <Trash2 size={18} />
+                                      </button>
                                     </div>
-                                  </div>
-                                  <button
-                                    onClick={() => unassignWorker(assignment.id)}
-                                    className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
-                                    title="Remove assignment"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Available Workers */}
-                      {!isFull && (
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-gray-700">Available Workers:</p>
-                            <span className="text-xs text-gray-500">
-                              {workers.filter(worker => {
-                                if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-                                if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
-                                const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
-                                const positionName = pos.name.toLowerCase();
-                                if (positionName.includes('poker')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('poker'));
-                                } else if (positionName.includes('blackjack')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('blackjack'));
-                                } else if (positionName.includes('roulette')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('roulette'));
-                                } else if (positionName.includes('craps')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('craps'));
-                                } else if (positionName.includes('baccarat')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('baccarat'));
-                                } else if (positionName.includes('host')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('host'));
-                                } else if (positionName.includes('bartender')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('bartender') || skill.toLowerCase().includes('mixology'));
-                                } else if (positionName === 'dealer') {
-                                  return workerSkills.some(skill => 
-                                    skill.toLowerCase().includes('dealer') || 
-                                    skill.toLowerCase().includes('poker') ||
-                                    skill.toLowerCase().includes('blackjack') ||
-                                    skill.toLowerCase().includes('roulette') ||
-                                    skill.toLowerCase().includes('craps') ||
-                                    skill.toLowerCase().includes('baccarat')
                                   );
-                                }
-                                return true;
-                              }).length} qualified workers
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                            {workers
-                              .filter(worker => {
-                                // Apply search filter
-                                if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) {
-                                  return false;
-                                }
-                                
-                                // Apply availability filter
-                                if (showOnlyAvailable) {
-                                  const isAssigned = eventAssignments.some(a => a.worker_id === worker.id);
-                                  if (isAssigned) return false;
-                                }
-                                
-                                // Check if worker has required skills for this position
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Available Workers */}
+                          {!isFull && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">
+                                Available Workers: ({qualifiedWorkers.length})
+                              </p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                                {qualifiedWorkers.map(worker => {
                                 const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
                                 const positionName = pos.name.toLowerCase();
                                 
@@ -2033,6 +2053,16 @@ const GigStaffPro = () => {
                                         }`}>
                                           {worker.name}
                                         </p>
+                                        <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                                          worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
+                                          worker.rank === 2 ? 'bg-blue-100 text-blue-800' :
+                                          'bg-gray-100 text-gray-700'
+                                        }`}>
+                                          Rank {worker.rank}
+                                        </span>
+                                        <span className="text-xs text-gray-600 flex items-center">
+                                          ⭐ {worker.reliability.toFixed(1)}
+                                        </span>
                                         {hasTimeConflict && (
                                           <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
                                             TIME CONFLICT
@@ -2073,43 +2103,15 @@ const GigStaffPro = () => {
                                   </div>
                                 );
                               })}
-                            {workers.filter(worker => {
-                              const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
-                              const positionName = pos.name.toLowerCase();
-                              
-                              if (positionName.includes('poker')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('poker'));
-                              } else if (positionName.includes('blackjack')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('blackjack'));
-                              } else if (positionName.includes('roulette')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('roulette'));
-                              } else if (positionName.includes('craps')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('craps'));
-                              } else if (positionName.includes('baccarat')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('baccarat'));
-                              } else if (positionName.includes('host')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('host'));
-                              } else if (positionName.includes('bartender')) {
-                                return workerSkills.some(skill => skill.toLowerCase().includes('bartender') || skill.toLowerCase().includes('mixology'));
-                              } else if (positionName === 'dealer') {
-                                return workerSkills.some(skill => 
-                                  skill.toLowerCase().includes('dealer') || 
-                                  skill.toLowerCase().includes('poker') ||
-                                  skill.toLowerCase().includes('blackjack') ||
-                                  skill.toLowerCase().includes('roulette') ||
-                                  skill.toLowerCase().includes('craps') ||
-                                  skill.toLowerCase().includes('baccarat')
-                                );
-                              }
-                              return true;
-                            }).length === 0 && (
-                              <p className="text-sm text-gray-500 col-span-2 text-center py-4">
-                                No qualified workers available for this position
-                              </p>
-                            )}
+                              {qualifiedWorkers.length === 0 && (
+                                <p className="text-sm text-gray-500 col-span-2 text-center py-4">
+                                  No qualified workers available for this position
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   );
                 })}
