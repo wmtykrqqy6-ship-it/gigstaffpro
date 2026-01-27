@@ -27,11 +27,14 @@ const LoginScreen = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      // Find worker by phone
+      // Strip all non-numeric characters from phone for comparison
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      
+      // Search for worker by phone - try both formatted and unformatted
       const { data: workers, error: fetchError } = await supabase
         .from('workers')
         .select('*')
-        .eq('phone', phoneNumber)
+        .or(`phone.eq.${phoneNumber},phone.eq.${cleanPhone}`)
         .eq('is_active', true);
 
       if (fetchError) throw fetchError;
