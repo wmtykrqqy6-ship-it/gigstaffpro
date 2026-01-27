@@ -2,8 +2,298 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
 
+// Simple hash function for PINs (in production, use proper bcrypt on backend)
+const hashPin = async (pin) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const LoginScreen = ({ onLogin }) => {
+  const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [pin, setPin] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleWorkerLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Find worker by phone
+      const { data: workers, error: fetchError } = await supabase
+        .from('workers')
+        .select('*')
+        .eq('phone', phoneNumber)
+        .eq('is_active', true);
+
+      if (fetchError) throw fetchError;
+
+      if (!workers || workers.length === 0) {
+        setError('Phone number not found. Contact your manager.');
+        setLoading(false);
+        return;
+      }
+
+      const worker = workers[0];
+
+      // Check if PIN is set
+      if (!worker.pin_hash) {
+        setError('No PIN set for this account. Contact your manager to set up your PIN.');
+        setLoading(false);
+        return;
+      }
+
+      // Hash entered PIN and compare
+      const hashedPin = await hashPin(pin);
+      if (hashedPin !== worker.pin_hash) {
+        setError('Incorrect PIN. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Success!
+      onLogin('worker', worker);
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Check admin credentials
+      const { data: admins, error: fetchError } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('username', username);
+
+      if (fetchError) throw fetchError;
+
+      if (!admins || admins.length === 0) {
+        setError('Invalid username or password.');
+        setLoading(false);
+        return;
+      }
+
+      const admin = admins[0];
+
+      // For now, simple comparison (in production, use bcrypt)
+      const hashedPassword = await hashPin(password);
+      if (hashedPassword !== admin.password_hash) {
+        setError('Invalid username or password.');
+        setLoading(false);
+        return;
+      }
+
+      // Success!
+      onLogin('admin', admin);
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatPhoneNumber = (value) => {
+    const cleaned = value.replace(/\D/g, '');
+    if (cleaned.length <= 3) return cleaned;
+    if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+  };
+
+  if (mode === 'select') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">🎰 GigStaffPro</h1>
+            <p className="text-red-200">Casino Staffing Management</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-xl p-8 space-y-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Select Login Type</h2>
+            
+            <button
+              onClick={() => setMode('worker')}
+              className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 font-semibold text-lg flex items-center justify-center space-x-2"
+            >
+              <User size={24} />
+              <span>Worker Login</span>
+            </button>
+
+            <button
+              onClick={() => setMode('admin')}
+              className="w-full bg-red-900 text-white px-6 py-4 rounded-lg hover:bg-red-800 font-semibold text-lg flex items-center justify-center space-x-2"
+            >
+              <Settings size={24} />
+              <span>Admin Login</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'worker') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">🎰 GigStaffPro</h1>
+            <p className="text-red-200">Worker Portal</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-xl p-8">
+            <button
+              onClick={() => setMode('select')}
+              className="text-sm text-gray-600 hover:text-gray-900 mb-4"
+            >
+              ← Back
+            </button>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Worker Login</h2>
+
+            <form onSubmit={handleWorkerLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
+                  placeholder="(555) 123-4567"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  maxLength={14}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  PIN (4 digits)
+                </label>
+                <input
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-2xl tracking-widest"
+                  maxLength={4}
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || pin.length !== 4}
+                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
+              >
+                {loading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+
+            <p className="text-xs text-gray-500 mt-4 text-center">
+              Forgot your PIN? Contact your manager.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">🎰 GigStaffPro</h1>
+            <p className="text-red-200">Admin Dashboard</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-xl p-8">
+            <button
+              onClick={() => setMode('select')}
+              className="text-sm text-gray-600 hover:text-gray-900 mb-4"
+            >
+              ← Back
+            </button>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Admin Login</h2>
+
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="admin"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
+              >
+                {loading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+};
+
 const GigStaffPro = () => {
-  const [userRole, setUserRole] = useState('admin');
+  const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
   const [currentView, setCurrentView] = useState('dashboard');
   const [workers, setWorkers] = useState([]);
   const [events, setEvents] = useState([]);
@@ -33,6 +323,8 @@ const GigStaffPro = () => {
   const [rankAccessDays, setRankAccessDays] = useState({
     1: 0, 2: 7, 3: 10, 4: 12, 5: 14
   });
+  const [loggedInWorker, setLoggedInWorker] = useState(null); // Current logged in worker
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Load workers from Supabase
   useEffect(() => {
@@ -289,7 +581,9 @@ const GigStaffPro = () => {
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-bold">GigStaffPro</h1>
-              <p className="text-xs text-red-200 hidden sm:block">Casino Party Staffing</p>
+              <p className="text-xs text-red-200 hidden sm:block">
+                {userRole === 'admin' ? 'Admin Dashboard' : `${loggedInWorker?.name || 'Worker'} Portal`}
+              </p>
             </div>
           </div>
           
@@ -299,10 +593,11 @@ const GigStaffPro = () => {
               <span className="absolute -top-1 -right-1 bg-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">3</span>
             </button>
             <button 
-              onClick={() => setUserRole(userRole === 'admin' ? 'worker' : 'admin')}
-              className="text-xs bg-red-700 px-2 sm:px-3 py-1.5 sm:py-2 rounded hover:bg-red-600 font-medium whitespace-nowrap"
+              onClick={handleLogout}
+              className="text-xs bg-red-700 px-2 sm:px-3 py-1.5 sm:py-2 rounded hover:bg-red-600 font-medium whitespace-nowrap flex items-center space-x-1"
             >
-              Mode: {userRole === 'admin' ? 'Admin' : 'Worker'}
+              <LogOut size={14} />
+              <span>Logout</span>
             </button>
           </div>
         </div>
@@ -4799,48 +5094,18 @@ const GigStaffPro = () => {
   };
 
   const WorkerPortalView = () => {
-    // For demo purposes, use first worker. In production, this would be based on logged-in user
-    const [selectedWorkerId, setSelectedWorkerId] = useState(null);
-    const [workerSelectMode, setWorkerSelectMode] = useState(true);
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedEventModal, setSelectedEventModal] = useState(null);
 
-    // Select a worker for demo
-    if (workerSelectMode) {
+    const currentWorker = loggedInWorker;
+    if (!currentWorker) {
       return (
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Select Your Profile</h2>
-            <p className="text-gray-600 mb-6">
-              In production, you would be automatically logged in. For demo purposes, select a worker profile:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {workers.map(worker => (
-                <button
-                  key={worker.id}
-                  onClick={() => {
-                    setSelectedWorkerId(worker.id);
-                    setWorkerSelectMode(false);
-                  }}
-                  className="text-left p-4 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:shadow-md transition-all"
-                >
-                  <p className="font-bold text-gray-900">{worker.name}</p>
-                  <p className="text-sm text-gray-600">{worker.email}</p>
-                  <div className="flex items-center space-x-1 mt-2">
-                    <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                    <span className="text-sm font-semibold">{worker.reliability}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="bg-white rounded-lg shadow p-6">
+          <p className="text-red-600">Error: Not logged in as a worker.</p>
         </div>
       );
     }
-
-    const currentWorker = workers.find(w => w.id === selectedWorkerId);
-    if (!currentWorker) return null;
 
     const workerAssignments = assignments
       .filter(a => a.worker_id === currentWorker.id)
@@ -4869,12 +5134,6 @@ const GigStaffPro = () => {
               <h2 className="text-3xl font-bold mb-2">Welcome, {currentWorker.name}!</h2>
               <p className="text-red-200">Your worker portal</p>
             </div>
-            <button
-              onClick={() => setWorkerSelectMode(true)}
-              className="text-sm bg-red-700 px-3 py-2 rounded hover:bg-red-600"
-            >
-              Switch Profile
-            </button>
           </div>
         </div>
 
@@ -5418,6 +5677,57 @@ const GigStaffPro = () => {
       </div>
     );
   };
+
+  const handleLogin = (role, user) => {
+    setUserRole(role);
+    setIsAuthenticated(true);
+    if (role === 'worker') {
+      setLoggedInWorker(user);
+    }
+    // Store in sessionStorage to persist across page refreshes
+    sessionStorage.setItem('userRole', role);
+    sessionStorage.setItem('userId', user.id);
+  };
+
+  const handleLogout = () => {
+    setUserRole(null);
+    setIsAuthenticated(false);
+    setLoggedInWorker(null);
+    sessionStorage.removeItem('userRole');
+    sessionStorage.removeItem('userId');
+  };
+
+  // Check for existing session on load
+  useEffect(() => {
+    const checkSession = async () => {
+      const storedRole = sessionStorage.getItem('userRole');
+      const storedUserId = sessionStorage.getItem('userId');
+
+      if (storedRole && storedUserId) {
+        if (storedRole === 'worker') {
+          const { data } = await supabase
+            .from('workers')
+            .select('*')
+            .eq('id', storedUserId)
+            .single();
+          if (data) {
+            setLoggedInWorker(data);
+            setUserRole('worker');
+            setIsAuthenticated(true);
+          }
+        } else if (storedRole === 'admin') {
+          setUserRole('admin');
+          setIsAuthenticated(true);
+        }
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
