@@ -1960,43 +1960,9 @@ const GigStaffPro = () => {
                               </p>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
                                 {qualifiedWorkers.map(worker => {
-                                const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
-                                const positionName = pos.name.toLowerCase();
-                                
-                                // Match logic for different position types
-                                if (positionName.includes('poker')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('poker'));
-                                } else if (positionName.includes('blackjack')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('blackjack'));
-                                } else if (positionName.includes('roulette')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('roulette'));
-                                } else if (positionName.includes('craps')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('craps'));
-                                } else if (positionName.includes('baccarat')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('baccarat'));
-                                } else if (positionName.includes('host')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('host'));
-                                } else if (positionName.includes('bartender')) {
-                                  return workerSkills.some(skill => skill.toLowerCase().includes('bartender') || skill.toLowerCase().includes('mixology'));
-                                } else if (positionName === 'dealer') {
-                                  // Generic "Dealer" - anyone with any dealer skill
-                                  return workerSkills.some(skill => 
-                                    skill.toLowerCase().includes('dealer') || 
-                                    skill.toLowerCase().includes('poker') ||
-                                    skill.toLowerCase().includes('blackjack') ||
-                                    skill.toLowerCase().includes('roulette') ||
-                                    skill.toLowerCase().includes('craps') ||
-                                    skill.toLowerCase().includes('baccarat')
-                                  );
-                                }
-                                
-                                // For any other custom positions, show all workers
-                                return true;
-                              })
-                              .map(worker => {
-                                // Check if worker is assigned to a different position in this event
-                                const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== pos.name);
-                                const isAvailable = !otherAssignment;
+                                  // Check if worker is assigned to a different position in this event
+                                  const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== pos.name);
+                                  const isAvailable = !otherAssignment;
                                 
                                 // Check for time conflicts with other events on the same day
                                 const workerOtherAssignments = assignments.filter(a => 
