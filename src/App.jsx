@@ -109,24 +109,38 @@ const LoginScreen = ({ onLogin }) => {
     setLoading(true);
 
     try {
+      console.log('Admin login attempt:');
+      console.log('- Username:', username);
+      console.log('- Password:', password);
+      
       // Check admin credentials
       const { data: admins, error: fetchError } = await supabase
         .from('admin_users')
         .select('*')
         .eq('username', username);
 
-      if (fetchError) throw fetchError;
+      console.log('Admin found:', admins);
+
+      if (fetchError) {
+        console.error('Fetch error:', fetchError);
+        throw fetchError;
+      }
 
       if (!admins || admins.length === 0) {
+        console.log('No admin found with username:', username);
         setError('Invalid username or password.');
         setLoading(false);
         return;
       }
 
       const admin = admins[0];
+      console.log('Admin password_hash from DB:', admin.password_hash);
 
-      // For now, simple comparison (in production, use bcrypt)
+      // Hash entered password
       const hashedPassword = await hashPin(password);
+      console.log('Entered password hash:', hashedPassword);
+      console.log('Match?', hashedPassword === admin.password_hash);
+      
       if (hashedPassword !== admin.password_hash) {
         setError('Invalid username or password.');
         setLoading(false);
@@ -134,6 +148,7 @@ const LoginScreen = ({ onLogin }) => {
       }
 
       // Success!
+      console.log('Admin login successful!');
       onLogin('admin', admin);
     } catch (error) {
       console.error('Login error:', error);
