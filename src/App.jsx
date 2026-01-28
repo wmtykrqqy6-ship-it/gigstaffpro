@@ -832,11 +832,23 @@ const GigStaffPro = () => {
 
     useEffect(() => {
       if (selectedWorkerForEdit) {
+        // Migrate old skill format (labels) to new format (keys)
+        const migratedSkills = (selectedWorkerForEdit.skills || []).map(skill => {
+          if (typeof skill === 'string') {
+            // Try to find matching position by label first, fallback to key
+            const position = positions.find(p => p.label === skill || p.key === skill);
+            if (position) return position.key;
+            // If not found, convert to key format
+            return getPositionKey(skill);
+          }
+          return skill;
+        });
+        
         setFormData({
           name: selectedWorkerForEdit.name || '',
           email: selectedWorkerForEdit.email || '',
           phone: selectedWorkerForEdit.phone || '',
-          skills: selectedWorkerForEdit.skills || [],
+          skills: migratedSkills,
           rank: selectedWorkerForEdit.rank || 1,
           reliability: selectedWorkerForEdit.reliability || 5.0
         });
@@ -940,20 +952,26 @@ const GigStaffPro = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Skills *</label>
                 <div className="flex flex-wrap gap-2">
-                  {skillOptions.map(skill => (
+                  {skillOptions.map(skill => {
+                    const skillKey = skill.key || skill;
+                    const skillLabel = skill.label || skill;
+                    const isSelected = formData.skills.includes(skillKey);
+                    
+                    return (
                     <button
-                      key={skill}
+                      key={skillKey}
                       type="button"
-                      onClick={() => toggleSkill(skill)}
+                      onClick={() => toggleSkill(skillKey)}
                       className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        formData.skills.includes(skill)
+                        isSelected
                           ? 'bg-red-900 text-white'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
-                      {skill}
+                      {skillLabel}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1239,19 +1257,23 @@ const GigStaffPro = () => {
                   <h4 className="text-lg font-semibold text-gray-900 mb-3">Staffing Requirements</h4>
                   <div className="space-y-3">
                     <p className="text-sm text-gray-600">Specify how many staff needed for each position:</p>
-                    {positionOptions.map(position => (
-                      <div key={position} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <label className="text-sm font-medium text-gray-700">{position}</label>
+                    {positionOptions.map(position => {
+                      const posKey = position.key || position;
+                      const posLabel = position.label || position;
+                      return (
+                      <div key={posKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <label className="text-sm font-medium text-gray-700">{posLabel}</label>
                         <input
                           type="number"
                           min="0"
-                          value={getPositionCount(position)}
-                          onChange={(e) => updatePositionCount(position, e.target.value)}
+                          value={getPositionCount(posKey)}
+                          onChange={(e) => updatePositionCount(posKey, e.target.value)}
                           className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           placeholder="0"
                         />
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1341,6 +1363,27 @@ const GigStaffPro = () => {
         // Extract just the date part (YYYY-MM-DD) for the date input
         const dateOnly = selectedEvent.date ? selectedEvent.date.split('T')[0] : '';
         
+        // Migrate old position format to new if needed
+        const migratedPositions = (selectedEvent.positions || []).map(pos => {
+          if (typeof pos === 'object' && pos.key) {
+            // Already new format with key
+            return pos;
+          } else if (typeof pos === 'object' && pos.name) {
+            // Old format with {name, count} - convert to {key, count}
+            return {
+              key: getPositionKey(pos.name),
+              count: pos.count
+            };
+          } else if (typeof pos === 'string') {
+            // Very old format (just string) - convert to {key, count}
+            return {
+              key: getPositionKey(pos),
+              count: 1
+            };
+          }
+          return pos;
+        });
+        
         setFormData({
           name: selectedEvent.name || '',
           client: selectedEvent.client || '',
@@ -1351,7 +1394,7 @@ const GigStaffPro = () => {
           venue: selectedEvent.venue || '',
           room: selectedEvent.room || '',
           address: selectedEvent.address || '',
-          positions: selectedEvent.positions || [],
+          positions: migratedPositions,
           dress_code: selectedEvent.dress_code || '',
           parking: selectedEvent.parking || '',
           notes: selectedEvent.notes || '',
@@ -1362,32 +1405,32 @@ const GigStaffPro = () => {
 
     const positionOptions = positions;
 
-    const updatePositionCount = (position, count) => {
+    const updatePositionCount = (positionKey, count) => {
       setFormData(prev => {
-        const existing = prev.positions.find(p => p.name === position);
+        const existing = prev.positions.find(p => p.key === positionKey);
         if (count === 0) {
           return {
             ...prev,
-            positions: prev.positions.filter(p => p.name !== position)
+            positions: prev.positions.filter(p => p.key !== positionKey)
           };
         }
         if (existing) {
           return {
             ...prev,
             positions: prev.positions.map(p => 
-              p.name === position ? { name: position, count: parseInt(count) } : p
+              p.key === positionKey ? { key: positionKey, count: parseInt(count) } : p
             )
           };
         }
         return {
           ...prev,
-          positions: [...prev.positions, { name: position, count: parseInt(count) }]
+          positions: [...prev.positions, { key: positionKey, count: parseInt(count) }]
         };
       });
     };
 
-    const getPositionCount = (position) => {
-      const found = formData.positions.find(p => p.name === position);
+    const getPositionCount = (positionKey) => {
+      const found = formData.positions.find(p => p.key === positionKey);
       return found ? found.count : 0;
     };
 
@@ -1559,19 +1602,23 @@ const GigStaffPro = () => {
                   <h4 className="text-lg font-semibold text-gray-900 mb-3">Staffing Requirements</h4>
                   <div className="space-y-3">
                     <p className="text-sm text-gray-600">Specify how many staff needed for each position:</p>
-                    {positionOptions.map(position => (
-                      <div key={position} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <label className="text-sm font-medium text-gray-700">{position}</label>
+                    {positionOptions.map(position => {
+                      const posKey = position.key || position;
+                      const posLabel = position.label || position;
+                      return (
+                      <div key={posKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <label className="text-sm font-medium text-gray-700">{posLabel}</label>
                         <input
                           type="number"
                           min="0"
-                          value={getPositionCount(position)}
-                          onChange={(e) => updatePositionCount(position, e.target.value)}
+                          value={getPositionCount(posKey)}
+                          onChange={(e) => updatePositionCount(posKey, e.target.value)}
                           className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           placeholder="0"
                         />
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1985,34 +2032,12 @@ const GigStaffPro = () => {
                       if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                       if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
                       
-                      const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];
-                      const positionName = pos.name.toLowerCase();
+                      // NEW: Use position key matching instead of fragile string matching
+                      const workerSkillKeys = Array.isArray(worker.skills) ? worker.skills : [];
+                      const posKey = pos.key || getPositionKey(pos.name || pos);
                       
-                      if (positionName.includes('poker')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('poker'));
-                      } else if (positionName.includes('blackjack')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('blackjack'));
-                      } else if (positionName.includes('roulette')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('roulette'));
-                      } else if (positionName.includes('craps')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('craps'));
-                      } else if (positionName.includes('baccarat')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('baccarat'));
-                      } else if (positionName.includes('host')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('host'));
-                      } else if (positionName.includes('bartender')) {
-                        return workerSkills.some(skill => skill.toLowerCase().includes('bartender') || skill.toLowerCase().includes('mixology'));
-                      } else if (positionName === 'dealer') {
-                        return workerSkills.some(skill => 
-                          skill.toLowerCase().includes('dealer') || 
-                          skill.toLowerCase().includes('poker') ||
-                          skill.toLowerCase().includes('blackjack') ||
-                          skill.toLowerCase().includes('roulette') ||
-                          skill.toLowerCase().includes('craps') ||
-                          skill.toLowerCase().includes('baccarat')
-                        );
-                      }
-                      return true;
+                      // Check if any worker skill matches this position
+                      return workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
                     })
                     .sort((a, b) => {
                       // Sort by rank first (lower is better)
@@ -2032,7 +2057,7 @@ const GigStaffPro = () => {
                           <button className="text-gray-600">
                             {isExpanded ? '▼' : '▶'}
                           </button>
-                          <h4 className="text-lg font-semibold text-gray-900">{pos.name}</h4>
+                          <h4 className="text-lg font-semibold text-gray-900">{getPositionLabel(pos.key || pos.name)}</h4>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                             isFull ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                           }`}>
@@ -2452,20 +2477,26 @@ const GigStaffPro = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Skills *</label>
                 <div className="flex flex-wrap gap-2">
-                  {skillOptions.map(skill => (
+                  {skillOptions.map(skill => {
+                    const skillKey = skill.key || skill;
+                    const skillLabel = skill.label || skill;
+                    const isSelected = formData.skills.includes(skillKey);
+                    
+                    return (
                     <button
-                      key={skill}
+                      key={skillKey}
                       type="button"
-                      onClick={() => toggleSkill(skill)}
+                      onClick={() => toggleSkill(skillKey)}
                       className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        formData.skills.includes(skill)
+                        isSelected
                           ? 'bg-red-900 text-white'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
-                      {skill}
+                      {skillLabel}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2832,7 +2863,7 @@ const GigStaffPro = () => {
             activities.push({
               type: 'assignment',
               date: assignment.created_at,
-              message: `${worker.name} assigned to ${event.name} as ${assignment.position}`,
+              message: `${worker.name} assigned to ${event.name} as ${getPositionLabel(assignment.position)}`,
               icon: Users,
               color: 'green'
             });
@@ -3278,12 +3309,18 @@ const GigStaffPro = () => {
                     <div className="mb-4">
                       <p className="text-xs text-gray-500 mb-2">Staff Needed:</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {event.positions.map((pos, idx) => (
+                        {event.positions.map((pos, idx) => {
+                          const posKey = pos.key || getPositionKey(pos.name || pos);
+                          const posLabel = getPositionLabel(posKey);
+                          const count = pos.count || 1;
+                          
+                          return (
                           <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded flex justify-between items-center">
-                            <span className="font-medium">{pos.name}</span>
-                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{pos.count}</span>
+                            <span className="font-medium">{posLabel}</span>
+                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -4769,9 +4806,7 @@ const GigStaffPro = () => {
                         <div className="text-sm text-gray-500">{assignment.event.venue}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
-                          {assignment.position}
-                        </span>
+                        <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">{getPositionLabel(assignment.position)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -4870,9 +4905,7 @@ const GigStaffPro = () => {
                     <div key={assignment.id} className="px-6 py-4 hover:bg-gray-50 flex justify-between items-center">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3">
-                          <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
-                            {assignment.position}
-                          </span>
+                          <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">{getPositionLabel(assignment.position)}</span>
                           {assignment.payment_status === 'paid' ? (
                             <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded flex items-center space-x-1">
                               <CheckCircle size={12} />
@@ -5210,7 +5243,7 @@ const GigStaffPro = () => {
                                   <CheckCircle size={16} className="text-green-600" />
                                   <span className="font-medium text-gray-900">{worker.name}</span>
                                   <span className="text-gray-600">•</span>
-                                  <span className="text-gray-600">{assignment.position}</span>
+                                  <span className="text-gray-600">{getPositionLabel(assignment.position)}</span>
                                 </div>
                               );
                             })}
@@ -5313,9 +5346,7 @@ const GigStaffPro = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
-                        {assignment.position}
-                      </span>
+                      <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{getPositionLabel(assignment.position)}</span>
                     </div>
                   </div>
                 </div>
@@ -5399,27 +5430,28 @@ const GigStaffPro = () => {
             return false;
           }
           
-          // Must have positions that match worker skills
+          // Must have positions that match worker skills (using position keys)
           const eventPositions = Array.isArray(event.positions) ? event.positions : [];
           console.log('Event Positions:', JSON.stringify(eventPositions));
           console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
           
-          // Extract position names from objects (they're stored as {name: "Blackjack", count: 4})
-          const positionNames = eventPositions.map(pos => 
-            typeof pos === 'object' && pos.name ? pos.name : pos
+          // Extract position keys from position objects
+          const positionKeys = eventPositions.map(pos => 
+            pos.key || getPositionKey(pos.name || pos)
           );
-          console.log('Position Names:', JSON.stringify(positionNames));
+          console.log('Position Keys:', JSON.stringify(positionKeys));
           
-          const hasMatchingSkill = positionNames.some(posName => 
-            currentWorker.skills && currentWorker.skills.includes(posName)
+          const workerSkillKeys = currentWorker.skills || [];
+          const hasMatchingSkill = positionKeys.some(posKey => 
+            workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
           );
           console.log('Has Matching Skill:', hasMatchingSkill);
           
           // DEBUG: Show which positions/skills are being compared
           console.log('Comparison breakdown:');
-          positionNames.forEach(pos => {
-            const matches = currentWorker.skills && currentWorker.skills.includes(pos);
-            console.log(`  "${pos}" matches worker skills? ${matches}`);
+          positionKeys.forEach(posKey => {
+            const matches = workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
+            console.log(`  "${posKey}" matches worker skills? ${matches}`);
           });
           
           if (!hasMatchingSkill) {
@@ -5916,7 +5948,7 @@ const GigStaffPro = () => {
                               <div
                                 key={idx}
                                 className="text-xs bg-blue-500 text-white px-1 py-0.5 rounded truncate"
-                                title={`${assignment.event.name} - ${assignment.position}`}
+                                title={`${assignment.event.name} - ${getPositionLabel(assignment.position)}`}
                               >
                                 {formatTime(assignment.event.time, timeFormat)} {assignment.position}
                               </div>
@@ -5987,9 +6019,7 @@ const GigStaffPro = () => {
                             </span>
                           )}
                         </div>
-                        <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">
-                          {assignment.position}
-                        </span>
+                        <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">{getPositionLabel(assignment.position)}</span>
                       </div>
                     </div>
                     
@@ -6068,7 +6098,7 @@ const GigStaffPro = () => {
                     <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                       <span>{parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       <span>•</span>
-                      <span>{assignment.position}</span>
+                      <span>{getPositionLabel(assignment.position)}</span>
                       <span>•</span>
                       <span>{assignment.event.venue}</span>
                     </div>
@@ -6139,9 +6169,7 @@ const GigStaffPro = () => {
                                 </span>
                               )}
                             </div>
-                            <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">
-                              {assignment.position}
-                            </span>
+                            <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">{getPositionLabel(assignment.position)}</span>
                           </div>
                         </div>
                         
