@@ -5777,15 +5777,22 @@ const GigStaffPro = () => {
                     // Format date as YYYY-MM-DD without timezone conversion
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     
-                    const dayAssignments = workerAssignments.filter(a => {
-                      if (!a.event || !a.event.date) return false;
-                      
-                      // Normalize the event date to YYYY-MM-DD format
-                      // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
-                      const eventDateStr = a.event.date.split('T')[0];
-                      
-                      return eventDateStr === dateStr;
-                    });
+                    const dayAssignments = workerAssignments
+                      .filter(a => {
+                        if (!a.event || !a.event.date) return false;
+                        
+                        // Normalize the event date to YYYY-MM-DD format
+                        // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+                        const eventDateStr = a.event.date.split('T')[0];
+                        
+                        return eventDateStr === dateStr;
+                      })
+                      .sort((a, b) => {
+                        // Sort by event start time (earliest first)
+                        const timeA = a.event.time || '00:00';
+                        const timeB = b.event.time || '00:00';
+                        return timeA.localeCompare(timeB);
+                      });
                     
                     const isToday = currentDate.getTime() === today.getTime();
                     const isPast = currentDate < today;
