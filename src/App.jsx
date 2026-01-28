@@ -4847,8 +4847,17 @@ const GigStaffPro = () => {
 
     // Get events for a specific date
     const getEventsForDate = (date) => {
-      const dateStr = date.toISOString().split('T')[0];
-      return events.filter(event => event.date === dateStr);
+      // Format date as YYYY-MM-DD without timezone conversion
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      return events.filter(event => {
+        // Extract just the date part from event.date (handles "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm:ss")
+        const eventDateStr = event.date ? event.date.split('T')[0] : '';
+        return eventDateStr === dateStr;
+      });
     };
 
     // Get all assignments for a specific worker
