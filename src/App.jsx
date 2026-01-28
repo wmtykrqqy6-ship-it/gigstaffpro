@@ -3062,7 +3062,7 @@ const GigStaffPro = () => {
     };
 
     const formatDate = (dateString) => {
-      const date = new Date(dateString);
+      const date = parseDateSafe(dateString);
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
