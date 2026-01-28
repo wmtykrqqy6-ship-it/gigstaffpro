@@ -2132,11 +2132,14 @@ const GigStaffPro = () => {
 
               <div className="space-y-6">
                 {selectedEvent.positions?.map((pos, idx) => {
+                  // Use a consistent key for this position
+                  const positionKey = pos.key || pos.name || pos;
+                  
                   const posAssignments = getPositionAssignments(pos.name);
                   const filled = posAssignments.length;
                   const needed = pos.count;
                   const isFull = filled >= needed;
-                  const isExpanded = expandedPositions[pos.name];
+                  const isExpanded = expandedPositions[positionKey];
 
                   // Get and sort qualified workers
                   const qualifiedWorkers = workers
@@ -2162,7 +2165,7 @@ const GigStaffPro = () => {
                     <div key={idx} className="border rounded-lg overflow-hidden">
                       {/* Collapsible Header */}
                       <div 
-                        onClick={() => togglePosition(pos.name)}
+                        onClick={() => togglePosition(positionKey)}
                         className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center space-x-3">
@@ -2311,18 +2314,6 @@ const GigStaffPro = () => {
                                           Conflicts with: {conflictEvent.name} ({conflictEvent.time}-{conflictEvent.end_time})
                                         </p>
                                       )}
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {/* Only show the skill relevant to this position */}
-                                        {(() => {
-                                          const posKey = pos.key || getPositionKey(pos.name);
-                                          const posLabel = getPositionLabel(posKey);
-                                          return (
-                                            <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                                              {posLabel}
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
                                     </div>
                                     <button
                                       onClick={() => assignWorker(worker.id, pos.name, otherAssignment)}
