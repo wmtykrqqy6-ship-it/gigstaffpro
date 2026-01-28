@@ -1262,11 +1262,14 @@ const GigStaffPro = () => {
 
     useEffect(() => {
       if (selectedEvent) {
+        // Extract just the date part (YYYY-MM-DD) for the date input
+        const dateOnly = selectedEvent.date ? selectedEvent.date.split('T')[0] : '';
+        
         setFormData({
           name: selectedEvent.name || '',
           client: selectedEvent.client || '',
           client_contact: selectedEvent.client_contact || '',
-          date: selectedEvent.date || '',
+          date: dateOnly,
           time: selectedEvent.time || '',
           end_time: selectedEvent.end_time || '',
           venue: selectedEvent.venue || '',
