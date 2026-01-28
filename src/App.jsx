@@ -2312,11 +2312,16 @@ const GigStaffPro = () => {
                                         </p>
                                       )}
                                       <div className="flex flex-wrap gap-1 mt-1">
-                                        {Array.isArray(worker.skills) && worker.skills.slice(0, 3).map((skill, idx) => (
-                                          <span key={idx} className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                                            {skill}
-                                          </span>
-                                        ))}
+                                        {/* Only show the skill relevant to this position */}
+                                        {(() => {
+                                          const posKey = pos.key || getPositionKey(pos.name);
+                                          const posLabel = getPositionLabel(posKey);
+                                          return (
+                                            <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                                              {posLabel}
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                     <button
