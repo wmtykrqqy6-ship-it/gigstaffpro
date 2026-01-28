@@ -2135,7 +2135,7 @@ const GigStaffPro = () => {
                   // Use a consistent key for this position
                   const positionKey = pos.key || pos.name || pos;
                   
-                  const posAssignments = getPositionAssignments(pos.name);
+                  const posAssignments = getPositionAssignments(positionKey);
                   const filled = posAssignments.length;
                   const needed = pos.count;
                   const isFull = filled >= needed;
@@ -2316,7 +2316,7 @@ const GigStaffPro = () => {
                                       )}
                                     </div>
                                     <button
-                                      onClick={() => assignWorker(worker.id, pos.name, otherAssignment)}
+                                      onClick={() => assignWorker(worker.id, positionKey, otherAssignment)}
                                       disabled={hasTimeConflict}
                                       className={`ml-3 px-3 py-1 rounded text-sm ${
                                         hasTimeConflict
