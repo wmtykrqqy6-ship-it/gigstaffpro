@@ -6617,6 +6617,7 @@ const GigStaffPro = () => {
                     const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
                     const isToday = daysUntil === 0;
                     const isTomorrow = daysUntil === 1;
+                    const canCancel = daysUntil >= 7;
 
                     return (
                       <div 
@@ -6695,6 +6696,29 @@ const GigStaffPro = () => {
                             <p className="text-gray-900">{assignment.event.notes}</p>
                           </div>
                         )}
+
+                        {/* Cancel Button */}
+                        <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                          {canCancel ? (
+                            <button
+                              onClick={() => {
+                                cancelAssignment(assignment);
+                                setSelectedEventModal(null); // Close modal after cancel
+                              }}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center space-x-1"
+                            >
+                              <XCircle size={16} />
+                              <span>Cancel Assignment</span>
+                            </button>
+                          ) : (
+                            <div className="text-xs text-gray-500">
+                              ⚠️ Cannot cancel within 7 days - contact admin
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            {daysUntil} day{daysUntil !== 1 ? 's' : ''} away
+                          </div>
+                        </div>
 
                         {paymentTrackingEnabled && assignment.total_pay > 0 && (
                           <div className="mt-3 pt-3 border-t">
