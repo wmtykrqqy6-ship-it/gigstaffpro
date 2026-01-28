@@ -29,6 +29,19 @@ const formatTime = (timeStr, format = '12') => {
   return `${hour12}:${minutes} ${period}`;
 };
 
+// Helper function to parse dates without timezone conversion
+// Prevents "2026-02-13" from becoming "2026-02-12" due to UTC offset
+const parseDateSafe = (dateStr) => {
+  if (!dateStr) return new Date();
+  
+  // Extract just the date part (YYYY-MM-DD)
+  const datePart = dateStr.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+  
+  // Create date in local timezone
+  return new Date(year, month - 1, day);
+};
+
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -5416,7 +5429,7 @@ const GigStaffPro = () => {
               currentWorker.skills && currentWorker.skills.includes(posName)
             );
             
-            const daysUntil = Math.ceil((new Date(event.date) - new Date()) / (1000 * 60 * 60 * 24));
+            const daysUntil = Math.ceil((parseDateSafe(event.date) - new Date()) / (1000 * 60 * 60 * 24));
             
             return (
               <div key={event.id} className="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-blue-50">
@@ -5432,7 +5445,7 @@ const GigStaffPro = () => {
                 <div className="space-y-1 text-sm text-gray-700 mb-3">
                   <div className="flex items-center space-x-2">
                     <Calendar size={14} className="text-gray-500" />
-                    <span>{new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                    <span>{parseDateSafe(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock size={14} className="text-gray-500" />
@@ -5853,7 +5866,7 @@ const GigStaffPro = () => {
                       <div className="flex items-center space-x-2">
                         <Calendar size={16} className="text-gray-500" />
                         <span>
-                          {new Date(assignment.event.date).toLocaleDateString('en-US', { 
+                          {parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { 
                             weekday: 'short',
                             month: 'short', 
                             day: 'numeric' 
@@ -5922,7 +5935,7 @@ const GigStaffPro = () => {
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{assignment.event.name}</p>
                     <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
-                      <span>{new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span>{parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       <span>•</span>
                       <span>{assignment.position}</span>
                       <span>•</span>
@@ -5943,7 +5956,7 @@ const GigStaffPro = () => {
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-2xl font-bold text-gray-900">
-                    Events on {new Date(selectedEventModal[0].event.date).toLocaleDateString('en-US', { 
+                    Events on {parseDateSafe(selectedEventModal[0].event.date).toLocaleDateString('en-US', { 
                       weekday: 'long',
                       month: 'long', 
                       day: 'numeric',
