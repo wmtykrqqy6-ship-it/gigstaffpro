@@ -6098,6 +6098,47 @@ const GigStaffPro = () => {
 
     const totalEarnings = currentWorker.earnings || 0;
 
+    const cancelAssignment = async (assignment) => {
+      const eventDate = new Date(assignment.event.date);
+      const today = new Date();
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      
+      // Check if within 7 days
+      if (daysUntil < 7) {
+        alert(
+          `⚠️ Cannot Cancel\n\n` +
+          `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
+          `Events within 7 days cannot be cancelled online.\n` +
+          `Please contact your admin directly if you need to cancel.`
+        );
+        return;
+      }
+      
+      if (!confirm(
+        `Cancel your assignment to "${assignment.event.name}"?\n\n` +
+        `Position: ${getPositionLabel(assignment.position)}\n` +
+        `Date: ${parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}\n\n` +
+        `This will remove you from the event.`
+      )) {
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', assignment.id);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('✓ Assignment cancelled successfully.');
+      } catch (error) {
+        console.error('Error cancelling assignment:', error);
+        alert('Error cancelling assignment: ' + error.message);
+      }
+    };
+
     return (
       <div className="space-y-6">
         {/* Header with worker info */}
@@ -6405,6 +6446,7 @@ const GigStaffPro = () => {
                 const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
                 const isToday = daysUntil === 0;
                 const isTomorrow = daysUntil === 1;
+                const canCancel = daysUntil >= 7;
                 
                 return (
                   <div 
@@ -6488,6 +6530,26 @@ const GigStaffPro = () => {
                         <span className="font-medium">Notes:</span> {assignment.event.notes}
                       </div>
                     )}
+
+                    {/* Cancel Button */}
+                    <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                      {canCancel ? (
+                        <button
+                          onClick={() => cancelAssignment(assignment)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center space-x-1"
+                        >
+                          <XCircle size={16} />
+                          <span>Cancel Assignment</span>
+                        </button>
+                      ) : (
+                        <div className="text-xs text-gray-500">
+                          ⚠️ Cannot cancel within 7 days - contact admin
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500">
+                        {daysUntil} day{daysUntil !== 1 ? 's' : ''} away
+                      </div>
+                    </div>
                   </div>
                 );
               })}
