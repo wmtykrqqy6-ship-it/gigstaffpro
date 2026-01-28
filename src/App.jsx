@@ -564,6 +564,64 @@ const GigStaffPro = () => {
     }
   };
 
+  // Standard position definitions with keys
+  const STANDARD_POSITIONS = [
+    { key: 'blackjack_dealer', label: 'Blackjack Dealer' },
+    { key: 'poker_dealer', label: 'Poker Dealer' },
+    { key: 'roulette_dealer', label: 'Roulette Dealer' },
+    { key: 'craps_dealer', label: 'Craps Dealer' },
+    { key: 'baccarat_dealer', label: 'Baccarat Dealer' },
+    { key: 'dealer', label: 'Dealer' },
+    { key: 'host', label: 'Host' },
+    { key: 'bartender', label: 'Bartender' },
+    { key: 'server', label: 'Server' },
+    { key: 'cashier', label: 'Cashier' }
+  ];
+
+  // Helper functions for position handling
+  const getPositionLabel = (keyOrLabel) => {
+    // If it's already an object, return its label
+    if (typeof keyOrLabel === 'object' && keyOrLabel.label) return keyOrLabel.label;
+    
+    // Try to find by key first
+    const position = positions.find(p => p.key === keyOrLabel);
+    if (position) return position.label;
+    
+    // Fallback: try to find by label (for backward compatibility)
+    const byLabel = positions.find(p => p.label === keyOrLabel);
+    if (byLabel) return byLabel.label;
+    
+    // Last resort: return as-is
+    return keyOrLabel;
+  };
+
+  const getPositionKey = (keyOrLabel) => {
+    // If it's already an object, return its key
+    if (typeof keyOrLabel === 'object' && keyOrLabel.key) return keyOrLabel.key;
+    
+    // Try to find by key first
+    const position = positions.find(p => p.key === keyOrLabel);
+    if (position) return position.key;
+    
+    // Try to find by label (for backward compatibility during migration)
+    const byLabel = positions.find(p => p.label === keyOrLabel);
+    if (byLabel) return byLabel.key;
+    
+    // Last resort: convert label to key format
+    return keyOrLabel.toLowerCase().replace(/\s+/g, '_');
+  };
+
+  const positionMatches = (workerSkillKey, positionKey) => {
+    // Direct key match
+    if (workerSkillKey === positionKey) return true;
+    
+    // Special case: 'dealer' key matches all dealer positions
+    if (workerSkillKey === 'dealer' && positionKey.includes('dealer')) return true;
+    if (positionKey === 'dealer' && workerSkillKey.includes('dealer')) return true;
+    
+    return false;
+  };
+
   const loadSettings = async () => {
     try {
       const { data, error } = await supabase
@@ -573,13 +631,31 @@ const GigStaffPro = () => {
         .single();
       
       if (error) {
-        // If settings don't exist, use defaults
-        console.log('No settings found, using defaults');
-        const defaultPositions = ['Dealer', 'Poker Dealer', 'Blackjack Dealer', 'Roulette Dealer', 'Craps Dealer', 'Host', 'Bartender'].sort();
-        setPositions(defaultPositions);
+        // If settings don't exist, use standard positions
+        console.log('No settings found, using standard positions');
+        setPositions(STANDARD_POSITIONS);
       } else {
-        const sortedPositions = (data.setting_value || []).sort();
-        setPositions(sortedPositions);
+        // Check if data is old format (array of strings) or new format (array of objects)
+        const storedPositions = data.setting_value || [];
+        
+        if (storedPositions.length > 0 && typeof storedPositions[0] === 'string') {
+          // Old format - migrate to new format
+          console.log('Migrating positions from old format to new format');
+          const migratedPositions = storedPositions.map(label => ({
+            key: label.toLowerCase().replace(/\s+/g, '_'),
+            label: label
+          }));
+          setPositions(migratedPositions);
+          
+          // Save migrated format back to database
+          await supabase
+            .from('settings')
+            .update({ setting_value: migratedPositions })
+            .eq('setting_key', 'positions');
+        } else {
+          // New format - use as is
+          setPositions(storedPositions);
+        }
       }
 
       // Load warehouse address
@@ -3690,8 +3766,12 @@ const GigStaffPro = () => {
     const savePositions = async (updatedPositions) => {
       setSaving(true);
       try {
-        // Sort alphabetically
-        const sortedPositions = [...updatedPositions].sort();
+        // Sort alphabetically by label
+        const sortedPositions = [...updatedPositions].sort((a, b) => {
+          const labelA = a.label || a;
+          const labelB = b.label || b;
+          return labelA.localeCompare(labelB);
+        });
         
         // Check if settings exist
         const { data: existingSettings } = await supabase
@@ -3738,26 +3818,32 @@ const GigStaffPro = () => {
         alert('Please enter a position name');
         return;
       }
-      if (positions.includes(newPosition.trim())) {
+      
+      const newKey = newPosition.trim().toLowerCase().replace(/\s+/g, '_');
+      const newLabel = newPosition.trim();
+      
+      if (positions.some(p => p.key === newKey)) {
         alert('This position already exists');
         return;
       }
       
-      const updatedPositions = [...positions, newPosition.trim()];
+      const updatedPositions = [...positions, { key: newKey, label: newLabel }];
       await savePositions(updatedPositions);
       setNewPosition('');
     };
 
     const handleDeletePosition = async (position) => {
-      if (!confirm(`Are you sure you want to delete "${position}"?`)) return;
+      const label = position.label || position;
+      if (!confirm(`Are you sure you want to delete "${label}"?`)) return;
       
-      const updatedPositions = positions.filter(p => p !== position);
+      const posKey = position.key || position;
+      const updatedPositions = positions.filter(p => p.key !== posKey);
       await savePositions(updatedPositions);
     };
 
     const handleEditPosition = (position) => {
-      setEditingPosition(position);
-      setEditValue(position);
+      setEditingPosition(position.key || position);
+      setEditValue(position.label || position);
     };
 
     const handleSaveEdit = async () => {
@@ -3765,14 +3851,17 @@ const GigStaffPro = () => {
         alert('Position name cannot be empty');
         return;
       }
-      if (editValue !== editingPosition && positions.includes(editValue.trim())) {
-        alert('This position already exists');
-        return;
-      }
-
-      const updatedPositions = positions.map(p => 
-        p === editingPosition ? editValue.trim() : p
-      );
+      
+      const newLabel = editValue.trim();
+      const existingPos = positions.find(p => p.key === editingPosition);
+      
+      const updatedPositions = positions.map(p => {
+        if (p.key === editingPosition) {
+          return { ...p, label: newLabel };
+        }
+        return p;
+      });
+      
       await savePositions(updatedPositions);
       setEditingPosition(null);
       setEditValue('');
@@ -3836,9 +3925,14 @@ const GigStaffPro = () => {
               {positions.length === 0 ? (
                 <p className="text-gray-500 text-sm py-4">No positions configured yet. Add your first position above.</p>
               ) : (
-                positions.map((position, idx) => (
+                positions.map((position, idx) => {
+                  const posLabel = position.label || position;
+                  const posKey = position.key || position.toLowerCase().replace(/\s+/g, '_');
+                  const isEditing = editingPosition === posKey;
+                  
+                  return (
                   <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    {editingPosition === position ? (
+                    {isEditing ? (
                       <>
                         <input
                           type="text"
@@ -3867,7 +3961,10 @@ const GigStaffPro = () => {
                       </>
                     ) : (
                       <>
-                        <span className="font-medium text-gray-900">{position}</span>
+                        <div>
+                          <span className="font-medium text-gray-900">{posLabel}</span>
+                          <span className="text-xs text-gray-500 ml-2">({posKey})</span>
+                        </div>
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleEditPosition(position)}
@@ -3889,7 +3986,8 @@ const GigStaffPro = () => {
                       </>
                     )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
