@@ -5738,9 +5738,15 @@ const GigStaffPro = () => {
                     // Format date as YYYY-MM-DD without timezone conversion
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     
-                    const dayAssignments = workerAssignments.filter(a => 
-                      a.event && a.event.date === dateStr
-                    );
+                    const dayAssignments = workerAssignments.filter(a => {
+                      if (!a.event || !a.event.date) return false;
+                      
+                      // Normalize the event date to YYYY-MM-DD format
+                      // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+                      const eventDateStr = a.event.date.split('T')[0];
+                      
+                      return eventDateStr === dateStr;
+                    });
                     
                     const isToday = currentDate.getTime() === today.getTime();
                     const isPast = currentDate < today;
