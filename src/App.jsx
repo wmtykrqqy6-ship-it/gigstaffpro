@@ -4958,6 +4958,13 @@ const GigStaffPro = () => {
               const dayEvents = getEventsForDate(date);
               const hasEvents = dayEvents.length > 0;
               
+              // Sort events by start time
+              const sortedDayEvents = [...dayEvents].sort((a, b) => {
+                const timeA = a.time || '00:00';
+                const timeB = b.time || '00:00';
+                return timeA.localeCompare(timeB);
+              });
+              
               return (
                 <div
                   key={date.toISOString()}
@@ -4978,7 +4985,7 @@ const GigStaffPro = () => {
                   <div className="text-sm font-semibold text-gray-900 mb-1">
                     {date.getDate()}
                   </div>
-                  {dayEvents.slice(0, 2).map(event => {
+                  {sortedDayEvents.slice(0, 2).map(event => {
                     const eventAssignments = assignments.filter(a => a.event_id === event.id);
                     const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
                     const filled = eventAssignments.length;
@@ -5027,7 +5034,14 @@ const GigStaffPro = () => {
 
     const ListView = () => {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      const dayEvents = events.filter(event => event.date === dateStr);
+      const dayEvents = events
+        .filter(event => event.date === dateStr)
+        .sort((a, b) => {
+          // Sort by start time (earliest first)
+          const timeA = a.time || '00:00';
+          const timeB = b.time || '00:00';
+          return timeA.localeCompare(timeB);
+        });
 
       return (
         <div className="space-y-6">
@@ -5984,7 +5998,14 @@ const GigStaffPro = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {selectedEventModal.map((assignment, idx) => {
+                  {selectedEventModal
+                    .sort((a, b) => {
+                      // Sort by start time (earliest first)
+                      const timeA = a.event.time || '00:00';
+                      const timeB = b.event.time || '00:00';
+                      return timeA.localeCompare(timeB);
+                    })
+                    .map((assignment, idx) => {
                     const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
                     const isToday = daysUntil === 0;
                     const isTomorrow = daysUntil === 1;
