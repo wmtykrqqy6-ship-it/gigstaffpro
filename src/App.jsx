@@ -6730,17 +6730,6 @@ const GigStaffPro = () => {
         setProcessingId(null);
       }
     };
-        if (error) throw error;
-        
-        loadAssignments();
-        alert('Application approved!');
-      } catch (error) {
-        console.error('Error approving application:', error);
-        alert('Error approving application: ' + error.message);
-      } finally {
-        setProcessingId(null);
-      }
-    };
 
     const handleReject = async (applicationId) => {
       if (!confirm('Reject this application? This will remove the assignment.')) return;
