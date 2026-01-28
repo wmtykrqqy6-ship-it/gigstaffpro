@@ -686,7 +686,53 @@ const GigStaffPro = () => {
       
       if (error) throw error;
       
-      setWorkers(data || []);
+      // Migrate worker skills from old format (labels) to new format (keys)
+      const workersNeedingMigration = [];
+      const migratedWorkers = (data || []).map(worker => {
+        if (!worker.skills || worker.skills.length === 0) return worker;
+        
+        // Check if skills need migration (if any skill is a label string, not a key)
+        const needsMigration = worker.skills.some(skill => {
+          // If skill contains spaces or capital letters, it's probably a label
+          return /[A-Z\s]/.test(skill);
+        });
+        
+        if (needsMigration) {
+          const migratedSkills = worker.skills.map(skill => {
+            // Try to find matching position by label
+            const position = positions.find(p => p.label === skill || p.key === skill);
+            if (position) return position.key;
+            // Fallback: convert to key format
+            return skill.toLowerCase().replace(/\s+/g, '_');
+          });
+          
+          workersNeedingMigration.push({
+            id: worker.id,
+            skills: migratedSkills
+          });
+          
+          return { ...worker, skills: migratedSkills };
+        }
+        
+        return worker;
+      });
+      
+      // Update database for workers that needed migration
+      if (workersNeedingMigration.length > 0) {
+        console.log(`Migrating skills for ${workersNeedingMigration.length} workers...`);
+        
+        // Update each worker in database
+        for (const workerUpdate of workersNeedingMigration) {
+          await supabase
+            .from('workers')
+            .update({ skills: workerUpdate.skills })
+            .eq('id', workerUpdate.id);
+        }
+        
+        console.log('Worker skill migration complete!');
+      }
+      
+      setWorkers(migratedWorkers);
       setError(null);
     } catch (error) {
       console.error('Error loading workers:', error);
@@ -705,7 +751,63 @@ const GigStaffPro = () => {
       
       if (error) throw error;
       
-      setEvents(data || []);
+      // Migrate event positions from old format to new format
+      const eventsNeedingMigration = [];
+      const migratedEvents = (data || []).map(event => {
+        if (!event.positions || event.positions.length === 0) return event;
+        
+        // Check if positions need migration
+        const needsMigration = event.positions.some(pos => 
+          (typeof pos === 'object' && pos.name && !pos.key) || typeof pos === 'string'
+        );
+        
+        if (needsMigration) {
+          const migratedPositions = event.positions.map(pos => {
+            if (typeof pos === 'object' && pos.key) {
+              // Already new format
+              return pos;
+            } else if (typeof pos === 'object' && pos.name) {
+              // Old format with {name, count}
+              return {
+                key: getPositionKey(pos.name),
+                count: pos.count
+              };
+            } else if (typeof pos === 'string') {
+              // Very old format (just string)
+              return {
+                key: getPositionKey(pos),
+                count: 1
+              };
+            }
+            return pos;
+          });
+          
+          eventsNeedingMigration.push({
+            id: event.id,
+            positions: migratedPositions
+          });
+          
+          return { ...event, positions: migratedPositions };
+        }
+        
+        return event;
+      });
+      
+      // Update database for events that needed migration
+      if (eventsNeedingMigration.length > 0) {
+        console.log(`Migrating positions for ${eventsNeedingMigration.length} events...`);
+        
+        for (const eventUpdate of eventsNeedingMigration) {
+          await supabase
+            .from('events')
+            .update({ positions: eventUpdate.positions })
+            .eq('id', eventUpdate.id);
+        }
+        
+        console.log('Event position migration complete!');
+      }
+      
+      setEvents(migratedEvents);
     } catch (error) {
       console.error('Error loading events:', error);
     }
