@@ -389,6 +389,8 @@ const GigStaffPro = () => {
   const [showEditWorker, setShowEditWorker] = useState(false);
   const [showEditEvent, setShowEditEvent] = useState(false);
   const [showBulkInvite, setShowBulkInvite] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedWorkerForEdit, setSelectedWorkerForEdit] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -422,6 +424,124 @@ const GigStaffPro = () => {
     loadRankAccessDays();
     loadTimeFormat();
   }, []);
+
+  // Generate notifications whenever assignments change
+  useEffect(() => {
+    generateNotifications();
+  }, [assignments, events, workers, userRole, loggedInWorker]);
+
+  const generateNotifications = () => {
+    const newNotifications = [];
+    const now = new Date();
+
+    if (userRole === 'admin') {
+      // Admin notifications
+      
+      // 1. Pending applications
+      const pendingApps = assignments.filter(a => a.status === 'pending');
+      if (pendingApps.length > 0) {
+        pendingApps.forEach(app => {
+          const worker = workers.find(w => w.id === app.worker_id);
+          const event = events.find(e => e.id === app.event_id);
+          if (worker && event) {
+            newNotifications.push({
+              id: `pending-${app.id}`,
+              type: 'application',
+              title: 'New Application',
+              message: `${worker.name} applied for ${event.name}`,
+              timestamp: app.applied_at || app.created_at,
+              action: () => setCurrentView('applications')
+            });
+          }
+        });
+      }
+
+      // 2. Events within 48 hours that aren't fully staffed
+      const soonEvents = events.filter(e => {
+        const eventDate = parseDateSafe(e.date);
+        const hoursUntil = (eventDate - now) / (1000 * 60 * 60);
+        return hoursUntil > 0 && hoursUntil <= 48;
+      });
+
+      soonEvents.forEach(event => {
+        const eventAssignments = assignments.filter(a => a.event_id === event.id && a.status === 'approved');
+        const totalNeeded = (event.positions || []).reduce((sum, pos) => sum + (pos.count || 0), 0);
+        const totalAssigned = eventAssignments.length;
+        
+        if (totalAssigned < totalNeeded) {
+          newNotifications.push({
+            id: `understaffed-${event.id}`,
+            type: 'warning',
+            title: 'Understaffed Event',
+            message: `${event.name} needs ${totalNeeded - totalAssigned} more worker(s)`,
+            timestamp: new Date().toISOString(),
+            action: () => {
+              setSelectedEvent(event);
+              setShowAssignModal(true);
+            }
+          });
+        }
+      });
+
+    } else if (userRole === 'worker' && loggedInWorker) {
+      // Worker notifications
+      
+      // 1. Upcoming events within 24 hours
+      const workerAssignments = assignments.filter(a => 
+        a.worker_id === loggedInWorker.id && 
+        a.status === 'approved'
+      );
+
+      workerAssignments.forEach(assignment => {
+        const event = events.find(e => e.id === assignment.event_id);
+        if (event) {
+          const eventDate = parseDateSafe(event.date);
+          const hoursUntil = (eventDate - now) / (1000 * 60 * 60);
+          
+          if (hoursUntil > 0 && hoursUntil <= 24) {
+            newNotifications.push({
+              id: `reminder-${assignment.id}`,
+              type: 'reminder',
+              title: 'Event Tomorrow!',
+              message: `${event.name} at ${formatTime(event.time, timeFormat)}`,
+              timestamp: new Date().toISOString(),
+              action: () => {} // Could open event details
+            });
+          }
+        }
+      });
+
+      // 2. Recent approvals (last 7 days)
+      const recentApprovals = assignments.filter(a => 
+        a.worker_id === loggedInWorker.id && 
+        a.status === 'approved' &&
+        a.updated_at
+      );
+
+      recentApprovals.forEach(assignment => {
+        const updatedDate = new Date(assignment.updated_at);
+        const daysAgo = (now - updatedDate) / (1000 * 60 * 60 * 24);
+        
+        if (daysAgo <= 7) {
+          const event = events.find(e => e.id === assignment.event_id);
+          if (event) {
+            newNotifications.push({
+              id: `approved-${assignment.id}`,
+              type: 'success',
+              title: 'Application Approved!',
+              message: `You're confirmed for ${event.name}`,
+              timestamp: assignment.updated_at,
+              action: () => {}
+            });
+          }
+        }
+      });
+    }
+
+    // Sort by timestamp (newest first) and limit to 20
+    newNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    setNotifications(newNotifications.slice(0, 20));
+  };
 
   const loadTimeFormat = async () => {
     try {
@@ -850,6 +970,134 @@ const GigStaffPro = () => {
     }
   };
 
+  const NotificationsModal = () => {
+    if (!showNotifications) return null;
+
+    const getNotificationIcon = (type) => {
+      switch (type) {
+        case 'application': return <Mail size={20} className="text-blue-600" />;
+        case 'warning': return <AlertCircle size={20} className="text-yellow-600" />;
+        case 'reminder': return <Clock size={20} className="text-orange-600" />;
+        case 'success': return <CheckCircle size={20} className="text-green-600" />;
+        default: return <Bell size={20} className="text-gray-600" />;
+      }
+    };
+
+    const getTimeAgo = (timestamp) => {
+      const now = new Date();
+      const then = new Date(timestamp);
+      const diffMs = now - then;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    const clearAllNotifications = () => {
+      if (confirm('Clear all notifications?')) {
+        setNotifications([]);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Bell size={24} className="text-gray-700" />
+              <h3 className="text-2xl font-bold text-gray-900">Notifications</h3>
+              {notifications.length > 0 && (
+                <span className="bg-red-100 text-red-800 text-sm px-2 py-1 rounded-full font-medium">
+                  {notifications.length}
+                </span>
+              )}
+            </div>
+            <button 
+              onClick={() => setShowNotifications(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {/* Notifications List */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Bell size={48} className="text-gray-300 mb-4" />
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">All Caught Up!</h4>
+                <p className="text-gray-600">No new notifications</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map(notification => (
+                  <div
+                    key={notification.id}
+                    onClick={() => {
+                      if (notification.action) {
+                        notification.action();
+                        setShowNotifications(false);
+                      }
+                    }}
+                    className={`p-4 rounded-lg border transition-colors ${
+                      notification.action 
+                        ? 'hover:bg-gray-50 cursor-pointer' 
+                        : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {notification.title}
+                            </p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {notification.message}
+                            </p>
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2 whitespace-nowrap">
+                            {getTimeAgo(notification.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 border-t flex items-center justify-between bg-gray-50">
+            {notifications.length > 0 && (
+              <button
+                onClick={clearAllNotifications}
+                className="text-sm text-gray-600 hover:text-gray-800 font-medium"
+              >
+                Clear All
+              </button>
+            )}
+            <button
+              onClick={() => setShowNotifications(false)}
+              className="ml-auto bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const Header = () => (
     <div className="bg-gradient-to-r from-red-900 to-black text-white shadow-lg">
       <div className="px-4 py-3">
@@ -870,9 +1118,16 @@ const GigStaffPro = () => {
           </div>
           
           <div className="flex items-center space-x-2 sm:space-x-3">
-            <button className="relative p-2 hover:bg-red-800 rounded-full">
+            <button 
+              onClick={() => setShowNotifications(true)}
+              className="relative p-2 hover:bg-red-800 rounded-full transition-colors"
+            >
               <Bell size={20} />
-              <span className="absolute -top-1 -right-1 bg-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">3</span>
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
             </button>
             <button 
               onClick={handleLogout}
@@ -7145,6 +7400,7 @@ const GigStaffPro = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}
       </div>
+      <NotificationsModal />
       <AddWorkerModal />
       <BulkInviteModal />
       <SetPinModal />
