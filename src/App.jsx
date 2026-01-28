@@ -1872,8 +1872,12 @@ const GigStaffPro = () => {
       return eventAssignments.filter(a => a.position === position);
     };
 
-    const getPositionCount = (position) => {
-      const pos = selectedEvent.positions?.find(p => p.name === position);
+    const getPositionCount = (positionKey) => {
+      // Find position by key OR by name (for backward compatibility)
+      const pos = selectedEvent.positions?.find(p => {
+        const pKey = p.key || p.name || p;
+        return pKey === positionKey || p.name === positionKey;
+      });
       return pos ? pos.count : 0;
     };
 
