@@ -1028,32 +1028,32 @@ const GigStaffPro = () => {
 
     const positionOptions = positions;
 
-    const updatePositionCount = (position, count) => {
+    const updatePositionCount = (positionKey, count) => {
       setFormData(prev => {
-        const existing = prev.positions.find(p => p.name === position);
+        const existing = prev.positions.find(p => p.key === positionKey);
         if (count === 0) {
           return {
             ...prev,
-            positions: prev.positions.filter(p => p.name !== position)
+            positions: prev.positions.filter(p => p.key !== positionKey)
           };
         }
         if (existing) {
           return {
             ...prev,
             positions: prev.positions.map(p => 
-              p.name === position ? { name: position, count: parseInt(count) } : p
+              p.key === positionKey ? { key: positionKey, count: parseInt(count) } : p
             )
           };
         }
         return {
           ...prev,
-          positions: [...prev.positions, { name: position, count: parseInt(count) }]
+          positions: [...prev.positions, { key: positionKey, count: parseInt(count) }]
         };
       });
     };
 
-    const getPositionCount = (position) => {
-      const found = formData.positions.find(p => p.name === position);
+    const getPositionCount = (positionKey) => {
+      const found = formData.positions.find(p => p.key === positionKey);
       return found ? found.count : 0;
     };
 
