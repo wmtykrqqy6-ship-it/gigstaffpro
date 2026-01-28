@@ -787,11 +787,15 @@ const GigStaffPro = () => {
   const Navigation = () => {
     if (userRole !== 'admin') return null;
     
+    // Count pending applications
+    const pendingCount = assignments.filter(a => a.status === 'pending').length;
+    
     const navItems = [
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'staff', label: 'Staff', icon: Users },
       { id: 'events', label: 'Events', icon: Calendar },
       { id: 'schedule', label: 'Schedule', icon: Clock },
+      { id: 'applications', label: 'Applications', icon: FileText, badge: pendingCount },
       ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
       { id: 'settings', label: 'Settings', icon: Settings }
     ];
@@ -800,7 +804,7 @@ const GigStaffPro = () => {
       <div className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8 overflow-x-auto">
-            {navItems.map(({ id, label, icon: Icon }) => (
+            {navItems.map(({ id, label, icon: Icon, badge }) => (
               <button
                 key={id}
                 onClick={() => setCurrentView(id)}
@@ -812,6 +816,11 @@ const GigStaffPro = () => {
               >
                 <Icon size={18} />
                 <span>{label}</span>
+                {badge > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 font-bold">
+                    {badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -6253,6 +6262,277 @@ const GigStaffPro = () => {
     );
   };
 
+  const ApplicationsView = () => {
+    const [filter, setFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
+    const [searchTerm, setSearchTerm] = useState('');
+    const [processingId, setProcessingId] = useState(null);
+
+    // Get all applications with worker and event details
+    const applications = assignments
+      .map(assignment => {
+        const worker = workers.find(w => w.id === assignment.worker_id);
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, worker, event };
+      })
+      .filter(app => app.worker && app.event) // Only include valid applications
+      .sort((a, b) => new Date(b.applied_at || b.created_at) - new Date(a.applied_at || a.created_at)); // Newest first
+
+    // Apply filters
+    const filteredApplications = applications.filter(app => {
+      // Status filter
+      if (filter === 'pending' && app.status !== 'pending') return false;
+      if (filter === 'approved' && app.status !== 'approved') return false;
+      if (filter === 'rejected' && app.status !== 'rejected') return false;
+      
+      // Search filter
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        const matchesWorker = app.worker.name.toLowerCase().includes(search);
+        const matchesEvent = app.event.name.toLowerCase().includes(search);
+        const matchesPosition = (app.position || '').toLowerCase().includes(search);
+        if (!matchesWorker && !matchesEvent && !matchesPosition) return false;
+      }
+      
+      return true;
+    });
+
+    const handleApprove = async (applicationId) => {
+      if (!confirm('Approve this application?')) return;
+      
+      setProcessingId(applicationId);
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({ status: 'approved' })
+          .eq('id', applicationId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Application approved!');
+      } catch (error) {
+        console.error('Error approving application:', error);
+        alert('Error approving application: ' + error.message);
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    const handleReject = async (applicationId) => {
+      if (!confirm('Reject this application? This will remove the assignment.')) return;
+      
+      setProcessingId(applicationId);
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', applicationId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Application rejected and removed.');
+      } catch (error) {
+        console.error('Error rejecting application:', error);
+        alert('Error rejecting application: ' + error.message);
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    const pendingCount = applications.filter(a => a.status === 'pending').length;
+    const approvedCount = applications.filter(a => a.status === 'approved').length;
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900">Applications</h2>
+          <p className="text-sm text-gray-600 mt-1">Review and manage worker applications</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600 font-medium">Pending Review</p>
+                <p className="text-3xl font-bold text-yellow-900 mt-1">{pendingCount}</p>
+              </div>
+              <Clock size={32} className="text-yellow-600" />
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Approved</p>
+                <p className="text-3xl font-bold text-green-900 mt-1">{approvedCount}</p>
+              </div>
+              <CheckCircle size={32} className="text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium">Total Applications</p>
+                <p className="text-3xl font-bold text-blue-900 mt-1">{applications.length}</p>
+              </div>
+              <FileText size={32} className="text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Status filter */}
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'all'
+                    ? 'bg-red-900 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilter('pending')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'pending'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Pending ({pendingCount})
+              </button>
+              <button
+                onClick={() => setFilter('approved')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'approved'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Approved
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="flex-1">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by worker, event, or position..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Applications List */}
+        <div className="bg-white rounded-lg shadow">
+          {filteredApplications.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Found</h3>
+              <p className="text-gray-600">
+                {filter === 'pending' 
+                  ? 'No pending applications to review.' 
+                  : 'Try adjusting your filters or search terms.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredApplications.map(app => (
+                <div key={app.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    {/* Application Info */}
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-bold text-gray-900">{app.worker.name}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {app.status === 'pending' ? 'Pending Review' : 
+                           app.status === 'approved' ? 'Approved' : 'Rejected'}
+                        </span>
+                        {app.worker.rank <= 2 && (
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${
+                            app.worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            Rank {app.worker.rank}
+                          </span>
+                        )}
+                        {app.worker.reliability >= 4.5 && (
+                          <span className="text-sm text-yellow-600">⭐ {app.worker.reliability.toFixed(1)}</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Event</p>
+                          <p className="font-medium text-gray-900">{app.event.name}</p>
+                          <p className="text-xs text-gray-600">
+                            {parseDateSafe(app.event.date).toLocaleDateString('en-US', { 
+                              weekday: 'short', month: 'short', day: 'numeric' 
+                            })} • {formatTime(app.event.time, timeFormat)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">Position</p>
+                          <p className="font-medium text-gray-900">{getPositionLabel(app.position)}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">Applied</p>
+                          <p className="font-medium text-gray-900">
+                            {app.applied_at 
+                              ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {app.status === 'pending' && (
+                      <div className="flex space-x-2 ml-4">
+                        <button
+                          onClick={() => handleApprove(app.id)}
+                          disabled={processingId === app.id}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        >
+                          <CheckCircle size={18} />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          onClick={() => handleReject(app.id)}
+                          disabled={processingId === app.id}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        >
+                          <XCircle size={18} />
+                          <span>Reject</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderView = () => {
     // Worker mode - show worker portal instead of admin views
     if (userRole === 'worker') {
@@ -6264,6 +6544,7 @@ const GigStaffPro = () => {
     if (currentView === 'staff') return <StaffView />;
     if (currentView === 'events') return <EventsView />;
     if (currentView === 'schedule') return <ScheduleView />;
+    if (currentView === 'applications') return <ApplicationsView />;
     if (currentView === 'payments') return <PaymentsView />;
     if (currentView === 'settings') return <SettingsView />;
     
