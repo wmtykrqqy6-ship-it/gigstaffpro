@@ -5638,12 +5638,15 @@ const GigStaffPro = () => {
       
       setApplying(true);
       try {
+        // Convert position label back to key for storage
+        const positionKey = getPositionKey(position);
+        
         const { error } = await supabase
           .from('assignments')
           .insert([{
             event_id: event.id,
             worker_id: currentWorker.id,
-            position: position,
+            position: positionKey,
             status: 'pending',
             applied_at: new Date().toISOString()
           }]);
@@ -5686,15 +5689,22 @@ const GigStaffPro = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {availableEvents.map(event => {
-            // Get positions that match worker skills
+            // Get positions that match worker skills (using position keys)
             const eventPositions = Array.isArray(event.positions) ? event.positions : [];
-            // Extract position names from objects {name: "Blackjack", count: 4}
-            const positionNames = eventPositions.map(pos => 
-              typeof pos === 'object' && pos.name ? pos.name : pos
+            
+            // Extract position keys
+            const positionKeys = eventPositions.map(pos => 
+              pos.key || getPositionKey(pos.name || pos)
             );
-            const matchingPositions = positionNames.filter(posName => 
-              currentWorker.skills && currentWorker.skills.includes(posName)
+            
+            // Find matching positions
+            const workerSkillKeys = currentWorker.skills || [];
+            const matchingPositionKeys = positionKeys.filter(posKey => 
+              workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
             );
+            
+            // Convert back to labels for display
+            const matchingPositions = matchingPositionKeys.map(key => getPositionLabel(key));
             
             const daysUntil = Math.ceil((parseDateSafe(event.date) - new Date()) / (1000 * 60 * 60 * 24));
             
