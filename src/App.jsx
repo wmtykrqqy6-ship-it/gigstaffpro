@@ -6745,7 +6745,14 @@ const GigStaffPro = () => {
           ) : (
             <div className="space-y-4">
               {upcomingAssignments.map(assignment => {
-                const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
+                const eventDate = parseDateSafe(assignment.event.date);
+                const today = new Date();
+                
+                // Normalize both dates to midnight for accurate comparison
+                const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+                const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                
+                const daysUntil = Math.ceil((eventDateOnly - todayOnly) / (1000 * 60 * 60 * 24));
                 const isToday = daysUntil === 0;
                 const isTomorrow = daysUntil === 1;
                 const canCancel = daysUntil >= 7;
@@ -6984,7 +6991,14 @@ const GigStaffPro = () => {
                       return timeA.localeCompare(timeB);
                     })
                     .map((assignment, idx) => {
-                    const daysUntil = Math.ceil((new Date(assignment.event.date) - new Date()) / (1000 * 60 * 60 * 24));
+                    const eventDate = parseDateSafe(assignment.event.date);
+                    const today = new Date();
+                    
+                    // Normalize both dates to midnight for accurate comparison
+                    const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+                    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    
+                    const daysUntil = Math.ceil((eventDateOnly - todayOnly) / (1000 * 60 * 60 * 24));
                     const isToday = daysUntil === 0;
                     const isTomorrow = daysUntil === 1;
                     const canCancel = daysUntil >= 7;
