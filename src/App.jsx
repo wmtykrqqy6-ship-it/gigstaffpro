@@ -6394,6 +6394,50 @@ const GigStaffPro = () => {
       }
     };
 
+    const switchPosition = async (assignment, newPositionKey) => {
+      const eventDate = new Date(assignment.event.date);
+      const today = new Date();
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      
+      // Check if within 7 days
+      if (daysUntil < 7) {
+        alert(
+          `⚠️ Cannot Switch Position\n\n` +
+          `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
+          `Position changes within 7 days require admin approval.\n` +
+          `Please contact your admin directly.`
+        );
+        return;
+      }
+      
+      const newPositionLabel = getPositionLabel(newPositionKey);
+      const currentPositionLabel = getPositionLabel(assignment.position);
+      
+      if (!confirm(
+        `Switch position for "${assignment.event.name}"?\n\n` +
+        `From: ${currentPositionLabel}\n` +
+        `To: ${newPositionLabel}\n\n` +
+        `This change will take effect immediately.`
+      )) {
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({ position: newPositionKey })
+          .eq('id', assignment.id);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert(`✓ Position switched to ${newPositionLabel}!`);
+      } catch (error) {
+        console.error('Error switching position:', error);
+        alert('Error switching position: ' + error.message);
+      }
+    };
+
     return (
       <div className="space-y-6">
         {/* Header with worker info */}
@@ -6786,6 +6830,68 @@ const GigStaffPro = () => {
                       </div>
                     )}
 
+                    {/* Switch Position Section */}
+                    {(() => {
+                      // Get available positions for this event
+                      const eventPositions = assignment.event.positions || [];
+                      const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && a.status === 'approved');
+                      
+                      // Find positions worker is qualified for but not currently assigned to
+                      const availablePositions = eventPositions
+                        .filter(pos => {
+                          const posKey = pos.key || pos.name || pos;
+                          // Skip current position
+                          if (posKey === assignment.position) return false;
+                          
+                          // Check if worker has the skill
+                          const hasSkill = currentWorker.skills?.some(skill => positionMatches(skill, posKey));
+                          if (!hasSkill) return false;
+                          
+                          // Check if position has space
+                          const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                          const needed = pos.count || 0;
+                          return assignedCount < needed;
+                        });
+
+                      if (availablePositions.length === 0) return null;
+
+                      return (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center space-x-1">
+                            <MessageSquare size={14} />
+                            <span>Switch to different position?</span>
+                          </p>
+                          <div className="space-y-2">
+                            {availablePositions.map(pos => {
+                              const posKey = pos.key || pos.name || pos;
+                              const posLabel = getPositionLabel(posKey);
+                              const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                              const needed = pos.count || 0;
+                              
+                              return (
+                                <div key={posKey} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{posLabel}</p>
+                                    <p className="text-xs text-gray-500">{assignedCount} of {needed} spots filled</p>
+                                  </div>
+                                  {canCancel ? (
+                                    <button
+                                      onClick={() => switchPosition(assignment, posKey)}
+                                      className="text-blue-600 hover:text-blue-800 text-xs font-medium px-3 py-1 bg-blue-50 rounded hover:bg-blue-100"
+                                    >
+                                      Switch
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">Contact admin</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Cancel Button */}
                     <div className="mt-4 pt-4 border-t flex items-center justify-between">
                       {canCancel ? (
@@ -6951,6 +7057,71 @@ const GigStaffPro = () => {
                             <p className="text-gray-900">{assignment.event.notes}</p>
                           </div>
                         )}
+
+                        {/* Switch Position Section */}
+                        {(() => {
+                          // Get available positions for this event
+                          const eventPositions = assignment.event.positions || [];
+                          const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && a.status === 'approved');
+                          
+                          // Find positions worker is qualified for but not currently assigned to
+                          const availablePositions = eventPositions
+                            .filter(pos => {
+                              const posKey = pos.key || pos.name || pos;
+                              // Skip current position
+                              if (posKey === assignment.position) return false;
+                              
+                              // Check if worker has the skill
+                              const hasSkill = currentWorker.skills?.some(skill => positionMatches(skill, posKey));
+                              if (!hasSkill) return false;
+                              
+                              // Check if position has space
+                              const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                              const needed = pos.count || 0;
+                              return assignedCount < needed;
+                            });
+
+                          if (availablePositions.length === 0) return null;
+
+                          return (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-sm font-medium text-gray-700 mb-2 flex items-center space-x-1">
+                                <MessageSquare size={14} />
+                                <span>Switch to different position?</span>
+                              </p>
+                              <div className="space-y-2">
+                                {availablePositions.map(pos => {
+                                  const posKey = pos.key || pos.name || pos;
+                                  const posLabel = getPositionLabel(posKey);
+                                  const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                                  const needed = pos.count || 0;
+                                  
+                                  return (
+                                    <div key={posKey} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">{posLabel}</p>
+                                        <p className="text-xs text-gray-500">{assignedCount} of {needed} spots filled</p>
+                                      </div>
+                                      {canCancel ? (
+                                        <button
+                                          onClick={() => {
+                                            switchPosition(assignment, posKey);
+                                            setSelectedEventModal(null); // Close modal after switch
+                                          }}
+                                          className="text-blue-600 hover:text-blue-800 text-xs font-medium px-3 py-1 bg-blue-50 rounded hover:bg-blue-100"
+                                        >
+                                          Switch
+                                        </button>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">Contact admin</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Cancel Button */}
                         <div className="mt-3 pt-3 border-t flex items-center justify-between">
