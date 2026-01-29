@@ -6346,12 +6346,23 @@ const GigStaffPro = () => {
       })
       .filter(a => a.event);
 
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
     const upcomingAssignments = workerAssignments
-      .filter(a => new Date(a.event.date) >= new Date())
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDateOnly >= todayOnly;
+      })
       .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
 
     const pastAssignments = workerAssignments
-      .filter(a => new Date(a.event.date) < new Date())
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        return eventDateOnly < todayOnly;
+      })
       .sort((a, b) => new Date(b.event.date) - new Date(a.event.date));
 
     const totalEarnings = currentWorker.earnings || 0;
