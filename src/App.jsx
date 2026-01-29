@@ -6250,7 +6250,10 @@ const GigStaffPro = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin size={14} className="text-gray-500" />
-                    <span>{event.venue}</span>
+                    <span>
+                      {event.venue}
+                      {event.room && <span className="text-gray-600"> - {event.room}</span>}
+                    </span>
                   </div>
                   {event.address && (
                     <div className="mt-2 p-2 bg-white rounded border border-gray-200">
@@ -6792,7 +6795,10 @@ const GigStaffPro = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <MapPin size={16} className="text-gray-500" />
-                        <span>{assignment.event.venue}</span>
+                        <span>
+                          {assignment.event.venue}
+                          {assignment.event.room && <span className="text-gray-600"> - {assignment.event.room}</span>}
+                        </span>
                       </div>
                     </div>
 
@@ -6934,7 +6940,10 @@ const GigStaffPro = () => {
                       <span>•</span>
                       <span>{getPositionLabel(assignment.position)}</span>
                       <span>•</span>
-                      <span>{assignment.event.venue}</span>
+                      <span>
+                        {assignment.event.venue}
+                        {assignment.event.room && ` - ${assignment.event.room}`}
+                      </span>
                     </div>
                   </div>
                   <CheckCircle size={20} className="text-green-600" />
@@ -7017,7 +7026,10 @@ const GigStaffPro = () => {
                           </div>
                           <div className="flex items-center space-x-2">
                             <MapPin size={16} className="text-gray-500" />
-                            <span>{assignment.event.venue}</span>
+                            <span>
+                              {assignment.event.venue}
+                              {assignment.event.room && <span className="text-gray-600"> - {assignment.event.room}</span>}
+                            </span>
                           </div>
                         </div>
 
