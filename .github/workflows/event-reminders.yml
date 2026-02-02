@@ -1,0 +1,19 @@
+name: Send Event Reminders
+
+on:
+  schedule:
+    # Run every hour at :05 minutes past the hour
+    - cron: '5 * * * *'
+  workflow_dispatch: # Allows manual triggering for testing
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Send Event Reminders
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            https://ycsauzvkrbcynifkawuw.supabase.co/functions/v1/send-event-reminders
