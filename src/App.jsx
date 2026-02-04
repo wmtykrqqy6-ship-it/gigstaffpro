@@ -6316,8 +6316,168 @@ const GigStaffPro = () => {
     </div>
   );
 };
+const WorkerPortalView = () => {
+    const currentWorker = loggedInWorker;
+    const [viewMode, setViewMode] = useState('list');
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedEventModal, setSelectedEventModal] = useState(null);
 
-    const switchPosition = async (assignment, newPositionKey) => {
+    const workerAssignments = assignments
+      .filter(a => a.worker_id === currentWorker.id)
+      .map(assignment => {
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, event };
+      })
+      .filter(a => a.event);
+
+    const upcomingAssignments = workerAssignments
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return eventDate >= today && a.status === 'approved';
+      })
+      .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
+
+    const pastAssignments = workerAssignments
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return eventDate < today && a.status === 'approved';
+      })
+      .sort((a, b) => new Date(b.event.date) - new Date(a.event.date));
+
+    const pendingApplications = workerAssignments.filter(a => a.status === 'pending');
+
+    const totalEarnings = workerAssignments
+      .filter(a => a.status === 'approved' && a.total_pay)
+      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+
+    const cancelAssignment = async (assignment) => {
+      const eventDate = parseDateSafe(assignment.event.date);
+      const today = new Date();
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntil < 7) {
+        alert(
+          `⚠️ Cannot Cancel\n\n` +
+          `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
+          `Cancellations within 7 days require admin approval.\n` +
+          `Please contact your admin directly.`
+        );
+        return;
+      }
+      
+      if (!confirm(
+        `Cancel your assignment for "${assignment.event.name}"?\n\n` +
+        `Position: ${getPositionLabel(assignment.position)}\n` +
+        `Date: ${parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}\n\n` +
+        `This action cannot be undone.`
+      )) {
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', assignment.id);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('✓ Assignment cancelled successfully.');
+      } catch (error) {
+        console.error('Error cancelling assignment:', error);
+        alert('Error cancelling assignment: ' + error.message);
+      }
+    };
+```
+
+**STEP 3: Find the END location**
+
+Now press `Ctrl+F` again and search for this EXACT text:
+```
+  const renderView = () => {
+  const WorkerPortalView = () => {
+    const currentWorker = loggedInWorker;
+    const [viewMode, setViewMode] = useState('list');
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedEventModal, setSelectedEventModal] = useState(null);
+
+    const workerAssignments = assignments
+      .filter(a => a.worker_id === currentWorker.id)
+      .map(assignment => {
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, event };
+      })
+      .filter(a => a.event);
+
+    const upcomingAssignments = workerAssignments
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return eventDate >= today && a.status === 'approved';
+      })
+      .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
+
+    const pastAssignments = workerAssignments
+      .filter(a => {
+        const eventDate = parseDateSafe(a.event.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return eventDate < today && a.status === 'approved';
+      })
+      .sort((a, b) => new Date(b.event.date) - new Date(a.event.date));
+
+    const pendingApplications = workerAssignments.filter(a => a.status === 'pending');
+
+    const totalEarnings = workerAssignments
+      .filter(a => a.status === 'approved' && a.total_pay)
+      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+
+    const cancelAssignment = async (assignment) => {
+      const eventDate = parseDateSafe(assignment.event.date);
+      const today = new Date();
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntil < 7) {
+        alert(
+          `⚠️ Cannot Cancel\n\n` +
+          `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
+          `Cancellations within 7 days require admin approval.\n` +
+          `Please contact your admin directly.`
+        );
+        return;
+      }
+      
+      if (!confirm(
+        `Cancel your assignment for "${assignment.event.name}"?\n\n` +
+        `Position: ${getPositionLabel(assignment.position)}\n` +
+        `Date: ${parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}\n\n` +
+        `This action cannot be undone.`
+      )) {
+        return;
+      }
+      
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', assignment.id);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('✓ Assignment cancelled successfully.');
+      } catch (error) {
+        console.error('Error cancelling assignment:', error);
+        alert('Error cancelling assignment: ' + error.message);
+      }
+    };    
+const switchPosition = async (assignment, newPositionKey) => {
       const eventDate = new Date(assignment.event.date);
       const today = new Date();
       const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
@@ -7435,7 +7595,7 @@ const GigStaffPro = () => {
       </div>
     );
   };
-
+  };
   const renderView = () => {
     // Worker mode - show worker portal instead of admin views
     if (userRole === 'worker') {
