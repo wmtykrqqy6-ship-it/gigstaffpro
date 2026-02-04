@@ -1,46 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { formatTime, parseDateSafe } from './utils/dateHelpers';
+import { hashPin } from './utils/authHelpers';
+import { STANDARD_POSITIONS, getPositionLabel, getPositionKey, positionMatches, setPositions as setPositionsHelper } from './utils/positionHelpers';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
-
-// Simple hash function for PINs (in production, use proper bcrypt on backend)
-const hashPin = async (pin) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-};
-
-// Helper function to format time based on 12/24 hour preference
-const formatTime = (timeStr, format = '12') => {
-  if (!timeStr) return '';
-  
-  const [hours, minutes] = timeStr.split(':');
-  const hour = parseInt(hours);
-  
-  if (format === '24') {
-    return `${hours}:${minutes}`;
-  }
-  
-  // 12-hour format
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${hour12}:${minutes} ${period}`;
-};
-
-// Helper function to parse dates without timezone conversion
-// Prevents "2026-02-13" from becoming "2026-02-12" due to UTC offset
-const parseDateSafe = (dateStr) => {
-  if (!dateStr) return new Date();
-  
-  // Extract just the date part (YYYY-MM-DD)
-  const datePart = dateStr.split('T')[0];
-  const [year, month, day] = datePart.split('-').map(Number);
-  
-  // Create date in local timezone
-  return new Date(year, month - 1, day);
-};
 
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
@@ -685,64 +648,6 @@ const GigStaffPro = () => {
     }
   };
 
-  // Standard position definitions with keys
-  const STANDARD_POSITIONS = [
-    { key: 'blackjack_dealer', label: 'Blackjack Dealer' },
-    { key: 'poker_dealer', label: 'Poker Dealer' },
-    { key: 'roulette_dealer', label: 'Roulette Dealer' },
-    { key: 'craps_dealer', label: 'Craps Dealer' },
-    { key: 'baccarat_dealer', label: 'Baccarat Dealer' },
-    { key: 'dealer', label: 'Dealer' },
-    { key: 'host', label: 'Host' },
-    { key: 'bartender', label: 'Bartender' },
-    { key: 'server', label: 'Server' },
-    { key: 'cashier', label: 'Cashier' }
-  ];
-
-  // Helper functions for position handling
-  const getPositionLabel = (keyOrLabel) => {
-    // If it's already an object, return its label
-    if (typeof keyOrLabel === 'object' && keyOrLabel.label) return keyOrLabel.label;
-    
-    // Try to find by key first
-    const position = positions.find(p => p.key === keyOrLabel);
-    if (position) return position.label;
-    
-    // Fallback: try to find by label (for backward compatibility)
-    const byLabel = positions.find(p => p.label === keyOrLabel);
-    if (byLabel) return byLabel.label;
-    
-    // Last resort: return as-is
-    return keyOrLabel;
-  };
-
-  const getPositionKey = (keyOrLabel) => {
-    // If it's already an object, return its key
-    if (typeof keyOrLabel === 'object' && keyOrLabel.key) return keyOrLabel.key;
-    
-    // Try to find by key first
-    const position = positions.find(p => p.key === keyOrLabel);
-    if (position) return position.key;
-    
-    // Try to find by label (for backward compatibility during migration)
-    const byLabel = positions.find(p => p.label === keyOrLabel);
-    if (byLabel) return byLabel.key;
-    
-    // Last resort: convert label to key format
-    return keyOrLabel.toLowerCase().replace(/\s+/g, '_');
-  };
-
-  const positionMatches = (workerSkillKey, positionKey) => {
-    // Direct key match
-    if (workerSkillKey === positionKey) return true;
-    
-    // Special case: 'dealer' key matches all dealer positions
-    if (workerSkillKey === 'dealer' && positionKey.includes('dealer')) return true;
-    if (positionKey === 'dealer' && workerSkillKey.includes('dealer')) return true;
-    
-    return false;
-  };
-
   const loadSettings = async () => {
     try {
       const { data, error } = await supabase
@@ -776,6 +681,8 @@ const GigStaffPro = () => {
         } else {
           // New format - use as is
           setPositions(storedPositions);
+setPositions(storedPositions);
+          setPositionsHelper(storedPositions);  // Tell the helper about the positions
         }
       }
 
