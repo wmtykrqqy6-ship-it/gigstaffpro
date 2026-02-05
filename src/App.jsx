@@ -714,8 +714,7 @@ setPositions(storedPositions);
 
   const loadWorkers = async () => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
+           const { data, error } = await supabase
         .from('workers')
         .select('*')
         .order('name', { ascending: true });
@@ -773,9 +772,7 @@ setPositions(storedPositions);
     } catch (error) {
       console.error('Error loading workers:', error);
       setError(error.message);
-    } finally {
-      setLoading(false);
-    }
+   
   };
 
   const loadEvents = async () => {
