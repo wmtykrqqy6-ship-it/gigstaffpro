@@ -334,7 +334,7 @@ const LoginScreen = ({ onLogin }) => {
   }
 };
 
-const GigStaffPro = () => {
+export default function GigStaffPro() {
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
   const [currentView, setCurrentView] = useState('dashboard');
   const [workers, setWorkers] = useState([]);
@@ -6361,5 +6361,3 @@ setPositions(storedPositions);
     </div>
   );
 };
-
-export default GigStaffPro;
