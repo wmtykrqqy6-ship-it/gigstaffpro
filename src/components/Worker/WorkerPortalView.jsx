@@ -323,7 +323,7 @@ const AvailableEventsSection = ({
 };
 
 // ===== MAIN COMPONENT: WorkerPortalView =====
-const WorkerPortalView = ({
+const WorkerPortalView = ({ 
   loggedInWorker,
   assignments,
   events,
@@ -334,11 +334,28 @@ const WorkerPortalView = ({
   eventPaymentSettings,
   payRates,
   positions,
-  loadAssignments
+  loadAssignments,
+  loading
 }) => {
-  const currentWorker = loggedInWorker;
+// Show loading spinner while data loads
+if (loading) {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-900 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading your dashboard...</p>
+      </div>
+    </div>
+  );
+}
+
+// Safety check for required data
 if (!assignments || !events || !workers) {
-  return <div>Loading...</div>;
+  return (
+    <div className="text-center py-12">
+      <p className="text-red-600">Error: Unable to load data. Please refresh the page.</p>
+    </div>
+  );
 }
   const [viewMode, setViewMode] = useState('list');
   const [selectedDate, setSelectedDate] = useState(new Date());
