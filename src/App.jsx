@@ -7418,7 +7418,7 @@ const switchPosition = async (assignment, newPositionKey) => {
       </div>
     );
   };
-  };
+
   const renderView = () => {
     // Worker mode - show worker portal instead of admin views
     if (userRole === 'worker') {
