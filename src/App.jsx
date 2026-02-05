@@ -5940,7 +5940,7 @@ setPositions(storedPositions);
     );
   };
 
-  {currentView === 'worker-portal' && (
+ {currentView === 'worker-portal' && (
   <WorkerPortalView
     loggedInWorker={loggedInWorker}
     assignments={assignments}
@@ -5953,6 +5953,7 @@ setPositions(storedPositions);
     payRates={payRates}
     positions={positions}
     loadAssignments={loadAssignments}
+    loading={loading}
   />
 )}
 
