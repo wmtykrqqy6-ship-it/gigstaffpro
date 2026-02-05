@@ -376,17 +376,25 @@ const GigStaffPro = () => {
   const [newPin, setNewPin] = useState('');
   const [settingPin, setSettingPin] = useState(false);
 
-  // Load workers from Supabase
-  useEffect(() => {
-    loadWorkers();
-    loadEvents();
-    loadSettings();
-    loadAssignments();
-    loadPaymentConfig();
-    loadPaymentTrackingSetting();
-    loadRankAccessDays();
-    loadTimeFormat();
-  }, []);
+ // Load workers from Supabase
+useEffect(() => {
+  const loadAllData = async () => {
+    setLoading(true);
+    await Promise.all([
+      loadWorkers(),
+      loadEvents(),
+      loadSettings(),
+      loadAssignments(),
+      loadPaymentConfig(),
+      loadPaymentTrackingSetting(),
+      loadRankAccessDays(),
+      loadTimeFormat()
+    ]);
+    setLoading(false);
+  };
+  
+  loadAllData();
+}, []);
 
   // Generate notifications whenever assignments change
   useEffect(() => {
