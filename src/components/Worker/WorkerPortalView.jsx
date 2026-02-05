@@ -590,16 +590,16 @@ const WorkerPortalView = ({
 
       {/* Available Events - Events worker can apply to */}
       <AvailableEventsSection 
-        currentWorker={currentWorker} 
-        events={events}
-        assignments={assignments}
-        rankAccessDays={rankAccessDays}
-        timeFormat={timeFormat}
-        paymentTrackingEnabled={paymentTrackingEnabled}
-        eventPaymentSettings={eventPaymentSettings}
-        payRates={payRates}
-        loadAssignments={loadAssignments}
-      />
+  currentWorker={currentWorker} 
+  events={events}
+  assignments={assignments}
+  rankAccessDays={rankAccessDays}
+  timeFormat={timeFormat}
+  paymentTrackingEnabled={paymentTrackingEnabled}
+  eventPaymentSettings={eventPaymentSettings}
+  payRates={payRates}
+  loadAssignments={loadAssignments}
+/>
 
       {/* Upcoming Events */}
       <div className="bg-white rounded-lg shadow p-6">
