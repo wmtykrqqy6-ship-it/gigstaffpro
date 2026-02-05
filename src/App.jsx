@@ -6361,3 +6361,12 @@ setPositions(storedPositions);
     </div>
   );
 };
+const GigStaffPro = () => {
+  return (
+    <>
+      ...your JSX...
+    </>
+  );
+};
+
+export default GigStaffPro;
