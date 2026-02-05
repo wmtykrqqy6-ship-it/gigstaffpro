@@ -337,6 +337,9 @@ const WorkerPortalView = ({
   loadAssignments
 }) => {
   const currentWorker = loggedInWorker;
+if (!assignments || !events || !workers) {
+  return <div>Loading...</div>;
+}
   const [viewMode, setViewMode] = useState('list');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEventModal, setSelectedEventModal] = useState(null);
