@@ -1053,7 +1053,7 @@ setPositions(storedPositions);
       </div>
     </div>
   );
-
+};
   const Navigation = () => {
     if (userRole !== 'admin') return null;
     
