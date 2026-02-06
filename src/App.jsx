@@ -6391,7 +6391,7 @@ setPositions(storedPositions);
         <p className="text-gray-600">This feature will be available soon!</p>
       </div>
     );
-  };return (
+    return (
     <div className="min-h-screen bg-gray-100">
       <Header />
       <Navigation />
