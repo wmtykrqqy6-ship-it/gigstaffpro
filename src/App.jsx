@@ -6341,25 +6341,40 @@ setPositions(storedPositions);
   if (!isAuthenticated) {
     return <LoginScreen onLogin={handleLogin} />;
   }
-
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {renderView()}
+// Worker mode - show worker portal instead of admin views
+    if (userRole === 'worker') {
+      return (
+        <WorkerPortalView
+          loggedInWorker={loggedInWorker}
+          assignments={assignments}
+          events={events}
+          workers={workers}
+          rankAccessDays={rankAccessDays}
+          timeFormat={timeFormat}
+          paymentTrackingEnabled={paymentTrackingEnabled}
+          eventPaymentSettings={eventPaymentSettings}
+          payRates={payRates}
+          positions={positions}
+          loadAssignments={loadAssignments}
+          loading={loading}
+        />
+      );
+    }
+    
+    // Admin views
+    if (currentView === 'dashboard') return <DashboardView />;
+    if (currentView === 'staff') return <StaffView />;
+    if (currentView === 'events') return <EventsView />;
+    if (currentView === 'schedule') return <ScheduleView />;
+    if (currentView === 'applications') return <ApplicationsView />;
+    if (currentView === 'payments') return <PaymentsView />;
+    if (currentView === 'settings') return <SettingsView />;
+    
+    return (
+      <div className="bg-white rounded-lg shadow p-8 text-center">
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
+        <p className="text-gray-600">This feature will be available soon!</p>
       </div>
-      <NotificationsModal />
-      <AddWorkerModal />
-      <BulkInviteModal />
-      <SetPinModal />
-      <EditWorkerModal />
-      <AddEventModal />
-      <EditEventModal />
-      <AssignWorkersModal />
-      <PaymentCalculatorModal />
-    </div>
-  );
-};
-
+    );
+  };
 export default GigStaffPro;
