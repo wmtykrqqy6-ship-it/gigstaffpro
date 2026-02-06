@@ -334,7 +334,7 @@ const LoginScreen = ({ onLogin }) => {
   }
 };
 
-export default function GigStaffPro() {
+const GigStaffPro = () => {
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
   const [currentView, setCurrentView] = useState('dashboard');
   const [workers, setWorkers] = useState([]);
@@ -6359,13 +6359,6 @@ setPositions(storedPositions);
       <AssignWorkersModal />
       <PaymentCalculatorModal />
     </div>
-  );
-};
-const GigStaffPro = () => {
-  return (
-    <>
-      ...your JSX...
-    </>
   );
 };
 
