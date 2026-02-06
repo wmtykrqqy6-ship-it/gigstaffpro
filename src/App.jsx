@@ -5950,7 +5950,7 @@ setPositions(storedPositions);
     payRates={payRates}
     positions={positions}
     loadAssignments={loadAssignments}
-loadEvents={loadEvents}
+  loadEvents={loadEvents}
     loading={loading}
   />
 )}

@@ -335,6 +335,7 @@ const WorkerPortalView = ({
   payRates,
   positions,
   loadAssignments,
+  loadEvents,
   loading
 }) => {
 // Show loading spinner while data loads
