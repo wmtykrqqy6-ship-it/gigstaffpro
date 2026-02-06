@@ -6269,27 +6269,42 @@ setPositions(storedPositions);
   };
 
   const renderView = () => {
-    // Worker mode - show worker portal instead of admin views
-    if (userRole === 'worker') {
-      return <WorkerPortalView />;
-    }
-    
-    // Admin views
-    if (currentView === 'dashboard') return <DashboardView />;
-    if (currentView === 'staff') return <StaffView />;
-    if (currentView === 'events') return <EventsView />;
-    if (currentView === 'schedule') return <ScheduleView />;
-    if (currentView === 'applications') return <ApplicationsView />;
-    if (currentView === 'payments') return <PaymentsView />;
-    if (currentView === 'settings') return <SettingsView />;
-    
+  // Worker mode - show worker portal instead of admin views
+  if (userRole === 'worker') {
     return (
-      <div className="bg-white rounded-lg shadow p-8 text-center">
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
-        <p className="text-gray-600">This feature will be available soon!</p>
-      </div>
+      <WorkerPortalView
+        loggedInWorker={loggedInWorker}
+        assignments={assignments}
+        events={events}
+        workers={workers}
+        rankAccessDays={rankAccessDays}
+        timeFormat={timeFormat}
+        paymentTrackingEnabled={paymentTrackingEnabled}
+        eventPaymentSettings={eventPaymentSettings}
+        payRates={payRates}
+        positions={positions}
+        loadAssignments={loadAssignments}
+        loading={loading}
+      />
     );
-  };
+  }
+  
+  // Admin views
+  if (currentView === 'dashboard') return <DashboardView />;
+  if (currentView === 'staff') return <StaffView />;
+  if (currentView === 'events') return <EventsView />;
+  if (currentView === 'schedule') return <ScheduleView />;
+  if (currentView === 'applications') return <ApplicationsView />;
+  if (currentView === 'payments') return <PaymentsView />;
+  if (currentView === 'settings') return <SettingsView />;
+  
+  return (
+    <div className="bg-white rounded-lg shadow p-8 text-center">
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
+      <p className="text-gray-600">This feature will be available soon!</p>
+    </div>
+  );
+};
 
   const handleLogin = (role, user) => {
     setUserRole(role);
