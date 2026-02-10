@@ -17,7 +17,9 @@ let appPositions = STANDARD_POSITIONS;
 
 // Function to set positions from the app
 export const setPositions = (positions) => {
-  appPositions = positions;
+  appPositions = Array.isArray(positions) && positions.length
+    ? positions
+    : STANDARD_POSITIONS;
 };
 
 // Get position label from key
@@ -51,7 +53,7 @@ export const getPositionKey = (keyOrLabel) => {
   if (byLabel) return byLabel.key;
   
   // Last resort: convert label to key format
-  return keyOrLabel.toLowerCase().replace(/\s+/g, '_');
+ return String(keyOrLabel).toLowerCase().replace(/\s+/g, '_');
 };
 
 // Check if worker skill matches position

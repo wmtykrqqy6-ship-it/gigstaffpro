@@ -1,5 +1,7 @@
 // Simple hash function for PINs (in production, use proper bcrypt on backend)
-const hashPin = async (pin) => {
+export const hashPin = async (pin) => {
+  if (!pin) return '';
+
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
   const hash = await crypto.subtle.digest('SHA-256', data);
