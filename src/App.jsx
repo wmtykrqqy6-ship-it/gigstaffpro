@@ -401,6 +401,23 @@ const GigStaffPro = () => {
   useEffect(() => {
     generateNotifications();
   }, [assignments, events, workers, userRole, loggedInWorker]);
+const getDismissKey = () => {
+  if (userRole === 'admin') return 'dismissed_notifications_admin';
+  if (userRole === 'worker' && loggedInWorker?.id) return `dismissed_notifications_worker_${loggedInWorker.id}`;
+  return 'dismissed_notifications_unknown';
+};
+
+const loadDismissedNotificationIds = () => {
+  try {
+    return JSON.parse(localStorage.getItem(getDismissKey()) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveDismissedNotificationIds = (ids) => {
+  localStorage.setItem(getDismissKey(), JSON.stringify(ids));
+};
 
   const generateNotifications = () => {
     const newNotifications = [];
@@ -510,10 +527,32 @@ const GigStaffPro = () => {
       });
     }
 
-    // Sort by timestamp (newest first) and limit to 20
-    newNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    setNotifications(newNotifications.slice(0, 20));
+// Sort by timestamp (newest first)
+newNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+
+// ✅ Filter out dismissed notifications (per user)
+const dismissedIds = new Set(loadDismissedNotificationIds());
+const visibleNotifications = newNotifications.filter(n => !dismissedIds.has(n.id));
+
+// Limit to 20
+setNotifications(visibleNotifications.slice(0, 20));
+
   };
+
+const handleClearAllNotifications = () => {
+  if (!confirm('Clear all notifications?')) return;
+
+  const idsToDismiss = notifications.map(n => n.id).filter(Boolean);
+  const existing = loadDismissedNotificationIds();
+
+  saveDismissedNotificationIds(
+    Array.from(new Set([...existing, ...idsToDismiss]))
+  );
+
+  setNotifications([]);
+};
+
 
   const loadTimeFormat = async () => {
     try {
@@ -7326,9 +7365,7 @@ setAppPositions(storedPositions);
   open={showNotifications}
   notifications={notifications}
   onClose={() => setShowNotifications(false)}
-  onClearAll={() => {
-    if (confirm('Clear all notifications?')) setNotifications([]);
-  }}
+  onClearAll={handleClearAllNotifications}
 />
       <AddWorkerModal />
       <BulkInviteModal />
