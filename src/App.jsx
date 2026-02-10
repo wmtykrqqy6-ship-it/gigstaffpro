@@ -3,6 +3,13 @@ import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
 import { hashPin } from './utils/authHelpers';
 import { formatTime, parseDateSafe } from './utils/dateHelpers';
+import {
+  STANDARD_POSITIONS,
+  setPositions as setAppPositions,
+  getPositionLabel,
+  getPositionKey,
+  positionMatches
+} from './utils/positionHelpers';
 
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
@@ -647,64 +654,6 @@ const GigStaffPro = () => {
     }
   };
 
-  // Standard position definitions with keys
-  const STANDARD_POSITIONS = [
-    { key: 'blackjack_dealer', label: 'Blackjack Dealer' },
-    { key: 'poker_dealer', label: 'Poker Dealer' },
-    { key: 'roulette_dealer', label: 'Roulette Dealer' },
-    { key: 'craps_dealer', label: 'Craps Dealer' },
-    { key: 'baccarat_dealer', label: 'Baccarat Dealer' },
-    { key: 'dealer', label: 'Dealer' },
-    { key: 'host', label: 'Host' },
-    { key: 'bartender', label: 'Bartender' },
-    { key: 'server', label: 'Server' },
-    { key: 'cashier', label: 'Cashier' }
-  ];
-
-  // Helper functions for position handling
-  const getPositionLabel = (keyOrLabel) => {
-    // If it's already an object, return its label
-    if (typeof keyOrLabel === 'object' && keyOrLabel.label) return keyOrLabel.label;
-    
-    // Try to find by key first
-    const position = positions.find(p => p.key === keyOrLabel);
-    if (position) return position.label;
-    
-    // Fallback: try to find by label (for backward compatibility)
-    const byLabel = positions.find(p => p.label === keyOrLabel);
-    if (byLabel) return byLabel.label;
-    
-    // Last resort: return as-is
-    return keyOrLabel;
-  };
-
-  const getPositionKey = (keyOrLabel) => {
-    // If it's already an object, return its key
-    if (typeof keyOrLabel === 'object' && keyOrLabel.key) return keyOrLabel.key;
-    
-    // Try to find by key first
-    const position = positions.find(p => p.key === keyOrLabel);
-    if (position) return position.key;
-    
-    // Try to find by label (for backward compatibility during migration)
-    const byLabel = positions.find(p => p.label === keyOrLabel);
-    if (byLabel) return byLabel.key;
-    
-    // Last resort: convert label to key format
-    return keyOrLabel.toLowerCase().replace(/\s+/g, '_');
-  };
-
-  const positionMatches = (workerSkillKey, positionKey) => {
-    // Direct key match
-    if (workerSkillKey === positionKey) return true;
-    
-    // Special case: 'dealer' key matches all dealer positions
-    if (workerSkillKey === 'dealer' && positionKey.includes('dealer')) return true;
-    if (positionKey === 'dealer' && workerSkillKey.includes('dealer')) return true;
-    
-    return false;
-  };
-
   const loadSettings = async () => {
     try {
       const { data, error } = await supabase
@@ -717,6 +666,8 @@ const GigStaffPro = () => {
         // If settings don't exist, use standard positions
         console.log('No settings found, using standard positions');
         setPositions(STANDARD_POSITIONS);
+setAppPositions(STANDARD_POSITIONS);
+
       } else {
         // Check if data is old format (array of strings) or new format (array of objects)
         const storedPositions = data.setting_value || [];
@@ -729,7 +680,8 @@ const GigStaffPro = () => {
             label: label
           }));
           setPositions(migratedPositions);
-          
+setAppPositions(migratedPositions);
+
           // Save migrated format back to database
           await supabase
             .from('settings')
@@ -738,6 +690,7 @@ const GigStaffPro = () => {
         } else {
           // New format - use as is
           setPositions(storedPositions);
+setAppPositions(storedPositions);
         }
       }
 
