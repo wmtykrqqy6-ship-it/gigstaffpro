@@ -20,8 +20,13 @@ export default function NotificationsModal({
   };
 
   const getTimeAgo = (timestamp) => {
-    const now = new Date();
+    // ✅ Improvement: handle missing/invalid timestamps safely
+    if (!timestamp) return '';
+
     const then = new Date(timestamp);
+    if (Number.isNaN(then.getTime())) return '';
+
+    const now = new Date();
     const diffMs = now - then;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
