@@ -3,7 +3,7 @@ export const formatTime = (timeStr, format = '12') => {
   if (!timeStr) return '';
   
   const [hours, minutes] = timeStr.split(':');
-  const hour = parseInt(hours);
+  const hour = parseInt(hours, 10);
   
   if (format === '24') {
     return `${hours}:${minutes}`;

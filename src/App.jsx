@@ -1,46 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
-
-// Simple hash function for PINs (in production, use proper bcrypt on backend)
-const hashPin = async (pin) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-};
-
-// Helper function to format time based on 12/24 hour preference
-const formatTime = (timeStr, format = '12') => {
-  if (!timeStr) return '';
-  
-  const [hours, minutes] = timeStr.split(':');
-  const hour = parseInt(hours);
-  
-  if (format === '24') {
-    return `${hours}:${minutes}`;
-  }
-  
-  // 12-hour format
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${hour12}:${minutes} ${period}`;
-};
-
-// Helper function to parse dates without timezone conversion
-// Prevents "2026-02-13" from becoming "2026-02-12" due to UTC offset
-const parseDateSafe = (dateStr) => {
-  if (!dateStr) return new Date();
-  
-  // Extract just the date part (YYYY-MM-DD)
-  const datePart = dateStr.split('T')[0];
-  const [year, month, day] = datePart.split('-').map(Number);
-  
-  // Create date in local timezone
-  return new Date(year, month - 1, day);
-};
+import { hashPin } from './utils/authHelpers';
+import { formatTime, parseDateSafe } from './utils/dateHelpers';
 
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
