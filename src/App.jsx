@@ -12,8 +12,7 @@ import {
 } from './utils/positionHelpers';
 import NotificationsModal from './components/NotificationsModal';
 import Header from './components/Header';
-
-
+import Navigation from './components/Navigation';
 
 const LoginScreen = ({ onLogin }) => {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin'
@@ -887,51 +886,6 @@ setAppPositions(storedPositions);
       console.error('Error deleting event:', error);
       alert('Error deleting event: ' + error.message);
     }
-  };
-
-  const Navigation = () => {
-    if (userRole !== 'admin') return null;
-    
-    // Count pending applications
-    const pendingCount = assignments.filter(a => a.status === 'pending').length;
-    
-    const navItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: Home },
-      { id: 'staff', label: 'Staff', icon: Users },
-      { id: 'events', label: 'Events', icon: Calendar },
-      { id: 'schedule', label: 'Schedule', icon: Clock },
-      { id: 'applications', label: 'Applications', icon: FileText, badge: pendingCount },
-      ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
-      { id: 'settings', label: 'Settings', icon: Settings }
-    ];
-    
-    return (
-      <div className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8 overflow-x-auto">
-            {navItems.map(({ id, label, icon: Icon, badge }) => (
-              <button
-                key={id}
-                onClick={() => setCurrentView(id)}
-                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  currentView === id
-                    ? 'border-red-900 text-red-900'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-                {badge > 0 && (
-                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 font-bold">
-                    {badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const EditWorkerModal = () => {
@@ -7358,7 +7312,13 @@ setAppPositions(storedPositions);
   onLogout={handleLogout}
   onGoDashboard={() => setCurrentView('dashboard')}
 />
-  <Navigation />
+  <Navigation
+  userRole={userRole}
+  assignments={assignments}
+  paymentTrackingEnabled={paymentTrackingEnabled}
+  currentView={currentView}
+  onNavigate={(id) => setCurrentView(id)}
+/>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}
       </div>
