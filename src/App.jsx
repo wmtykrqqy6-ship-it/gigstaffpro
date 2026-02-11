@@ -2367,14 +2367,24 @@ setAppPositions(storedPositions);
                 })}
               </div>
 
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowAssignModal(false)}
-                  className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
-                >
-                  Close
-                </button>
-              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+  <button
+    onClick={() => {
+      setShowAssignModal(false);
+      setSelectedEvent(null);
+    }}
+    className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
+  >
+    Done
+  </button>
+
+  <button
+    onClick={() => setShowAssignModal(false)}
+    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+  >
+    Close
+  </button>
+</div>
             </div>
           </div>
         </div>
@@ -2413,7 +2423,7 @@ setAppPositions(storedPositions);
         setShowSetPinModal(false);
         setSelectedWorkerForPin(null);
         setNewPin('');
-        loadWorkers(); // Refresh worker list
+        await loadWorkers(); // Refresh worker list
       } catch (error) {
         console.error('Error setting PIN:', error);
         alert('Error setting PIN: ' + error.message);
