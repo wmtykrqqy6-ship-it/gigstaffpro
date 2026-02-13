@@ -629,27 +629,23 @@ const handleSaveWorker = async (formData) => {
   const loadPaymentConfig = async () => {
     try {
       // Load pay rates
-      const { data: ratesData, error: ratesError } = await supabase
-        .from('pay_rates')
-        .select('*');
-      
-      if (!ratesError && ratesData) {
-        const ratesMap = {};
-        ratesData.forEach(rate => {
-          ratesMap[rate.position] = rate.hourly_rate;
-        });
-        setPayRates(ratesMap);
-      }
+     const { data: ratesData, error: ratesError } = await supabase
+  .from('pay_rates')
+  .select('position, hourly_rate');
 
-      // Load travel tiers
-      const { data: tiersData, error: tiersError } = await supabase
-        .from('travel_tiers')
-        .select('*')
-        .order('min_miles', { ascending: true });
-      
-      if (!tiersError && tiersData) {
-        setTravelTiers(tiersData);
-      }
+if (ratesError) throw ratesError;
+
+const ratesMap = {};
+
+(ratesData || []).forEach((rate) => {
+  const key = getPayRateKey(rate.position); // normalize label → key
+  ratesMap[key] = Number(rate.hourly_rate) || 0;
+
+  // Optional safety: allow direct lookup too
+  ratesMap[rate.position] = Number(rate.hourly_rate) || 0;
+});
+
+setPayRates(ratesMap);
 
       // Load bonuses
       const { data: bonusesData, error: bonusesError } = await supabase
