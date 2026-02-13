@@ -683,20 +683,30 @@ const getPayRateKey = (position) => {
 
   // Payment calculation function based on PRD
   const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday) => {
+
+  // 🔎 TEMP DEBUG — add this right here
+  console.log('miles:', miles, 'travelTiers:', travelTiers);
+  if (travelTiers?.[0]) {
+    console.log('tier sample keys:', Object.keys(travelTiers[0]), travelTiers[0]);
+  }
     // Step 1: Calculate base pay
    const rateKey = getPayRateKey(position);
 const hourlyRate = payRates[rateKey] || 0;
     const basePay = hours * hourlyRate;
 
     // Step 2: Calculate travel pay
-    let travelPay = 0;
-    for (const tier of travelTiers) {
-      if (miles >= tier.min_miles && miles <= tier.max_miles) {
-        travelPay = tier.pay_amount;
-        break;
-      }
-    }
+let travelPay = 0;
 
+for (const tier of (travelTiers || [])) {
+  const min = Number(tier.min_miles ?? tier.minMiles ?? tier.min ?? 0);
+  const max = Number(tier.max_miles ?? tier.maxMiles ?? tier.max ?? 0);
+  const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
+
+  if (Number.isFinite(min) && Number.isFinite(max) && miles >= min && miles <= max) {
+    travelPay = amt;
+    break;
+  }
+}
     // Step 3: Add Lake Geneva bonus
     const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
 
