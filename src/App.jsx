@@ -33,10 +33,6 @@ const LoginScreen = ({ onLogin }) => {
       // Strip all non-numeric characters from phone for comparison
       const cleanPhone = phoneNumber.replace(/\D/g, '');
       
-      console.log('Login attempt:');
-      console.log('- Phone entered:', phoneNumber);
-      console.log('- Clean phone:', cleanPhone);
-      console.log('- PIN entered:', pin);
       
       // Search for worker by phone - try formatted version first
       let { data: workers, error: fetchError } = await supabase
@@ -45,11 +41,9 @@ const LoginScreen = ({ onLogin }) => {
         .eq('phone', phoneNumber)
         .eq('is_active', true);
 
-      console.log('First query (formatted phone):', workers);
 
       // If not found, try unformatted
       if (!workers || workers.length === 0) {
-        console.log('Trying unformatted phone...');
         const result = await supabase
           .from('workers')
           .select('*')
@@ -58,24 +52,19 @@ const LoginScreen = ({ onLogin }) => {
         
         workers = result.data;
         fetchError = result.error;
-        console.log('Second query (clean phone):', workers);
       }
 
       if (fetchError) {
-        console.error('Supabase error:', fetchError);
         throw fetchError;
       }
 
       if (!workers || workers.length === 0) {
-        console.log('No worker found');
         setError('Phone number not found. Contact your manager.');
         setLoading(false);
         return;
       }
 
       const worker = workers[0];
-      console.log('Worker found:', worker.name);
-      console.log('PIN hash in DB:', worker.pin_hash);
 
       // Check if PIN is set
       if (!worker.pin_hash) {
@@ -86,8 +75,6 @@ const LoginScreen = ({ onLogin }) => {
 
       // Hash entered PIN and compare
       const hashedPin = await hashPin(pin);
-      console.log('Entered PIN hash:', hashedPin);
-      console.log('Match?', hashedPin === worker.pin_hash);
       
       if (hashedPin !== worker.pin_hash) {
         setError('Incorrect PIN. Please try again.');
@@ -96,10 +83,8 @@ const LoginScreen = ({ onLogin }) => {
       }
 
       // Success!
-      console.log('Login successful!');
       onLogin('worker', worker);
     } catch (error) {
-      console.error('Login error:', error);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
@@ -112,9 +97,6 @@ const LoginScreen = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      console.log('Admin login attempt:');
-      console.log('- Username:', username);
-      console.log('- Password:', password);
       
       // Check admin credentials
       const { data: admins, error: fetchError } = await supabase
@@ -122,27 +104,21 @@ const LoginScreen = ({ onLogin }) => {
         .select('*')
         .eq('username', username);
 
-      console.log('Admin found:', admins);
 
       if (fetchError) {
-        console.error('Fetch error:', fetchError);
         throw fetchError;
       }
 
       if (!admins || admins.length === 0) {
-        console.log('No admin found with username:', username);
         setError('Invalid username or password.');
         setLoading(false);
         return;
       }
 
       const admin = admins[0];
-      console.log('Admin password_hash from DB:', admin.password_hash);
 
       // Hash entered password
       const hashedPassword = await hashPin(password);
-      console.log('Entered password hash:', hashedPassword);
-      console.log('Match?', hashedPassword === admin.password_hash);
       
       if (hashedPassword !== admin.password_hash) {
         setError('Invalid username or password.');
@@ -151,10 +127,8 @@ const LoginScreen = ({ onLogin }) => {
       }
 
       // Success!
-      console.log('Admin login successful!');
       onLogin('admin', admin);
     } catch (error) {
-      console.error('Login error:', error);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
@@ -568,7 +542,6 @@ const handleSaveWorker = async (formData) => {
     await loadWorkers();
     return true;
   } catch (error) {
-    console.error('Error adding worker:', error);
     alert('Error adding worker: ' + error.message);
     return false;
   } finally {
@@ -588,7 +561,6 @@ const handleSaveWorker = async (formData) => {
         setTimeFormat(data.setting_value);
       }
     } catch (error) {
-      console.error('Error loading time format:', error);
       // Default to 12-hour if error
       setTimeFormat('12');
     }
@@ -606,7 +578,6 @@ const handleSaveWorker = async (formData) => {
         setPaymentTrackingEnabled(data.setting_value === 'true' || data.setting_value === true);
       }
     } catch (error) {
-      console.error('Error loading payment tracking setting:', error);
     }
   };
 
@@ -622,7 +593,6 @@ const handleSaveWorker = async (formData) => {
         setRankAccessDays(JSON.parse(data.setting_value));
       }
     } catch (error) {
-      console.error('Error loading rank access days:', error);
     }
   };
 
@@ -660,7 +630,6 @@ setPayRates(ratesMap);
         setBonuses(bonusesMap);
       }
     } catch (error) {
-      console.error('Error loading payment config:', error);
     }
   };
 const getPayRateKey = (position) => {
@@ -685,9 +654,7 @@ const getPayRateKey = (position) => {
   const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday) => {
 
   // 🔎 TEMP DEBUG — add this right here
-  console.log('miles:', miles, 'travelTiers:', travelTiers);
   if (travelTiers?.[0]) {
-    console.log('tier sample keys:', Object.keys(travelTiers[0]), travelTiers[0]);
   }
     // Step 1: Calculate base pay
    const rateKey = getPayRateKey(position);
@@ -738,7 +705,6 @@ for (const tier of (travelTiers || [])) {
       
       setAssignments(data || []);
     } catch (error) {
-      console.error('Error loading assignments:', error);
     }
   };
 
@@ -752,7 +718,6 @@ for (const tier of (travelTiers || [])) {
       
       if (error) {
         // If settings don't exist, use standard positions
-        console.log('No settings found, using standard positions');
         setPositions(STANDARD_POSITIONS);
 setAppPositions(STANDARD_POSITIONS);
 
@@ -762,7 +727,6 @@ setAppPositions(STANDARD_POSITIONS);
         
         if (storedPositions.length > 0 && typeof storedPositions[0] === 'string') {
           // Old format - migrate to new format
-          console.log('Migrating positions from old format to new format');
           const migratedPositions = storedPositions.map(label => ({
             key: label.toLowerCase().replace(/\s+/g, '_'),
             label: label
@@ -791,10 +755,8 @@ setAppPositions(storedPositions);
       
       if (!warehouseError && warehouseData) {
         // Warehouse address loaded, stored in settings
-        console.log('Warehouse address loaded');
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
       const defaultPositions = ['Dealer', 'Poker Dealer', 'Blackjack Dealer', 'Roulette Dealer', 'Craps Dealer', 'Host', 'Bartender'].sort();
       setPositions(defaultPositions);
     }
@@ -843,7 +805,6 @@ setAppPositions(storedPositions);
       
       // Update database for workers that needed migration
       if (workersNeedingMigration.length > 0) {
-        console.log(`Migrating skills for ${workersNeedingMigration.length} workers...`);
         
         // Update each worker in database
         for (const workerUpdate of workersNeedingMigration) {
@@ -853,13 +814,11 @@ setAppPositions(storedPositions);
             .eq('id', workerUpdate.id);
         }
         
-        console.log('Worker skill migration complete!');
       }
       
       setWorkers(migratedWorkers);
       setError(null);
     } catch (error) {
-      console.error('Error loading workers:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -919,7 +878,6 @@ setAppPositions(storedPositions);
       
       // Update database for events that needed migration
       if (eventsNeedingMigration.length > 0) {
-        console.log(`Migrating positions for ${eventsNeedingMigration.length} events...`);
         
         for (const eventUpdate of eventsNeedingMigration) {
           await supabase
@@ -928,12 +886,10 @@ setAppPositions(storedPositions);
             .eq('id', eventUpdate.id);
         }
         
-        console.log('Event position migration complete!');
       }
       
       setEvents(migratedEvents);
     } catch (error) {
-      console.error('Error loading events:', error);
     }
   };
 
@@ -950,7 +906,6 @@ setAppPositions(storedPositions);
       
       loadWorkers();
     } catch (error) {
-      console.error('Error deleting worker:', error);
       alert('Error deleting worker: ' + error.message);
     }
   };
@@ -968,7 +923,6 @@ setAppPositions(storedPositions);
       
       loadEvents();
     } catch (error) {
-      console.error('Error deleting event:', error);
       alert('Error deleting event: ' + error.message);
     }
   };
@@ -1032,7 +986,6 @@ setAppPositions(storedPositions);
         setSelectedWorkerForEdit(null);
         loadWorkers();
       } catch (error) {
-        console.error('Error updating worker:', error);
         alert('Error updating worker: ' + error.message);
       }
     };
@@ -1263,7 +1216,6 @@ setAppPositions(storedPositions);
           status: 'confirmed'
         });
       } catch (error) {
-        console.error('Error creating event:', error);
         alert('Error creating event: ' + error.message);
       }
     };
@@ -1608,7 +1560,6 @@ setAppPositions(storedPositions);
         setSelectedEvent(null);
         loadEvents();
       } catch (error) {
-        console.error('Error updating event:', error);
         alert('Error updating event: ' + error.message);
       }
     };
@@ -2020,7 +1971,6 @@ setAppPositions(storedPositions);
         setShowPaymentModal(true);
 
       } catch (error) {
-        console.error('Error in assignment process:', error);
         alert('Error in assignment process: ' + error.message);
       }
     };
@@ -2038,7 +1988,6 @@ setAppPositions(storedPositions);
         
         loadAssignments();
       } catch (error) {
-        console.error('Error removing assignment:', error);
         alert('Error removing assignment: ' + error.message);
       }
     };
@@ -2449,7 +2398,6 @@ setAppPositions(storedPositions);
         setNewPin('');
         await loadWorkers(); // Refresh worker list
       } catch (error) {
-        console.error('Error setting PIN:', error);
         alert('Error setting PIN: ' + error.message);
       } finally {
         setSettingPin(false);
@@ -2567,7 +2515,6 @@ setAppPositions(storedPositions);
             setAssignmentPaymentData(null);
             alert(`${worker.name} assigned to ${assignmentPaymentData.position}`);
           } catch (error) {
-            console.error('Error creating assignment:', error);
             alert('Error creating assignment: ' + error.message);
           }
         };
@@ -2646,7 +2593,6 @@ setAppPositions(storedPositions);
         
         alert(`✓ ${worker.name} assigned to ${assignmentPaymentData.position}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
       } catch (error) {
-        console.error('Error creating assignment:', error);
         alert('Error creating assignment: ' + error.message);
       }
     };
@@ -3380,13 +3326,10 @@ setAppPositions(storedPositions);
       try {
         // In a real implementation, this would send SMS/Email
         // For now, we'll just log it
-        console.log(`Would send invites to:`, filteredWorkers.map(w => w.name));
-        console.log(`Message: ${message}`);
         
         alert(`✓ Invites sent to ${filteredWorkers.length} worker(s)!\n\n(Note: SMS/Email integration not yet connected)`);
         setShowBulkInvite(false);
       } catch (error) {
-        console.error('Error sending invites:', error);
         alert('Error sending invites: ' + error.message);
       } finally {
         setSending(false);
@@ -3709,7 +3652,6 @@ setAppPositions(storedPositions);
           setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
         }
       } catch (error) {
-        console.error('Error loading warehouse address:', error);
         setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
       } finally {
         setLoadingWarehouse(false);
@@ -3732,7 +3674,6 @@ setAppPositions(storedPositions);
           setPaymentTrackingEnabled(true);
         }
       } catch (error) {
-        console.error('Error loading payment tracking setting:', error);
         setPaymentTrackingEnabled(true);
       } finally {
         setLoadingPaymentSetting(false);
@@ -3772,7 +3713,6 @@ setAppPositions(storedPositions);
         setPaymentTrackingEnabled(enabled);
         alert(enabled ? 'Payment tracking enabled!' : 'Payment tracking disabled!');
       } catch (error) {
-        console.error('Error saving payment tracking setting:', error);
         alert('Error saving setting: ' + error.message);
       } finally {
         setSaving(false);
@@ -3791,7 +3731,6 @@ setAppPositions(storedPositions);
           setRankAccessDays(JSON.parse(data.setting_value));
         }
       } catch (error) {
-        console.error('Error loading rank access settings:', error);
       } finally {
         setLoadingRankAccess(false);
       }
@@ -3829,7 +3768,6 @@ setAppPositions(storedPositions);
 
         alert('Rank access settings saved successfully!');
       } catch (error) {
-        console.error('Error saving rank access settings:', error);
         alert('Error saving settings: ' + error.message);
       } finally {
         setSaving(false);
@@ -3868,7 +3806,6 @@ setAppPositions(storedPositions);
 
         alert('Warehouse address saved successfully!');
       } catch (error) {
-        console.error('Error saving warehouse address:', error);
         alert('Error saving warehouse address: ' + error.message);
       } finally {
         setSaving(false);
@@ -3899,7 +3836,6 @@ setAppPositions(storedPositions);
           setTimeFormat(formatData.setting_value || '12');
         }
       } catch (error) {
-        console.error('Error loading time settings:', error);
       } finally {
         setLoadingTimeSettings(false);
       }
@@ -3958,7 +3894,6 @@ setAppPositions(storedPositions);
 
         alert('Time settings saved successfully!');
       } catch (error) {
-        console.error('Error saving time settings:', error);
         alert('Error saving time settings: ' + error.message);
       } finally {
         setSaving(false);
@@ -4008,7 +3943,6 @@ setAppPositions(storedPositions);
         setPositions(sortedPositions);
         alert('Positions updated successfully!');
       } catch (error) {
-        console.error('Error saving positions:', error);
         alert('Error saving positions: ' + error.message);
       } finally {
         setSaving(false);
@@ -4537,7 +4471,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert('Payment marked as paid!');
       } catch (error) {
-        console.error('Error updating payment status:', error);
         alert('Error updating payment status: ' + error.message);
       }
     };
@@ -4559,7 +4492,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert('Payment marked as pending!');
       } catch (error) {
-        console.error('Error updating payment status:', error);
         alert('Error updating payment status: ' + error.message);
       }
     };
@@ -4611,7 +4543,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert(`${selectedAssignments.length} payments marked as paid!`);
       } catch (error) {
-        console.error('Error updating payments:', error);
         alert('Error updating payments: ' + error.message);
       } finally {
         setBulkActionLoading(false);
@@ -4642,7 +4573,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert(`${selectedAssignments.length} payments marked as pending!`);
       } catch (error) {
-        console.error('Error updating payments:', error);
         alert('Error updating payments: ' + error.message);
       } finally {
         setBulkActionLoading(false);
@@ -5661,58 +5591,44 @@ setAppPositions(storedPositions);
       const workerRank = currentWorker.rank || 5;
       const accessDays = rankAccessDays[workerRank] || 14;
       
-      console.log('Worker:', currentWorker.name, 'Rank:', workerRank, 'Access Days:', accessDays);
-      console.log('Worker Skills:', currentWorker.skills);
       
       return events
         .filter(event => {
-          console.log('--- Checking Event:', event.name);
           
           // Must be future event
           const eventDate = new Date(event.date);
           eventDate.setHours(0, 0, 0, 0);
-          console.log('Event Date:', eventDate, 'Today:', today, 'Is Future:', eventDate >= today);
           if (eventDate < today) {
-            console.log('❌ Event is in the past');
             return false;
           }
           
           // Calculate days until event
           const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-          console.log('Days Until Event:', daysUntil, 'Access Window:', accessDays);
           
           // Check if within access window (Rank 1 with 0 days can see all future events)
           if (accessDays > 0 && daysUntil > accessDays) {
-            console.log('❌ Outside access window');
             return false;
           }
           
           // Must have positions that match worker skills (using position keys)
           const eventPositions = Array.isArray(event.positions) ? event.positions : [];
-          console.log('Event Positions:', JSON.stringify(eventPositions));
-          console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
           
           // Extract position keys from position objects
           const positionKeys = eventPositions.map(pos => 
             pos.key || getPositionKey(pos.name || pos)
           );
-          console.log('Position Keys:', JSON.stringify(positionKeys));
           
           const workerSkillKeys = currentWorker.skills || [];
           const hasMatchingSkill = positionKeys.some(posKey => 
             workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
           );
-          console.log('Has Matching Skill:', hasMatchingSkill);
           
           // DEBUG: Show which positions/skills are being compared
-          console.log('Comparison breakdown:');
           positionKeys.forEach(posKey => {
             const matches = workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
-            console.log(`  "${posKey}" matches worker skills? ${matches}`);
           });
           
           if (!hasMatchingSkill) {
-            console.log('❌ No matching skills');
             return false;
           }
           
@@ -5722,14 +5638,11 @@ setAppPositions(storedPositions);
             a.worker_id === currentWorker.id &&
             ['approved', 'pending'].includes(a.status || 'approved')
           );
-          console.log('Already Assigned:', alreadyAssigned);
           
           if (alreadyAssigned) {
-            console.log('❌ Already assigned');
             return false;
           }
           
-          console.log('✅ Event is available!');
           return true;
         })
         .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -5802,7 +5715,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
       } catch (error) {
-        console.error('Error applying:', error);
         alert('Error submitting application: ' + error.message);
       } finally {
         setApplying(false);
@@ -6029,7 +5941,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert('✓ Assignment cancelled successfully.');
       } catch (error) {
-        console.error('Error cancelling assignment:', error);
         alert('Error cancelling assignment: ' + error.message);
       }
     };
@@ -6073,7 +5984,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert(`✓ Position switched to ${newPositionLabel}!`);
       } catch (error) {
-        console.error('Error switching position:', error);
         alert('Error switching position: ' + error.message);
       }
     };
@@ -6888,7 +6798,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert('Application approved!');
       } catch (error) {
-        console.error('Error approving application:', error);
         alert('Error approving application: ' + error.message);
       } finally {
         setProcessingId(null);
@@ -6919,7 +6828,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert(`✓ ${pendingApps.length} application(s) approved!`);
       } catch (error) {
-        console.error('Error bulk approving:', error);
         alert('Error bulk approving: ' + error.message);
       } finally {
         setProcessingId(null);
@@ -6941,7 +6849,6 @@ setAppPositions(storedPositions);
         loadAssignments();
         alert('Application rejected and removed.');
       } catch (error) {
-        console.error('Error rejecting application:', error);
         alert('Error rejecting application: ' + error.message);
       } finally {
         setProcessingId(null);
