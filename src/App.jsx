@@ -667,11 +667,29 @@ const handleSaveWorker = async (formData) => {
       console.error('Error loading payment config:', error);
     }
   };
+const getPayRateKey = (position) => {
+  const p = String(position || '').toLowerCase().trim();
+
+  if (p.includes('blackjack')) return 'blackjack_dealer';
+  if (p.includes('roulette')) return 'roulette_dealer';
+  if (p.includes('poker')) return 'poker_dealer';
+  if (p.includes('craps')) return 'craps_dealer';
+  if (p.includes('baccarat')) return 'baccarat_dealer';
+  if (p.includes('event lead')) return 'event_lead';
+  if (p === 'dealer') return 'dealer';
+  if (p.includes('host')) return 'host';
+  if (p.includes('bartender')) return 'bartender';
+  if (p.includes('server')) return 'server';
+  if (p.includes('cashier')) return 'cashier';
+
+  return p.replace(/\s+/g, '_');
+};
 
   // Payment calculation function based on PRD
   const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday) => {
     // Step 1: Calculate base pay
-    const hourlyRate = payRates[position] || 0;
+   const rateKey = getPayRateKey(position);
+const hourlyRate = payRates[rateKey] || 0;
     const basePay = hours * hourlyRate;
 
     // Step 2: Calculate travel pay
@@ -2727,7 +2745,7 @@ setAppPositions(storedPositions);
                   <h4 className="font-semibold text-gray-900 mb-3">Payment Breakdown</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-700">Base Pay ({hours} hrs × ${payRates[assignmentPaymentData.position] || 0}/hr):</span>
+                      <span className="text-gray-700">Base Pay ({hours} hrs × ${payRates[getPayRateKey(assignmentPaymentData.position)] || 0}/hr):</span>
                       <span className="font-semibold text-gray-900">${calculation.basePay.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
