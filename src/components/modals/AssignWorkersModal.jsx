@@ -25,8 +25,6 @@ export default function AssignWorkersModal({
   const [eventIsHoliday, setEventIsHoliday] = useState(false);
   const [expandedPositions, setExpandedPositions] = useState({});
   
-  if (!open || !event) return null;
-
   const togglePosition = (position) => {
     setExpandedPositions(prev => ({
       ...prev,
@@ -63,6 +61,9 @@ export default function AssignWorkersModal({
       setEventIsHoliday(settings.isHoliday);
     }
   }, [event, eventPaymentSettings]);
+
+  // Early return AFTER all hooks
+  if (!open || !event) return null;
 
   const saveEventPaymentSettings = () => {
     if (eventHours <= 0) {
