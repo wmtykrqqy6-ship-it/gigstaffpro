@@ -34,7 +34,9 @@ export default function AssignWorkersModal({
 
   // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
-    if (event && !eventPaymentSettings[event.id]) {
+    if (!event) return; // Guard against null event
+    
+    if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
       let defaultHours = 4;
       if (event.time && event.end_time) {
@@ -52,7 +54,7 @@ export default function AssignWorkersModal({
       setEventMiles(0);
       setEventIsLakeGeneva(false);
       setEventIsHoliday(false);
-    } else if (eventPaymentSettings[event.id]) {
+    } else if (event && eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
       setEventHours(settings.hours);
