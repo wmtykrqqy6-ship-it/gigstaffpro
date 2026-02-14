@@ -23,6 +23,7 @@ import LoginScreen from './components/LoginScreen';
 import NotificationsModal from './components/NotificationsModal';
 import SetPinModal from './components/modals/SetPinModal';
 import BulkInviteModal from './components/modals/BulkInviteModal';
+import EditWorkerModal from './components/modals/EditWorkerModal';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -630,211 +631,6 @@ setAppPositions(storedPositions);
     } catch (error) {
       alert('Error deleting event: ' + error.message);
     }
-  };
-
-  const EditWorkerModal = () => {
-    const [formData, setFormData] = useState({
-      name: '',
-      email: '',
-      phone: '',
-      skills: [],
-      rank: WORKER_DEFAULTS.RANK,
-      reliability: WORKER_DEFAULTS.RELIABILITY
-    });
-
-    useEffect(() => {
-      if (selectedWorkerForEdit) {
-        // Migrate old skill format (labels) to new format (keys)
-        const migratedSkills = (selectedWorkerForEdit.skills || []).map(skill => {
-          if (typeof skill === 'string') {
-            // Try to find matching position by label first, fallback to key
-            const position = positions.find(p => p.label === skill || p.key === skill);
-            if (position) return position.key;
-            // If not found, convert to key format
-            return getPositionKey(skill);
-          }
-          return skill;
-        });
-        
-        setFormData({
-          name: selectedWorkerForEdit.name || '',
-          email: selectedWorkerForEdit.email || '',
-          phone: selectedWorkerForEdit.phone || '',
-          skills: migratedSkills,
-          rank: selectedWorkerForEdit.rank || 1,
-          reliability: selectedWorkerForEdit.reliability || 5.0
-        });
-      }
-    }, [selectedWorkerForEdit]);
-
-    // Use positions from settings as available skills
-    const skillOptions = positions;
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      
-      if (formData.skills.length === 0) {
-        alert('Please select at least one skill');
-        return;
-      }
-      
-      try {
-        const { error } = await supabase
-          .from('workers')
-          .update(formData)
-          .eq('id', selectedWorkerForEdit.id);
-        
-        if (error) throw error;
-        
-        alert('Worker updated successfully!');
-        setShowEditWorker(false);
-        setSelectedWorkerForEdit(null);
-        loadWorkers();
-      } catch (error) {
-        alert('Error updating worker: ' + error.message);
-      }
-    };
-
-    const toggleSkill = (skill) => {
-      setFormData(prev => ({
-        ...prev,
-        skills: prev.skills.includes(skill)
-          ? prev.skills.filter(s => s !== skill)
-          : [...prev.skills, skill]
-      }));
-    };
-
-    if (!showEditWorker || !selectedWorkerForEdit) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Edit Worker</h3>
-              <button 
-                onClick={() => {
-                  setShowEditWorker(false);
-                  setSelectedWorkerForEdit(null);
-                }} 
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="john@email.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Skills *</label>
-                <div className="flex flex-wrap gap-2">
-                  {skillOptions.map(skill => {
-                    const skillKey = skill.key || skill;
-                    const skillLabel = skill.label || skill;
-                    const isSelected = formData.skills.includes(skillKey);
-                    
-                    return (
-                    <button
-                      key={skillKey}
-                      type="button"
-                      onClick={() => toggleSkill(skillKey)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        isSelected
-                          ? 'bg-red-900 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {skillLabel}
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rank Level</label>
-                <select
-                  value={formData.rank}
-                  onChange={(e) => setFormData({...formData, rank: parseInt(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                >
-                  {[1,2,3,4,5].map(level => (
-                    <option key={level} value={level}>Level {level}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Reliability Rating</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={formData.reliability}
-                  onChange={(e) => setFormData({...formData, reliability: parseFloat(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
-                >
-                  Update Worker
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditWorker(false);
-                    setSelectedWorkerForEdit(null);
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const AddEventModal = () => {
@@ -6608,7 +6404,16 @@ setAppPositions(storedPositions);
         }}
         onSuccess={loadWorkers}
       />
-      <EditWorkerModal />
+      <EditWorkerModal
+        open={showEditWorker}
+        worker={selectedWorkerForEdit}
+        positions={positions}
+        onClose={() => {
+          setShowEditWorker(false);
+          setSelectedWorkerForEdit(null);
+        }}
+        onSuccess={loadWorkers}
+      />
       <AddEventModal />
       <EditEventModal />
       <AssignWorkersModal />
