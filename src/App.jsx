@@ -3442,6 +3442,6 @@ setAppPositions(storedPositions);
       />
     </div>
   );
-};
+}; // end GigStaffPro
 
 export default GigStaffPro;
