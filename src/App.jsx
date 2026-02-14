@@ -640,7 +640,6 @@ setAppPositions(storedPositions);
       alert('Error deleting event: ' + error.message);
     }
   };
-  };
 
   const StaffView = () => {
     if (loading) {
