@@ -10,6 +10,15 @@ import {
   getPositionKey,
   positionMatches
 } from './utils/positionHelpers';
+import {
+  RANK_ACCESS_DAYS,
+  PAYMENT,
+  TIME,
+  UI,
+  WORKER_DEFAULTS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES
+} from './constants';
 import NotificationsModal from './components/NotificationsModal';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
@@ -349,9 +358,7 @@ const GigStaffPro = () => {
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [assigningWorker, setAssigningWorker] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
-  const [rankAccessDays, setRankAccessDays] = useState({
-    1: 0, 2: 7, 3: 10, 4: 12, 5: 14
-  });
+  const [rankAccessDays, setRankAccessDays] = useState(RANK_ACCESS_DAYS);
   const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24' hour format
   const [loggedInWorker, setLoggedInWorker] = useState(null); // Current logged in worker
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -675,13 +682,13 @@ for (const tier of (travelTiers || [])) {
   }
 }
     // Step 3: Add Lake Geneva bonus
-    const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
+    const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || PAYMENT.LAKE_GENEVA_BONUS) : 0;
 
     // Step 4: Calculate subtotal
     const subtotal = basePay + travelPay + lakeGenevaBonus;
 
     // Step 5: Apply holiday multiplier
-    const holidayMultiplier = isHoliday ? (bonuses['Holiday Multiplier'] || 1.5) : 1.0;
+    const holidayMultiplier = isHoliday ? (bonuses['Holiday Multiplier'] || PAYMENT.HOLIDAY_MULTIPLIER) : 1.0;
     const totalPay = subtotal * holidayMultiplier;
 
     return {
@@ -933,8 +940,8 @@ setAppPositions(storedPositions);
       email: '',
       phone: '',
       skills: [],
-      rank: 1,
-      reliability: 5.0
+      rank: WORKER_DEFAULTS.RANK,
+      reliability: WORKER_DEFAULTS.RELIABILITY
     });
 
     useEffect(() => {
