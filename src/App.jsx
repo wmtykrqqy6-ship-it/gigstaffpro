@@ -657,6 +657,8 @@ setAppPositions(storedPositions);
           timeFormat={timeFormat}
           paymentTrackingEnabled={paymentTrackingEnabled}
           rankAccessDays={rankAccessDays}
+          eventPaymentSettings={eventPaymentSettings}
+          payRates={payRates}
           onReloadAssignments={loadAssignments}
         />
       );

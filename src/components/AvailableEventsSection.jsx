@@ -4,7 +4,7 @@ import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react';
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat }) => {
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates }) => {
     const [applying, setApplying] = useState(false);
     
     // Calculate which events the worker can see based on rank

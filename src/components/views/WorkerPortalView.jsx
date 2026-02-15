@@ -13,6 +13,8 @@ export default function WorkerPortalView({
   timeFormat,
   paymentTrackingEnabled,
   rankAccessDays,
+  eventPaymentSettings,
+  payRates,
   onReloadAssignments
 }) {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
@@ -286,6 +288,9 @@ export default function WorkerPortalView({
           assignments={assignments}
           rankAccessDays={rankAccessDays}
           timeFormat={timeFormat}
+          paymentTrackingEnabled={paymentTrackingEnabled}
+          eventPaymentSettings={eventPaymentSettings}
+          payRates={payRates}
         />
 
         {/* Upcoming Events */}
