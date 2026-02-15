@@ -799,5 +799,4 @@ export default function PaymentsView({
         )}
       </div>
     );
-  };
 }
