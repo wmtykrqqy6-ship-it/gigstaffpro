@@ -1,34 +1,10 @@
-01:27:50.188 Running build in Washington, D.C., USA (East) – iad1
-01:27:50.189 Build machine configuration: 2 cores, 8 GB
-01:27:50.309 Cloning github.com/wmtykrqqy6-ship-it/gigstaffpro (Branch: main, Commit: d8a5ae5)
-01:27:50.554 Cloning completed: 244.000ms
-01:27:50.836 Restored build cache from previous deployment (3rorCzZaLwcco5AnqyvqXSw1SGss)
-01:27:51.090 Running "vercel build"
-01:27:51.713 Vercel CLI 50.15.1
-01:27:52.334 Installing dependencies...
-01:27:53.444 
-01:27:53.445 up to date in 864ms
-01:27:53.446 
-01:27:53.446 25 packages are looking for funding
-01:27:53.446   run `npm fund` for details
-01:27:53.476 Running "npm run build"
-01:27:53.575 
-01:27:53.575 > gigstaffpro@1.0.0 build
-01:27:53.575 > vite build
-01:27:53.575 
-01:27:53.859 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
-01:27:53.922 transforming...
-01:27:55.795 [32m✓[39m 1261 modules transformed.
-01:27:55.798 [31mx[39m Build failed in 1.91s
-01:27:55.799 [31merror during build:
-01:27:55.799 [31m[vite:esbuild] Transform failed with 1 error:
-01:27:55.799 /vercel/path0/src/components/AvailableEventsSection.jsx:295:2: ERROR: Unexpected "}"[31m
-01:27:55.799 file: [36m/vercel/path0/srimport React, { useState } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react';
 
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat }) => {
     const [applying, setApplying] = useState(false);
     
     // Calculate which events the worker can see based on rank
@@ -320,24 +296,3 @@ import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react
 }
 
 export default AvailableEventsSection;
-c/components/AvailableEventsSection.jsx:295:2[31m
-01:27:55.800 [33m
-01:27:55.800 [33mUnexpected "}"[33m
-01:27:55.800 293|        </div>
-01:27:55.800 294|      );
-01:27:55.800 295|    };
-01:27:55.800    |    ^
-01:27:55.800 296|  
-01:27:55.800 297|    const WorkerPortalView = () => {
-01:27:55.800 [31m
-01:27:55.800     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1472:15)
-01:27:55.800     at /vercel/path0/node_modules/esbuild/lib/main.js:755:50
-01:27:55.800     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:622:9)
-01:27:55.800     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:677:12)
-01:27:55.801     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:600:7)
-01:27:55.801     at Socket.emit (node:events:508:28)
-01:27:55.801     at addChunk (node:internal/streams/readable:559:12)
-01:27:55.801     at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
-01:27:55.801     at Readable.push (node:internal/streams/readable:390:5)
-01:27:55.801     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)[39m
-01:27:55.826 Error: Command "npm run build" exited with 1
