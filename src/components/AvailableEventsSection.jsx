@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime } from '../utils/dateHelpers';
-import { getPositionLabel, positionMatches } from '../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react';
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates }) => {
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
     
     // Calculate which events the worker can see based on rank
@@ -152,7 +152,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         
         if (error) throw error;
         
-        loadAssignments();
+        onReloadAssignments();
         alert(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
       } catch (error) {
         console.error('Error applying:', error);

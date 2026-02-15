@@ -291,6 +291,7 @@ export default function WorkerPortalView({
           paymentTrackingEnabled={paymentTrackingEnabled}
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
+          onReloadAssignments={onReloadAssignments}
         />
 
         {/* Upcoming Events */}
