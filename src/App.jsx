@@ -641,8 +641,6 @@ setAppPositions(storedPositions);
       alert('Error deleting event: ' + error.message);
     }
   };
-    );
-  };
 
   const PaymentsView = () => {
     const [filterStatus, setFilterStatus] = useState('all'); // all, pending, paid
