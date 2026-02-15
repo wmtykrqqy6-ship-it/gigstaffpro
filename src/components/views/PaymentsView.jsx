@@ -22,6 +22,7 @@ export default function PaymentsView({
     const [groupBy, setGroupBy] = useState('none'); // none, event, worker
     const [selectedAssignments, setSelectedAssignments] = useState([]);
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [exportingCSV, setExportingCSV] = useState(false);
 
     // Get all assignments with payment data
     const assignmentsWithDetails = assignments
