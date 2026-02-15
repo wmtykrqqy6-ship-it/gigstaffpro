@@ -905,5 +905,4 @@ export default function WorkerPortalView({
         )}
       </div>
     );
-  };
 }
