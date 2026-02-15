@@ -1,20 +1,300 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award } from 'lucide-react';
-import { supabase } from '../../supabaseClient';
-import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, getPositionKey } from '../../utils/positionHelpers';
-import AvailableEventsSection from '../AvailableEventsSection';
+import { supabase } from '../supabaseClient';
+import { parseDateSafe, formatTime } from '../utils/dateHelpers';
+import { getPositionLabel, positionMatches } from '../utils/positionHelpers';
+import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react';
 
-export default function WorkerPortalView({
-  loggedInWorker,
-  assignments,
-  events,
-  positions,
-  timeFormat,
-  paymentTrackingEnabled,
-  rankAccessDays,
-  onReloadAssignments
-}) {
+    const [applying, setApplying] = useState(false);
+    
+    // Calculate which events the worker can see based on rank
+    const getAvailableEvents = () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset to start of day
+      const workerRank = currentWorker.rank || 5;
+      const accessDays = rankAccessDays[workerRank] || 14;
+      
+      console.log('Worker:', currentWorker.name, 'Rank:', workerRank, 'Access Days:', accessDays);
+      console.log('Worker Skills:', currentWorker.skills);
+      
+      return events
+        .filter(event => {
+          console.log('--- Checking Event:', event.name);
+          
+          // Must be future event
+          const eventDate = new Date(event.date);
+          eventDate.setHours(0, 0, 0, 0);
+          console.log('Event Date:', eventDate, 'Today:', today, 'Is Future:', eventDate >= today);
+          if (eventDate < today) {
+            console.log('❌ Event is in the past');
+            return false;
+          }
+          
+          // Calculate days until event
+          const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+          console.log('Days Until Event:', daysUntil, 'Access Window:', accessDays);
+          
+          // Check if within access window (Rank 1 with 0 days can see all future events)
+          if (accessDays > 0 && daysUntil > accessDays) {
+            console.log('❌ Outside access window');
+            return false;
+          }
+          
+          // Must have positions that match worker skills (using position keys)
+          const eventPositions = Array.isArray(event.positions) ? event.positions : [];
+          console.log('Event Positions:', JSON.stringify(eventPositions));
+          console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
+          
+          // Extract position keys from position objects
+          const positionKeys = eventPositions.map(pos => 
+            pos.key || getPositionKey(pos.name || pos)
+          );
+          console.log('Position Keys:', JSON.stringify(positionKeys));
+          
+          const workerSkillKeys = currentWorker.skills || [];
+          const hasMatchingSkill = positionKeys.some(posKey => 
+            workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
+          );
+          console.log('Has Matching Skill:', hasMatchingSkill);
+          
+          // DEBUG: Show which positions/skills are being compared
+          console.log('Comparison breakdown:');
+          positionKeys.forEach(posKey => {
+            const matches = workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
+            console.log(`  "${posKey}" matches worker skills? ${matches}`);
+          });
+          
+          if (!hasMatchingSkill) {
+            console.log('❌ No matching skills');
+            return false;
+          }
+          
+          // Not already assigned or applied
+          const alreadyAssigned = assignments.some(a => 
+            a.event_id === event.id && 
+            a.worker_id === currentWorker.id &&
+            ['approved', 'pending'].includes(a.status || 'approved')
+          );
+          console.log('Already Assigned:', alreadyAssigned);
+          
+          if (alreadyAssigned) {
+            console.log('❌ Already assigned');
+            return false;
+          }
+          
+          console.log('✅ Event is available!');
+          return true;
+        })
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    };
+    
+    const availableEvents = getAvailableEvents();
+    
+    const applyToEvent = async (event, position) => {
+      // Check for time conflicts first
+      const workerAssignments = assignments.filter(a => 
+        a.worker_id === currentWorker.id && 
+        a.event_id !== event.id &&
+        ['approved', 'pending'].includes(a.status || 'approved')
+      );
+      
+      let hasTimeConflict = false;
+      let conflictEvent = null;
+      
+      if (workerAssignments.length > 0) {
+        const conflicts = workerAssignments.filter(assignment => {
+          const otherEvent = events.find(e => e.id === assignment.event_id);
+          if (!otherEvent || otherEvent.date !== event.date) return false;
+          
+          const parseTime = (timeStr) => {
+            if (!timeStr) return null;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+          
+          const thisStart = parseTime(event.time);
+          const thisEnd = parseTime(event.end_time);
+          const otherStart = parseTime(otherEvent.time);
+          const otherEnd = parseTime(otherEvent.end_time);
+          
+          if (!thisEnd || !otherEnd) return false;
+          
+          return (thisStart < otherEnd) && (thisEnd > otherStart);
+        });
+        
+        if (conflicts.length > 0) {
+          hasTimeConflict = true;
+          conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+        }
+      }
+      
+      if (hasTimeConflict && conflictEvent) {
+        alert(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${formatTime(conflictEvent.time, timeFormat)} - ${formatTime(conflictEvent.end_time, timeFormat)}\n\nThis conflicts with:\n${event.name}\n${formatTime(event.time, timeFormat)} - ${formatTime(event.end_time, timeFormat)}\n\nPlease contact admin if you need to change assignments.`);
+        return;
+      }
+      
+      if (!confirm(`Apply for ${position} position at ${event.name}?`)) return;
+      
+      setApplying(true);
+      try {
+        // Convert position label back to key for storage
+        const positionKey = getPositionKey(position);
+        
+        const { error } = await supabase
+          .from('assignments')
+          .insert([{
+            event_id: event.id,
+            worker_id: currentWorker.id,
+            position: positionKey,
+            status: 'pending',
+            applied_at: new Date().toISOString()
+          }]);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+      } catch (error) {
+        console.error('Error applying:', error);
+        alert('Error submitting application: ' + error.message);
+      } finally {
+        setApplying(false);
+      }
+    };
+    
+    if (availableEvents.length === 0) {
+      return (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Available Events</h3>
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-600">No events available to apply for right now.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Check back later or contact admin for more opportunities.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-900">Available Events</h3>
+          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+            {availableEvents.length} Available
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {availableEvents.map(event => {
+            // Get positions that match worker skills (using position keys)
+            const eventPositions = Array.isArray(event.positions) ? event.positions : [];
+            
+            // Extract position keys
+            const positionKeys = eventPositions.map(pos => 
+              pos.key || getPositionKey(pos.name || pos)
+            );
+            
+            // Find matching positions
+            const workerSkillKeys = currentWorker.skills || [];
+            const matchingPositionKeys = positionKeys.filter(posKey => 
+              workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
+            );
+            
+            // Convert back to labels for display
+            const matchingPositions = matchingPositionKeys.map(key => getPositionLabel(key));
+            
+            const daysUntil = Math.ceil((parseDateSafe(event.date) - new Date()) / (1000 * 60 * 60 * 24));
+            
+            return (
+              <div key={event.id} className="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-blue-50">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-gray-900">{event.name}</h4>
+                  {daysUntil <= 7 && (
+                    <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                      Soon!
+                    </span>
+                  )}
+                </div>
+                
+                <div className="space-y-1 text-sm text-gray-700 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Calendar size={14} className="text-gray-500" />
+                    <span>{parseDateSafe(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock size={14} className="text-gray-500" />
+                    <span>{formatTime(event.time, timeFormat)}{event.end_time ? ` - ${formatTime(event.end_time, timeFormat)}` : ''}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <MapPin size={14} className="text-gray-500" />
+                    <span>
+                      {event.venue}
+                      {event.room && <span className="text-gray-600"> - {event.room}</span>}
+                    </span>
+                  </div>
+                  {event.address && (
+                    <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-700 mb-1">Address:</p>
+                      <p className="text-xs text-gray-900 mb-1">{event.address}</p>
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center space-x-1"
+                      >
+                        <MapPin size={12} />
+                        <span>Open in Google Maps</span>
+                      </a>
+                    </div>
+                  )}
+                  {paymentTrackingEnabled && eventPaymentSettings[event.id] && (
+                    <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-700">Estimated Pay:</span>
+                        <span className="text-sm font-bold text-green-700">
+                          ~${eventPaymentSettings[event.id].hours && payRates[matchingPositions[0]] 
+                            ? (eventPaymentSettings[event.id].hours * payRates[matchingPositions[0]]).toFixed(0)
+                            : '???'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {eventPaymentSettings[event.id].hours || '?'} hrs • Plus travel pay
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Available Positions:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {matchingPositions.map(position => (
+                      <button
+                        key={position}
+                        onClick={() => applyToEvent(event, position)}
+                        disabled={applying}
+                        className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                      >
+                        Apply: {position}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {event.notes && (
+                  <p className="text-xs text-gray-600 bg-yellow-50 p-2 rounded border border-yellow-200">
+                    📝 {event.notes}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const WorkerPortalView = () => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedEventModal, setSelectedEventModal] = useState(null);
@@ -98,9 +378,10 @@ export default function WorkerPortalView({
         
         if (error) throw error;
         
-        onReloadAssignments();
+        loadAssignments();
         alert('✓ Assignment cancelled successfully.');
       } catch (error) {
+        console.error('Error cancelling assignment:', error);
         alert('Error cancelling assignment: ' + error.message);
       }
     };
@@ -141,9 +422,10 @@ export default function WorkerPortalView({
         
         if (error) throw error;
         
-        onReloadAssignments();
+        loadAssignments();
         alert(`✓ Position switched to ${newPositionLabel}!`);
       } catch (error) {
+        console.error('Error switching position:', error);
         alert('Error switching position: ' + error.message);
       }
     };
@@ -907,4 +1189,439 @@ export default function WorkerPortalView({
         )}
       </div>
     );
-}
+  };
+
+  const ApplicationsView = () => {
+    const [filter, setFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
+    const [searchTerm, setSearchTerm] = useState('');
+    const [processingId, setProcessingId] = useState(null);
+
+    // Get all applications with worker and event details
+    const applications = assignments
+      .map(assignment => {
+        const worker = workers.find(w => w.id === assignment.worker_id);
+        const event = events.find(e => e.id === assignment.event_id);
+        return { ...assignment, worker, event };
+      })
+      .filter(app => app.worker && app.event) // Only include valid applications
+      .sort((a, b) => new Date(b.applied_at || b.created_at) - new Date(a.applied_at || a.created_at)); // Newest first
+
+    // Apply filters
+    const filteredApplications = applications.filter(app => {
+      // Status filter
+      if (filter === 'pending' && app.status !== 'pending') return false;
+      if (filter === 'approved' && app.status !== 'approved') return false;
+      if (filter === 'rejected' && app.status !== 'rejected') return false;
+      
+      // Search filter
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        const matchesWorker = app.worker.name.toLowerCase().includes(search);
+        const matchesEvent = app.event.name.toLowerCase().includes(search);
+        const matchesPosition = (app.position || '').toLowerCase().includes(search);
+        if (!matchesWorker && !matchesEvent && !matchesPosition) return false;
+      }
+      
+      return true;
+    });
+
+    const handleApprove = async (applicationId) => {
+      if (!confirm('Approve this application?')) return;
+      
+      setProcessingId(applicationId);
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .update({ status: 'approved' })
+          .eq('id', applicationId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Application approved!');
+      } catch (error) {
+        console.error('Error approving application:', error);
+        alert('Error approving application: ' + error.message);
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    const handleBulkApprove = async () => {
+      const pendingApps = filteredApplications.filter(app => app.status === 'pending');
+      
+      if (pendingApps.length === 0) {
+        alert('No pending applications to approve.');
+        return;
+      }
+      
+      if (!confirm(`Approve ${pendingApps.length} pending application(s)?`)) return;
+      
+      setProcessingId('bulk');
+      try {
+        const ids = pendingApps.map(app => app.id);
+        
+        const { error } = await supabase
+          .from('assignments')
+          .update({ status: 'approved' })
+          .in('id', ids);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert(`✓ ${pendingApps.length} application(s) approved!`);
+      } catch (error) {
+        console.error('Error bulk approving:', error);
+        alert('Error bulk approving: ' + error.message);
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    const handleReject = async (applicationId) => {
+      if (!confirm('Reject this application? This will remove the assignment.')) return;
+      
+      setProcessingId(applicationId);
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', applicationId);
+        
+        if (error) throw error;
+        
+        loadAssignments();
+        alert('Application rejected and removed.');
+      } catch (error) {
+        console.error('Error rejecting application:', error);
+        alert('Error rejecting application: ' + error.message);
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    const pendingCount = applications.filter(a => a.status === 'pending').length;
+    const approvedCount = applications.filter(a => a.status === 'approved').length;
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900">Applications</h2>
+          <p className="text-sm text-gray-600 mt-1">Review and manage worker applications</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600 font-medium">Pending Review</p>
+                <p className="text-3xl font-bold text-yellow-900 mt-1">{pendingCount}</p>
+              </div>
+              <Clock size={32} className="text-yellow-600" />
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Approved</p>
+                <p className="text-3xl font-bold text-green-900 mt-1">{approvedCount}</p>
+              </div>
+              <CheckCircle size={32} className="text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium">Total Applications</p>
+                <p className="text-3xl font-bold text-blue-900 mt-1">{applications.length}</p>
+              </div>
+              <FileText size={32} className="text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Status filter */}
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'all'
+                    ? 'bg-red-900 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilter('pending')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'pending'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Pending ({pendingCount})
+              </button>
+              <button
+                onClick={() => setFilter('approved')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filter === 'approved'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Approved
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="flex-1">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by worker, event, or position..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+            
+            {/* Bulk Actions */}
+            {pendingCount > 0 && (
+              <button
+                onClick={handleBulkApprove}
+                disabled={processingId === 'bulk'}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium whitespace-nowrap flex items-center space-x-2"
+              >
+                <CheckCircle size={18} />
+                <span>Approve All Pending ({pendingCount})</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Applications List */}
+        <div className="bg-white rounded-lg shadow">
+          {filteredApplications.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Found</h3>
+              <p className="text-gray-600">
+                {filter === 'pending' 
+                  ? 'No pending applications to review.' 
+                  : 'Try adjusting your filters or search terms.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredApplications.map(app => (
+                <div key={app.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    {/* Application Info */}
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-bold text-gray-900">{app.worker.name}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {app.status === 'pending' ? 'Pending Review' : 
+                           app.status === 'approved' ? 'Approved' : 'Rejected'}
+                        </span>
+                        {app.worker.rank <= 2 && (
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${
+                            app.worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            Rank {app.worker.rank}
+                          </span>
+                        )}
+                        {app.worker.reliability >= 4.5 && (
+                          <span className="text-sm text-yellow-600">⭐ {app.worker.reliability.toFixed(1)}</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Event</p>
+                          <p className="font-medium text-gray-900">{app.event.name}</p>
+                          <p className="text-xs text-gray-600">
+                            {parseDateSafe(app.event.date).toLocaleDateString('en-US', { 
+                              weekday: 'short', month: 'short', day: 'numeric' 
+                            })} • {formatTime(app.event.time, timeFormat)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">Position</p>
+                          <p className="font-medium text-gray-900">{getPositionLabel(app.position)}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">Applied</p>
+                          <p className="font-medium text-gray-900">
+                            {app.applied_at 
+                              ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {app.status === 'pending' && (
+                      <div className="flex space-x-2 ml-4">
+                        <button
+                          onClick={() => handleApprove(app.id)}
+                          disabled={processingId === app.id}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        >
+                          <CheckCircle size={18} />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          onClick={() => handleReject(app.id)}
+                          disabled={processingId === app.id}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        >
+                          <XCircle size={18} />
+                          <span>Reject</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderView = () => {
+    // Worker mode - show worker portal instead of admin views
+    if (userRole === 'worker') {
+      return <WorkerPortalView />;
+    }
+    
+    // Admin views
+    if (currentView === 'dashboard') return <DashboardView />;
+    if (currentView === 'staff') return <StaffView />;
+    if (currentView === 'events') return <EventsView />;
+    if (currentView === 'schedule') return <ScheduleView />;
+    if (currentView === 'applications') return <ApplicationsView />;
+    if (currentView === 'payments') return <PaymentsView />;
+    if (currentView === 'settings') return <SettingsView />;
+    
+    return (
+      <div className="bg-white rounded-lg shadow p-8 text-center">
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
+        <p className="text-gray-600">This feature will be available soon!</p>
+      </div>
+    );
+  };
+
+  const handleLogin = (role, user) => {
+    setUserRole(role);
+    setIsAuthenticated(true);
+    if (role === 'worker') {
+      setLoggedInWorker(user);
+    }
+    // Store in sessionStorage to persist across page refreshes
+    sessionStorage.setItem('userRole', role);
+    sessionStorage.setItem('userId', user.id);
+  };
+
+  const handleLogout = () => {
+    setUserRole(null);
+    setIsAuthenticated(false);
+    setLoggedInWorker(null);
+    sessionStorage.removeItem('userRole');
+    sessionStorage.removeItem('userId');
+  };
+
+  // Check for existing session on load
+  useEffect(() => {
+    const checkSession = async () => {
+      const storedRole = sessionStorage.getItem('userRole');
+      const storedUserId = sessionStorage.getItem('userId');
+
+      if (storedRole && storedUserId) {
+        if (storedRole === 'worker') {
+          const { data } = await supabase
+            .from('workers')
+            .select('*')
+            .eq('id', storedUserId)
+            .single();
+          if (data) {
+            setLoggedInWorker(data);
+            setUserRole('worker');
+            setIsAuthenticated(true);
+          }
+        } else if (storedRole === 'admin') {
+          setUserRole('admin');
+          setIsAuthenticated(true);
+        }
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Header
+  userRole={userRole}
+  loggedInWorker={loggedInWorker}
+  notifications={notifications}
+  onShowNotifications={() => setShowNotifications(true)}
+  onLogout={handleLogout}
+  onGoDashboard={() => setCurrentView('dashboard')}
+/>
+  <Navigation
+  userRole={userRole}
+  assignments={assignments}
+  paymentTrackingEnabled={paymentTrackingEnabled}
+  currentView={currentView}
+  onNavigate={(id) => setCurrentView(id)}
+/>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {renderView()}
+      </div>
+      <NotificationsModal
+  open={showNotifications}
+  notifications={notifications}
+  onClose={() => setShowNotifications(false)}
+  onClearAll={handleClearAllNotifications}
+/>
+     <AddWorkerModal
+  open={showAddWorker}
+  savingWorker={savingWorker}
+  positions={positions}
+  onClose={() => setShowAddWorker(false)}
+  onSaveWorker={handleSaveWorker}
+/>
+      <BulkInviteModal />
+      <SetPinModal />
+      <EditWorkerModal />
+      <AddEventModal />
+      <EditEventModal />
+      <AssignWorkersModal />
+      <PaymentCalculatorModal />
+    </div>
+  );
+};
+
+
+export default AvailableEventsSection;
