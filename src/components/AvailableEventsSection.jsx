@@ -92,44 +92,46 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
     
     const applyToEvent = async (event, position) => {
       // ✅ Check if position is already full before allowing application
-      const positionKey = getPositionKey(position);
-
-      // Find max count - try multiple ways to match the position definition
-      let maxCount = 0;
+      // Use positionMatches() to handle both key and label formats
       if (event.positions && Array.isArray(event.positions)) {
         const positionDef = event.positions.find(p => {
-          const pKey = p.key || getPositionKey(p.name || p);
-          const pLabel = p.label || p.name || getPositionLabel(p.key);
-          return pKey === positionKey || 
-                 pLabel === position || 
-                 p.name === position ||
-                 p.key === positionKey;
+          const pKey = p.key || getPositionKey(p.name || String(p));
+          const pLabel = p.label || p.name || getPositionLabel(pKey);
+          // Match against both the label (what's displayed) and the key
+          return pLabel === position || pKey === getPositionKey(position) ||
+                 positionMatches(getPositionKey(position), pKey);
         });
-        if (positionDef) maxCount = positionDef.count || 1;
-      }
 
-      if (maxCount > 0) {
-        // Count ALL approved assignments for this position (regardless of key format)
-        const currentApproved = assignments.filter(a => {
-          if (a.event_id !== event.id) return false;
-          if (a.status !== 'approved') return false;
-          // Compare both as-is and as keys
-          const aKey = getPositionKey(a.position);
-          return a.position === positionKey || 
-                 a.position === position ||
-                 aKey === positionKey;
-        }).length;
-        
-        console.log(`Position check: ${position} | key: ${positionKey} | approved: ${currentApproved} | max: ${maxCount}`);
-        
-        if (currentApproved >= maxCount) {
-          alert(
-            `⚠️ POSITION FULL!\n\n` +
-            `Sorry, the ${position} position for "${event.name}" has already been filled.\n\n` +
-            `${currentApproved}/${maxCount} spots taken.\n\n` +
-            `Contact your manager if you think this is an error.`
-          );
-          return;
+        if (positionDef) {
+          const maxCount = positionDef.count || 1;
+          const pKey = positionDef.key || getPositionKey(positionDef.name || String(positionDef));
+
+          // Count approved assignments - match by BOTH key and label formats
+          const currentApproved = assignments.filter(a => {
+            if (a.event_id !== event.id) return false;
+            if (a.status !== 'approved') return false;
+            const aKey = getPositionKey(a.position);
+            const aLabel = getPositionLabel(a.position);
+            return positionMatches(aKey, pKey) ||
+                   a.position === positionDef.name ||
+                   a.position === positionDef.key ||
+                   a.position === position ||
+                   aLabel === position;
+          }).length;
+
+          console.log(`Position check: "${position}" | pKey: ${pKey} | approved: ${currentApproved} | max: ${maxCount}`);
+
+          if (currentApproved >= maxCount) {
+            alert(
+              `⚠️ POSITION FULL!\n\n` +
+              `Sorry, the ${position} position for "${event.name}" has already been filled.\n\n` +
+              `${currentApproved}/${maxCount} spots taken.\n\n` +
+              `Contact your manager if you think this is an error.`
+            );
+            return;
+          }
+        } else {
+          console.log(`Position check: Could not find position def for "${position}" in`, event.positions);
         }
       }
 

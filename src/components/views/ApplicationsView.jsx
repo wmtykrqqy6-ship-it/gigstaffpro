@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, CheckCircle, FileText, XCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, getPositionKey } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 
 export default function ApplicationsView({
@@ -45,31 +45,38 @@ export default function ApplicationsView({
   });
 
   const handleApprove = async (applicationId) => {
-    // Find the application
     const app = applications.find(a => a.id === applicationId);
     if (!app) return;
 
-    // ✅ Check if position is already full before approving
+    // ✅ Check if position is already full - handle both key and label formats
     const event = events.find(e => e.id === app.event_id);
     if (event && event.positions && Array.isArray(event.positions)) {
       const positionDef = event.positions.find(p => {
         const pKey = p.key || p.name;
-        return pKey === app.position || 
-               p.name === app.position || 
-               p.key === app.position;
+        return pKey === app.position ||
+               p.name === app.position ||
+               p.key === app.position ||
+               getPositionKey(p.name || p.key) === getPositionKey(app.position) ||
+               getPositionLabel(p.key) === app.position ||
+               getPositionLabel(p.name) === app.position;
       });
 
       if (positionDef) {
         const maxCount = positionDef.count || 1;
-        const currentApproved = assignments.filter(a => 
-          a.event_id === app.event_id && 
-          (a.position === app.position || a.position === positionDef.key || a.position === positionDef.name) &&
-          a.status === 'approved' &&
-          a.id !== applicationId
-        ).length;
-        
-        console.log(`Approve check: ${app.position} | approved: ${currentApproved} | max: ${maxCount}`);
-        
+        const currentApproved = assignments.filter(a => {
+          if (a.event_id !== app.event_id) return false;
+          if (a.status !== 'approved') return false;
+          if (a.id === applicationId) return false;
+          // Match position by any format
+          return a.position === app.position ||
+                 a.position === positionDef.key ||
+                 a.position === positionDef.name ||
+                 getPositionKey(a.position) === getPositionKey(app.position) ||
+                 getPositionLabel(a.position) === getPositionLabel(app.position);
+        }).length;
+
+        console.log(`Approve check: "${app.position}" | approved: ${currentApproved} | max: ${maxCount}`);
+
         if (currentApproved >= maxCount) {
           alert(
             `⚠️ POSITION FULL!\n\n` +
