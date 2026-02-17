@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, getPositionKey } from '../../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
 import AvailableEventsSection from '../AvailableEventsSection';
 
 export default function WorkerPortalView({
