@@ -344,16 +344,39 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                 <div className="mb-3">
                   <p className="text-xs font-semibold text-gray-600 mb-2">Available Positions:</p>
                   <div className="flex flex-wrap gap-2">
-                    {matchingPositions.map(position => (
-                      <button
-                        key={position}
-                        onClick={() => applyToEvent(event, position)}
-                        disabled={applying}
-                        className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-                      >
-                        Apply: {position}
-                      </button>
-                    ))}
+                    {matchingPositions.map(position => {
+                      // Check if worker is on standby for this position
+                      const positionKey = getPositionKey(position);
+                      const onStandby = assignments.some(a =>
+                        a.event_id === event.id &&
+                        a.worker_id === currentWorker.id &&
+                        a.status === 'standby' &&
+                        (getPositionKey(a.position) === positionKey || a.position === position)
+                      );
+
+                      if (onStandby) {
+                        return (
+                          <div
+                            key={position}
+                            className="bg-orange-100 border-2 border-orange-400 text-orange-800 text-xs px-3 py-1 rounded-lg font-medium flex items-center space-x-1"
+                          >
+                            <Clock size={14} />
+                            <span>On Standby: {position}</span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={position}
+                          onClick={() => applyToEvent(event, position)}
+                          disabled={applying}
+                          className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                        >
+                          Apply: {position}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 
