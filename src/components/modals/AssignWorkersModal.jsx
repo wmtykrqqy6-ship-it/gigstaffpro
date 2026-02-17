@@ -82,13 +82,14 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = assignments.filter(a => a.event_id === event.id);
+  const eventAssignments = event ? assignments.filter(a => a.event_id === event.id) : [];
   
   const getPositionAssignments = (position) => {
     return eventAssignments.filter(a => a.position === position);
   };
 
   const getPositionCount = (positionKey) => {
+    if (!event) return 0;
     // Find position by key OR by name (for backward compatibility)
     const pos = event.positions?.find(p => {
       const pKey = p.key || p.name || p;
