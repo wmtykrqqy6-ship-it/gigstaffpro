@@ -45,6 +45,38 @@ export default function ApplicationsView({
   });
 
   const handleApprove = async (applicationId) => {
+    // Find the application
+    const app = applications.find(a => a.id === applicationId);
+    if (!app) return;
+
+    // ✅ Check if position is already full before approving
+    const event = events.find(e => e.id === app.event_id);
+    if (event) {
+      const positionDef = event.positions?.find(p => 
+        p.key === app.position || p.name === app.position
+      );
+      if (positionDef) {
+        const maxCount = positionDef.count || 1;
+        const currentApproved = assignments.filter(a => 
+          a.event_id === app.event_id && 
+          a.position === app.position && 
+          a.status === 'approved' &&
+          a.id !== applicationId
+        ).length;
+        
+        if (currentApproved >= maxCount) {
+          alert(
+            `⚠️ POSITION FULL!\n\n` +
+            `Cannot approve this application.\n\n` +
+            `${app.position} for "${event.name}" is already fully staffed.\n` +
+            `Current: ${currentApproved}/${maxCount}\n\n` +
+            `Please reject this application or increase the position count in the event.`
+          );
+          return;
+        }
+      }
+    }
+
     if (!confirm('Approve this application?')) return;
     
     setProcessingId(applicationId);
@@ -72,12 +104,58 @@ export default function ApplicationsView({
       alert('No pending applications to approve.');
       return;
     }
-    
-    if (!confirm(`Approve ${pendingApps.length} pending application(s)?`)) return;
+
+    // ✅ Check each application for position capacity before bulk approving
+    const overfilledApps = [];
+    const approvableApps = [];
+
+    for (const app of pendingApps) {
+      const event = events.find(e => e.id === app.event_id);
+      if (!event) { approvableApps.push(app); continue; }
+
+      const positionDef = event.positions?.find(p => 
+        p.key === app.position || p.name === app.position
+      );
+      if (!positionDef) { approvableApps.push(app); continue; }
+
+      const maxCount = positionDef.count || 1;
+      // Count currently approved + any we've already added to approvableApps
+      const currentApproved = assignments.filter(a => 
+        a.event_id === app.event_id && 
+        a.position === app.position && 
+        a.status === 'approved'
+      ).length;
+      const pendingApprovalCount = approvableApps.filter(a =>
+        a.event_id === app.event_id && a.position === app.position
+      ).length;
+
+      if (currentApproved + pendingApprovalCount >= maxCount) {
+        overfilledApps.push(app);
+      } else {
+        approvableApps.push(app);
+      }
+    }
+
+    // Warn about overfilled positions
+    if (overfilledApps.length > 0) {
+      const names = overfilledApps.map(a => `• ${a.worker?.name} - ${a.position} @ ${a.event?.name}`).join('\n');
+      const proceed = confirm(
+        `⚠️ ${overfilledApps.length} application(s) cannot be approved - position already full:\n\n${names}\n\n` +
+        `Approve the remaining ${approvableApps.length} application(s)?`
+      );
+      if (!proceed) return;
+    } else {
+      if (!confirm(`Approve ${approvableApps.length} pending application(s)?`)) return;
+    }
+
+    if (approvableApps.length === 0) {
+      alert('No applications could be approved - all positions are full.');
+      return;
+    }
     
     setProcessingId('bulk');
     try {
-      const ids = pendingApps.map(app => app.id);
+      const ids = approvableApps.map(app => app.id);
       
       const { error } = await supabase
         .from('assignments')
@@ -87,7 +165,7 @@ export default function ApplicationsView({
       if (error) throw error;
       
       onReloadAssignments();
-      alert(`✓ ${pendingApps.length} application(s) approved!`);
+      alert(`✓ ${approvableApps.length} application(s) approved!${overfilledApps.length > 0 ? `\n${overfilledApps.length} skipped (position full).` : ''}`);
     } catch (error) {
       alert('Error bulk approving: ' + error.message);
     } finally {

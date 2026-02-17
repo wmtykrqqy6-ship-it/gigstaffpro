@@ -91,7 +91,31 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
     const availableEvents = getAvailableEvents();
     
     const applyToEvent = async (event, position) => {
-      // Check for time conflicts first
+      // ✅ Check if position is already full before allowing application
+      const positionKey = getPositionKey(position);
+      const positionDef = event.positions?.find(p => 
+        p.key === positionKey || p.name === position
+      );
+      if (positionDef) {
+        const maxCount = positionDef.count || 1;
+        const currentApproved = assignments.filter(a => 
+          a.event_id === event.id && 
+          a.position === positionKey && 
+          a.status === 'approved'
+        ).length;
+        
+        if (currentApproved >= maxCount) {
+          alert(
+            `⚠️ POSITION FULL!\n\n` +
+            `Sorry, the ${position} position for "${event.name}" has already been filled.\n\n` +
+            `${currentApproved}/${maxCount} spots taken.\n\n` +
+            `Contact your manager if you think this is an error.`
+          );
+          return;
+        }
+      }
+
+      // Check for time conflicts
       const workerAssignments = assignments.filter(a => 
         a.worker_id === currentWorker.id && 
         a.event_id !== event.id &&
