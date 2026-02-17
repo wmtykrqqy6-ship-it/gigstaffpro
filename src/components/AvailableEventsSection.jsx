@@ -94,10 +94,19 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       // ✅ Check if position is already full before allowing application
       // Use positionMatches() to handle both key and label formats
       if (event.positions && Array.isArray(event.positions)) {
+        // DEBUG: Show exact data so we can fix the comparison
+        const approvedForEvent = assignments.filter(a => a.event_id === event.id && a.status === 'approved');
+        alert(
+          `DEBUG INFO:\n\n` +
+          `Position you clicked: "${position}"\n` +
+          `Event positions: ${JSON.stringify(event.positions)}\n\n` +
+          `Approved assignments for this event:\n` +
+          approvedForEvent.map(a => `  position="${a.position}" status="${a.status}"`).join('\n')
+        );
+
         const positionDef = event.positions.find(p => {
           const pKey = p.key || getPositionKey(p.name || String(p));
           const pLabel = p.label || p.name || getPositionLabel(pKey);
-          // Match against both the label (what's displayed) and the key
           return pLabel === position || pKey === getPositionKey(position) ||
                  positionMatches(getPositionKey(position), pKey);
         });
