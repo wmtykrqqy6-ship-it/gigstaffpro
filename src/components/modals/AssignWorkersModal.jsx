@@ -6,11 +6,11 @@ import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/p
 export default function AssignWorkersModal({
   open,
   event,
-  workers,
-  events,
-  assignments,
+  workers = [],
+  events = [],
+  assignments = [],
   positions,
-  eventPaymentSettings,
+  eventPaymentSettings = {},
   onClose,
   onAssign,
   onUnassign,
@@ -34,7 +34,9 @@ export default function AssignWorkersModal({
 
   // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
-    if (event && !eventPaymentSettings[event.id]) {
+    if (!event) return; // Safety check - don't run if no event
+    
+    if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
       let defaultHours = 4;
       if (event.time && event.end_time) {
