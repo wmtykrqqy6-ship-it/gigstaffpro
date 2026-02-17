@@ -53,7 +53,7 @@ export const getPositionKey = (keyOrLabel) => {
   if (byLabel) return byLabel.key;
   
   // Last resort: convert label to key format
- return String(keyOrLabel).toLowerCase().replace(/\s+/g, '_');
+  return String(keyOrLabel).toLowerCase().replace(/\s+/g, '_');
 };
 
 // Check if worker skill matches position
