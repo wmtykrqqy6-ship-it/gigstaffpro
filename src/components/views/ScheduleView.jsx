@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Users, Clock, MapPin } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 
 export default function ScheduleView({
   events,
