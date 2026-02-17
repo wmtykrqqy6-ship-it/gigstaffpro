@@ -34,9 +34,7 @@ export default function AssignWorkersModal({
 
   // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
-    if (!event) return; // Guard against null event
-    
-    if (!eventPaymentSettings[event.id]) {
+    if (event && !eventPaymentSettings[event.id]) {
       // Calculate default hours
       let defaultHours = 4;
       if (event.time && event.end_time) {
@@ -54,7 +52,7 @@ export default function AssignWorkersModal({
       setEventMiles(0);
       setEventIsLakeGeneva(false);
       setEventIsHoliday(false);
-    } else if (event && eventPaymentSettings[event.id]) {
+    } else if (eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
       setEventHours(settings.hours);
@@ -109,10 +107,29 @@ export default function AssignWorkersModal({
     try {
       const worker = workers.find(w => w.id === workerId);
       
-      // Check for time conflicts with other events
+      // ✅ FIX #1: Check if position is full FIRST (before any other checks)
+      // Don't count the existing assignment if we're reassigning
+      const positionAssignments = getPositionAssignments(position);
+      const currentFilled = existingAssignment 
+        ? positionAssignments.filter(a => a.id !== existingAssignment.id).length
+        : positionAssignments.length;
+      const maxNeeded = getPositionCount(position);
+      
+      if (currentFilled >= maxNeeded && maxNeeded > 0) {
+        alert(
+          `⚠️ POSITION FULL!\n\n` +
+          `${getPositionLabel(position)} is already fully staffed.\n\n` +
+          `Current: ${currentFilled}/${maxNeeded} assigned\n\n` +
+          `Please remove an existing assignment before adding a new one.`
+        );
+        return;
+      }
+      
+      // ✅ FIX #2: Check for time conflicts with other events
       const workerOtherAssignments = assignments.filter(a => 
         a.worker_id === workerId && 
-        a.event_id !== event.id
+        a.event_id !== event.id &&
+        a.status === 'approved'  // Only check approved assignments
       );
       
       if (workerOtherAssignments.length > 0) {
@@ -140,15 +157,18 @@ export default function AssignWorkersModal({
         
         if (conflicts.length > 0) {
           const conflictEvent = events.find(e => e.id === conflicts[0].event_id);
-          const conflictPosition = conflicts[0].position;
+          const conflictPosition = getPositionLabel(conflicts[0].position);
           
           alert(
-            `⚠️ Time Conflict!\n\n` +
-            `${worker.name} is already assigned to:\n` +
-            `"${conflictEvent.name}"\n` +
-            `${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
+            `⚠️ TIME CONFLICT!\n\n` +
+            `${worker.name} is already assigned to:\n\n` +
+            `Event: "${conflictEvent.name}"\n` +
+            `Time: ${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
             `Position: ${conflictPosition}\n\n` +
-            `This overlaps with "${event.name}" (${event.time}${event.end_time ? ` - ${event.end_time}` : ''})`
+            `This overlaps with:\n\n` +
+            `Event: "${event.name}"\n` +
+            `Time: ${event.time}${event.end_time ? ` - ${event.end_time}` : ''}\n\n` +
+            `A worker cannot be in two places at once!`
           );
           return;
         }
@@ -156,7 +176,7 @@ export default function AssignWorkersModal({
       
       // If worker is already assigned to a different position, confirm reassignment
       if (existingAssignment) {
-        if (!confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`)) {
+        if (!confirm(`${worker.name} is currently assigned to ${getPositionLabel(existingAssignment.position)}. Move them to ${getPositionLabel(position)} instead?`)) {
           return;
         }
         
@@ -166,12 +186,6 @@ export default function AssignWorkersModal({
           .eq('id', existingAssignment.id);
         
         if (deleteError) throw deleteError;
-      }
-
-      // Check if position is full
-      if (isPositionFilled(position)) {
-        alert(`${position} is already fully staffed`);
-        return;
       }
 
       // Calculate default hours from event times
