@@ -51,18 +51,24 @@ export default function ApplicationsView({
 
     // ✅ Check if position is already full before approving
     const event = events.find(e => e.id === app.event_id);
-    if (event) {
-      const positionDef = event.positions?.find(p => 
-        p.key === app.position || p.name === app.position
-      );
+    if (event && event.positions && Array.isArray(event.positions)) {
+      const positionDef = event.positions.find(p => {
+        const pKey = p.key || p.name;
+        return pKey === app.position || 
+               p.name === app.position || 
+               p.key === app.position;
+      });
+
       if (positionDef) {
         const maxCount = positionDef.count || 1;
         const currentApproved = assignments.filter(a => 
           a.event_id === app.event_id && 
-          a.position === app.position && 
+          (a.position === app.position || a.position === positionDef.key || a.position === positionDef.name) &&
           a.status === 'approved' &&
           a.id !== applicationId
         ).length;
+        
+        console.log(`Approve check: ${app.position} | approved: ${currentApproved} | max: ${maxCount}`);
         
         if (currentApproved >= maxCount) {
           alert(
