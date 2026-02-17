@@ -124,12 +124,41 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           console.log(`Position check: "${position}" | pKey: ${pKey} | approved: ${currentApproved} | max: ${maxCount}`);
 
           if (currentApproved >= maxCount) {
-            alert(
+            const joinStandby = confirm(
               `⚠️ POSITION FULL!\n\n` +
               `Sorry, the ${position} position for "${event.name}" has already been filled.\n\n` +
               `${currentApproved}/${maxCount} spots taken.\n\n` +
-              `Contact your manager if you think this is an error.`
+              `Would you like to join the STANDBY list?\n\n` +
+              `You'll be notified if a spot opens up.`
             );
+            
+            if (joinStandby) {
+              // Apply with status 'standby' instead of blocking
+              setApplying(true);
+              try {
+                const positionKey = getPositionKey(position);
+                
+                const { error } = await supabase
+                  .from('assignments')
+                  .insert([{
+                    event_id: event.id,
+                    worker_id: currentWorker.id,
+                    position: positionKey,
+                    status: 'standby',
+                    applied_at: new Date().toISOString()
+                  }]);
+                
+                if (error) throw error;
+                
+                onReloadAssignments();
+                alert(`✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
+              } catch (error) {
+                console.error('Error joining standby:', error);
+                alert('Error joining standby: ' + error.message);
+              } finally {
+                setApplying(false);
+              }
+            }
             return;
           }
         } else {

@@ -31,6 +31,7 @@ export default function ApplicationsView({
     if (filter === 'pending' && app.status !== 'pending') return false;
     if (filter === 'approved' && app.status !== 'approved') return false;
     if (filter === 'rejected' && app.status !== 'rejected') return false;
+    if (filter === 'standby' && app.status !== 'standby') return false;
     
     // Search filter
     if (searchTerm) {
@@ -210,6 +211,7 @@ export default function ApplicationsView({
 
   const pendingCount = applications.filter(a => a.status === 'pending').length;
   const approvedCount = applications.filter(a => a.status === 'approved').length;
+  const standbyCount = applications.filter(a => a.status === 'standby').length;
 
   return (
     <div className="space-y-6">
@@ -287,6 +289,16 @@ export default function ApplicationsView({
             >
               Approved
             </button>
+            <button
+              onClick={() => setFilter('standby')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'standby'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Standby ({standbyCount})
+            </button>
           </div>
 
           {/* Search */}
@@ -338,10 +350,12 @@ export default function ApplicationsView({
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                        app.status === 'standby' ? 'bg-orange-100 text-orange-800' :
                         'bg-red-100 text-red-800'
                       }`}>
                         {app.status === 'pending' ? 'Pending Review' : 
-                         app.status === 'approved' ? 'Approved' : 'Rejected'}
+                         app.status === 'approved' ? 'Approved' :
+                         app.status === 'standby' ? 'Standby' : 'Rejected'}
                       </span>
                       {app.worker.rank <= 2 && (
                         <span className={`px-2 py-1 rounded text-xs font-bold ${
@@ -400,6 +414,26 @@ export default function ApplicationsView({
                       >
                         <XCircle size={18} />
                         <span>Reject</span>
+                      </button>
+                    </div>
+                  )}
+                  {app.status === 'standby' && (
+                    <div className="flex space-x-2 ml-4">
+                      <button
+                        onClick={() => handleApprove(app.id)}
+                        disabled={processingId === app.id}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                      >
+                        <CheckCircle size={18} />
+                        <span>Promote to Approved</span>
+                      </button>
+                      <button
+                        onClick={() => handleReject(app.id)}
+                        disabled={processingId === app.id}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                      >
+                        <XCircle size={18} />
+                        <span>Remove</span>
                       </button>
                     </div>
                   )}
