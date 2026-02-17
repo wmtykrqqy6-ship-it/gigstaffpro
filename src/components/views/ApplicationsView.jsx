@@ -65,9 +65,10 @@ export default function ApplicationsView({
         const maxCount = positionDef.count || 1;
         const currentApproved = assignments.filter(a => {
           if (a.event_id !== app.event_id) return false;
-          if (a.status !== 'approved') return false;
           if (a.id === applicationId) return false;
-          // Match position by any format
+          // Admin-assigned directly = null/undefined status. Count anything NOT pending/rejected/cancelled.
+          const s = a.status;
+          if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
           return a.position === app.position ||
                  a.position === positionDef.key ||
                  a.position === positionDef.name ||

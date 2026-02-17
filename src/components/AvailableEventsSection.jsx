@@ -94,16 +94,6 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       // ✅ Check if position is already full before allowing application
       // Use positionMatches() to handle both key and label formats
       if (event.positions && Array.isArray(event.positions)) {
-        // DEBUG: Show exact data so we can fix the comparison
-        const approvedForEvent = assignments.filter(a => a.event_id === event.id && a.status === 'approved');
-        alert(
-          `DEBUG INFO:\n\n` +
-          `Position you clicked: "${position}"\n` +
-          `Event positions: ${JSON.stringify(event.positions)}\n\n` +
-          `Approved assignments for this event:\n` +
-          approvedForEvent.map(a => `  position="${a.position}" status="${a.status}"`).join('\n')
-        );
-
         const positionDef = event.positions.find(p => {
           const pKey = p.key || getPositionKey(p.name || String(p));
           const pLabel = p.label || p.name || getPositionLabel(pKey);
@@ -115,10 +105,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           const maxCount = positionDef.count || 1;
           const pKey = positionDef.key || getPositionKey(positionDef.name || String(positionDef));
 
-          // Count approved assignments - match by BOTH key and label formats
+          // Count approved assignments - admin-assigned ones may have null/undefined status
           const currentApproved = assignments.filter(a => {
             if (a.event_id !== event.id) return false;
-            if (a.status !== 'approved') return false;
+            // Admin-assigned directly = no status or 'approved'. Worker-applied = 'pending' until approved.
+            // So count anything that is NOT pending/rejected/cancelled
+            const s = a.status;
+            if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
             const aKey = getPositionKey(a.position);
             const aLabel = getPositionLabel(a.position);
             return positionMatches(aKey, pKey) ||

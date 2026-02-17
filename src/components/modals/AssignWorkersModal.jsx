@@ -110,9 +110,11 @@ export default function AssignWorkersModal({
     try {
       const worker = workers.find(w => w.id === workerId);
       
-      // ✅ FIX #1: Check if position is full FIRST (before any other checks)
-      // Don't count the existing assignment if we're reassigning
-      const positionAssignments = getPositionAssignments(position);
+      // Count current filled - admin direct assigns may have null/undefined status
+      const positionAssignments = getPositionAssignments(position).filter(a => {
+        const s = a.status;
+        return s !== 'pending' && s !== 'rejected' && s !== 'cancelled';
+      });
       const currentFilled = existingAssignment 
         ? positionAssignments.filter(a => a.id !== existingAssignment.id).length
         : positionAssignments.length;
