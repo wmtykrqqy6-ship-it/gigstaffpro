@@ -17,6 +17,14 @@ export default function StaffView({
   const [skillFilter, setSkillFilter] = useState('all');
   const [rankFilter, setRankFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name'); // name, rating, gigs
+  const [expandedCards, setExpandedCards] = useState({}); // Track which cards are expanded
+
+  const toggleCard = (workerId) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [workerId]: !prev[workerId]
+    }));
+  };
 
   if (loading) {
     return (
@@ -92,8 +100,9 @@ export default function StaffView({
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Staff Management</h2>
-          <p className="text-sm text-green-600 mt-1">
-            Connected to Supabase • {sortedWorkers.length} of {workers.length} workers
+          <p className="text-sm text-gray-600 mt-1">
+            {sortedWorkers.length} {sortedWorkers.length === 1 ? 'worker' : 'workers'}
+            {sortedWorkers.length !== workers.length && ` of ${workers.length} total`}
           </p>
         </div>
         <div className="flex space-x-3">
@@ -232,92 +241,106 @@ export default function StaffView({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedWorkers.map(worker => (
-            <div 
-              key={worker.id} 
-              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200"
-            >
-              {/* Worker Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900">{worker.name}</h3>
-                  <div className="flex items-center space-x-3 mt-2">
-                    {/* Rank Badge */}
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                      Level {worker.rank || 1}
-                    </span>
-                    {/* Rating */}
-                    <div className="flex items-center space-x-1">
-                      <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                      <span className="text-sm font-medium text-gray-700">{worker.reliability || 0}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {sortedWorkers.map(worker => {
+            const isExpanded = expandedCards[worker.id];
+            return (
+              <div 
+                key={worker.id} 
+                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
+              >
+                {/* Compact Header - Always Visible */}
+                <div 
+                  className="p-4 cursor-pointer hover:bg-gray-50"
+                  onClick={() => toggleCard(worker.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          Rank {worker.rank || 1}
+                        </span>
+                        <div className="flex items-center space-x-0.5">
+                          <Star size={12} className="text-yellow-500 fill-yellow-500" />
+                          <span className="text-xs font-medium text-gray-700">{worker.reliability || 0}</span>
+                        </div>
+                      </div>
                     </div>
-                    {/* Total Gigs */}
-                    <span className="text-xs text-gray-500">{worker.total_gigs || 0} gigs</span>
+                    <div className="text-xs text-gray-500 ml-2">
+                      {worker.total_gigs || 0} gigs
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Contact Info */}
-              <div className="space-y-2 mb-4 text-sm">
-                {worker.phone && (
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <Phone size={14} className="text-gray-400" />
-                    <span>{worker.phone}</span>
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-gray-100 space-y-3">
+                    {/* Contact Info */}
+                    <div className="space-y-1.5 pt-3">
+                      {worker.phone && (
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Phone size={13} className="text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{worker.phone}</span>
+                        </div>
+                      )}
+                      {worker.email && (
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Mail size={13} className="text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{worker.email}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Skills */}
+                    {worker.skills && worker.skills.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 mb-1.5">Skills:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {worker.skills.map((skill, idx) => (
+                            <span 
+                              key={idx}
+                              className="px-1.5 py-0.5 bg-red-50 text-red-700 text-xs rounded border border-red-200"
+                            >
+                              {getPositionLabel(skill)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-1.5 pt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onSetPin(worker); }}
+                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors text-xs font-medium"
+                        title="Set PIN"
+                      >
+                        <Lock size={12} />
+                        <span>PIN</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditWorker(worker); }}
+                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-xs font-medium"
+                        title="Edit Worker"
+                      >
+                        <Edit size={12} />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteWorker(worker.id); }}
+                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors text-xs font-medium"
+                        title="Delete Worker"
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 )}
-                {worker.email && (
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <Mail size={14} className="text-gray-400" />
-                    <span className="truncate">{worker.email}</span>
-                  </div>
-                )}
               </div>
-
-              {/* Skills */}
-              <div className="mb-4">
-                <p className="text-xs font-medium text-gray-700 mb-2">Skills:</p>
-                <div className="flex flex-wrap gap-1">
-                  {(worker.skills || []).map((skill, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-2 py-1 bg-red-50 text-red-800 text-xs rounded border border-red-200"
-                    >
-                      {getPositionLabel(skill)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => onSetPin(worker)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors"
-                  title="Set PIN"
-                >
-                  <Lock size={14} />
-                  <span className="text-xs font-medium">PIN</span>
-                </button>
-                <button
-                  onClick={() => onEditWorker(worker)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
-                  title="Edit Worker"
-                >
-                  <Edit size={14} />
-                  <span className="text-xs font-medium">Edit</span>
-                </button>
-                <button
-                  onClick={() => onDeleteWorker(worker.id)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors"
-                  title="Delete Worker"
-                >
-                  <Trash2 size={14} />
-                  <span className="text-xs font-medium">Delete</span>
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
