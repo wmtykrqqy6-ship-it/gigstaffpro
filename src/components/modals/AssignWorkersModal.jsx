@@ -179,6 +179,38 @@ export default function AssignWorkersModal({
         }
       }
       
+      // ✅ FIX #3: Check if worker already assigned to a DIFFERENT position at this event
+      // Exception: Host, Setup, and Cleanup can be combined with other positions
+      const combinablePositions = ['host', 'setup', 'cleanup'];
+      const positionKey = getPositionKey(position);
+      const isCombinablePosition = combinablePositions.includes(positionKey);
+      
+      const workerSameEventAssignments = assignments.filter(a => 
+        a.worker_id === workerId && 
+        a.event_id === event.id &&
+        (!existingAssignment || a.id !== existingAssignment.id) // Exclude current assignment if reassigning
+      );
+      
+      if (workerSameEventAssignments.length > 0 && !isCombinablePosition) {
+        // Check if any existing assignments are NOT combinable positions
+        const nonCombinableExisting = workerSameEventAssignments.filter(a => {
+          const existingKey = getPositionKey(a.position);
+          return !combinablePositions.includes(existingKey);
+        });
+        
+        if (nonCombinableExisting.length > 0) {
+          const existingPosition = getPositionLabel(nonCombinableExisting[0].position);
+          alert(
+            `⚠️ ALREADY ASSIGNED!\n\n` +
+            `${worker.name} is already assigned to "${existingPosition}" at this event.\n\n` +
+            `Workers can only work ONE position per event.\n\n` +
+            `Exception: Host, Setup, and Cleanup can be combined with other positions.\n\n` +
+            `Please remove the existing assignment first.`
+          );
+          return;
+        }
+      }
+      
       // If worker is already assigned to a different position, confirm reassignment
       if (existingAssignment) {
         if (!confirm(`${worker.name} is currently assigned to ${getPositionLabel(existingAssignment.position)}. Move them to ${getPositionLabel(position)} instead?`)) {

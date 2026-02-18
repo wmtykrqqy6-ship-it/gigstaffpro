@@ -211,6 +211,40 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         return;
       }
       
+      // Check if worker already assigned to a different position at THIS event
+      // Exception: Host, Setup, and Cleanup can be combined with other positions
+      const combinablePositions = ['host', 'setup', 'cleanup'];
+      const positionKey = getPositionKey(position);
+      const isCombinablePosition = combinablePositions.includes(positionKey);
+      
+      const sameEventAssignments = assignments.filter(a => 
+        a.worker_id === currentWorker.id && 
+        a.event_id === event.id &&
+        ['approved', 'pending', 'standby'].includes(a.status)
+      );
+      
+      if (sameEventAssignments.length > 0 && !isCombinablePosition) {
+        // Check if any existing assignments are NOT combinable positions
+        const nonCombinableExisting = sameEventAssignments.filter(a => {
+          const existingKey = getPositionKey(a.position);
+          return !combinablePositions.includes(existingKey);
+        });
+        
+        if (nonCombinableExisting.length > 0) {
+          const existingPosition = getPositionLabel(nonCombinableExisting[0].position);
+          const statusText = nonCombinableExisting[0].status === 'approved' ? 'assigned to' : 
+                            nonCombinableExisting[0].status === 'standby' ? 'on standby for' : 'applied for';
+          alert(
+            `⚠️ ALREADY ${statusText.toUpperCase()}!\n\n` +
+            `You are already ${statusText} "${existingPosition}" at this event.\n\n` +
+            `Workers can only work ONE position per event.\n\n` +
+            `Exception: Host, Setup, and Cleanup can be combined with other positions.\n\n` +
+            `Please contact admin if you need to change your assignment.`
+          );
+          return;
+        }
+      }
+      
       if (!confirm(`Apply for ${position} position at ${event.name}?`)) return;
       
       setApplying(true);
