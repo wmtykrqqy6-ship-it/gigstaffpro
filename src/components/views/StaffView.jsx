@@ -247,11 +247,6 @@ export default function StaffView({
           </div>
         )}
       </div>
-              Clear All
-            </button>
-          </div>
-        )}
-      </div>
 
       {/* Worker Cards Grid */}
       {sortedWorkers.length === 0 ? (
