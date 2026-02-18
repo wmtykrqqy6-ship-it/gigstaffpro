@@ -2,16 +2,24 @@ import React, { useState } from 'react';
 import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import AssignWorkersModal from '../modals/AssignWorkersModal';
 
 export default function ScheduleView({
   events,
   assignments,
   workers,
-  timeFormat
+  timeFormat,
+  positions,
+  eventPaymentSettings,
+  onAssign,
+  onUnassign,
+  onSavePaymentSettings,
+  onReloadAssignments
 }) {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedWorker, setSelectedWorker] = useState(null);
+    const [selectedEvent, setSelectedEvent] = useState(null);
 
     // Get events for a specific date
     const getEventsForDate = (date) => {
@@ -701,5 +709,20 @@ export default function ScheduleView({
           })}
         </div>
       </div>
+
+      {/* Assign Workers Modal */}
+      <AssignWorkersModal
+        open={!!selectedEvent}
+        event={selectedEvent}
+        workers={workers}
+        events={events}
+        assignments={assignments}
+        positions={positions}
+        eventPaymentSettings={eventPaymentSettings}
+        onClose={() => setSelectedEvent(null)}
+        onAssign={onAssign}
+        onUnassign={onUnassign}
+        onSavePaymentSettings={onSavePaymentSettings}
+      />
     );
 }
