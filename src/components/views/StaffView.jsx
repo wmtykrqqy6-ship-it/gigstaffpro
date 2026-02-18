@@ -167,7 +167,7 @@ export default function StaffView({
               <option value="3">Rank 3</option>
               <option value="4">Rank 4</option>
               <option value="5">Rank 5</option>
-              <option value="5-star">⭐ 5-Star Only</option>
+              <option value="5-star">⭐ 5.0 Rating Only</option>
             </select>
           </div>
 
@@ -202,7 +202,7 @@ export default function StaffView({
             )}
             {rankFilter !== 'all' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                {rankFilter === '5-star' ? '⭐ 5-Star Only' : `Rank ${rankFilter}`}
+                {rankFilter === '5-star' ? '⭐ 5.0 Rating' : `Rank ${rankFilter}`}
               </span>
             )}
             <button
