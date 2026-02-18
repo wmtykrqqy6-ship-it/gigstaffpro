@@ -180,13 +180,14 @@ export default function ProfileView({ worker, onProfileUpdate }) {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               >
                 <option value="">Select Size</option>
-                <option value="XS">XS</option>
                 <option value="S">Small</option>
                 <option value="M">Medium</option>
                 <option value="L">Large</option>
                 <option value="XL">XL</option>
                 <option value="2XL">2XL</option>
                 <option value="3XL">3XL</option>
+                <option value="4XL">4XL</option>
+                <option value="5XL">5XL</option>
               </select>
             ) : (
               <p className="text-base text-gray-900 pl-6">{worker.shirt_size || 'Not provided'}</p>
