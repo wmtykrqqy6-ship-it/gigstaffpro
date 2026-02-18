@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
 import AvailableEventsSection from '../AvailableEventsSection';
+import ProfileView from './ProfileView';
 
 export default function WorkerPortalView({
   loggedInWorker,
@@ -17,6 +18,7 @@ export default function WorkerPortalView({
   payRates,
   onReloadAssignments
 }) {
+    const [currentTab, setCurrentTab] = useState('dashboard'); // 'dashboard' or 'profile'
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedEventModal, setSelectedEventModal] = useState(null);
@@ -162,6 +164,45 @@ export default function WorkerPortalView({
           </div>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+              <button
+                onClick={() => setCurrentTab('dashboard')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  currentTab === 'dashboard'
+                    ? 'border-red-900 text-red-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Calendar size={18} />
+                  <span>Dashboard</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setCurrentTab('profile')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  currentTab === 'profile'
+                    ? 'border-red-900 text-red-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <User size={18} />
+                  <span>Profile</span>
+                </div>
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {currentTab === 'profile' ? (
+          <ProfileView worker={currentWorker} />
+        ) : (
+          <>
         {/* Pending Applications Alert */}
         {pendingApplications.length > 0 && (
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
@@ -221,62 +262,6 @@ export default function WorkerPortalView({
                 <p className="text-3xl font-bold text-gray-900">${totalEarnings.toLocaleString()}</p>
               </div>
               <DollarSign className="text-purple-600" size={40} />
-            </div>
-          </div>
-        </div>
-
-        {/* Contact Info */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Your Profile</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 text-gray-600">
-                  <Mail size={16} />
-                  <span>{currentWorker.email}</span>
-                </div>
-                <div className="flex items-center space-x-2 text-gray-600">
-                  <Phone size={16} />
-                  <span>{currentWorker.phone}</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Your Skills</h4>
-              <div className="flex flex-wrap gap-2">
-                {Array.isArray(currentWorker.skills) && currentWorker.skills.map((skill, idx) => (
-                  <span key={idx} className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full font-medium">
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-gray-600">Rank Level</p>
-                <p className="font-semibold text-gray-900">Level {currentWorker.rank}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">No Shows</p>
-                <p className="font-semibold text-gray-900">{currentWorker.no_shows || 0}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Last Worked</p>
-                <p className="font-semibold text-gray-900">
-                  {currentWorker.last_worked 
-                    ? new Date(currentWorker.last_worked).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                    : 'N/A'}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600">Member Since</p>
-                <p className="font-semibold text-gray-900">
-                  {new Date(currentWorker.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -671,6 +656,8 @@ export default function WorkerPortalView({
               ))}
             </div>
           </div>
+        )}
+        </>
         )}
 
         {/* Event Details Modal */}
