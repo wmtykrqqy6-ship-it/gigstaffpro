@@ -237,7 +237,7 @@ export default function AssignWorkersModal({
       }
 
       // Call parent's assign handler
-      onAssign(workerId, position, existingAssignment, defaultHours);
+      onAssign(workerId, position, existingAssignment, defaultHours, event);
 
     } catch (error) {
       alert('Error in assignment process: ' + error.message);

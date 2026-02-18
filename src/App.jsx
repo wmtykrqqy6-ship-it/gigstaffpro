@@ -268,13 +268,17 @@ const handleSaveWorker = async (formData) => {
 };
 
   // Handler for assigning workers
-  const handleAssignWorker = (workerId, position, existingAssignment, defaultHours) => {
+  const handleAssignWorker = (workerId, position, existingAssignment, defaultHours, event) => {
     setAssignmentPaymentData({
       workerId,
       position,
       existingAssignment,
       defaultHours
     });
+    // Set selectedEvent so PaymentCalculatorModal can access it
+    if (event) {
+      setSelectedEvent(event);
+    }
     setShowPaymentModal(true);
   };
 
@@ -951,13 +955,17 @@ setAppPositions(storedPositions);
           setShowAssignModal(false);
           setSelectedEvent(null);
         }}
-        onAssign={(workerId, position, existingAssignment, defaultHours) => {
+        onAssign={(workerId, position, existingAssignment, defaultHours, event) => {
           setAssignmentPaymentData({
             workerId,
             position,
             existingAssignment,
             defaultHours
           });
+          // Set selectedEvent so PaymentCalculatorModal can access it
+          if (event) {
+            setSelectedEvent(event);
+          }
           setShowPaymentModal(true);
         }}
         onUnassign={async (assignmentId) => {
