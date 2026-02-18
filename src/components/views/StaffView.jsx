@@ -309,9 +309,6 @@ export default function StaffView({
                     </div>
                   )}
                 </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Expanded Details */}
                 {isExpanded && (
