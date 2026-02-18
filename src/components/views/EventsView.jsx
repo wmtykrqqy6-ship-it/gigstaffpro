@@ -13,8 +13,8 @@ export default function EventsView({
   onDeleteEvent,
   onAutoArchive
 }) {
-  const [statusFilter, setStatusFilter] = useState('all'); // all, needs-staff, confirmed, cancelled, archived
-  const [dateRangeFilter, setDateRangeFilter] = useState('all'); // all, this-week, this-month
+  const [statusFilter, setStatusFilter] = useState('active'); // active filters out archived by default
+  const [dateRangeFilter, setDateRangeFilter] = useState('next-30'); // Show next 30 days by default
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date'); // date, name, staffing
 
@@ -61,6 +61,10 @@ export default function EventsView({
     } else if (dateRangeFilter === 'this-month') {
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       return { start: today, end: monthEnd };
+    } else if (dateRangeFilter === 'next-30') {
+      const thirtyDaysOut = new Date(today);
+      thirtyDaysOut.setDate(today.getDate() + 30);
+      return { start: today, end: thirtyDaysOut };
     }
     return null; // 'all'
   };
@@ -68,7 +72,10 @@ export default function EventsView({
   // Comprehensive filtering
   const filteredEvents = events.filter(event => {
     // Status filter
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'active') {
+      // "Active" means not archived
+      if (event.status === 'archived') return false;
+    } else if (statusFilter !== 'all') {
       if (statusFilter === 'needs-staff') {
         const staffing = getEventStaffingStatus(event);
         const isFullyStaffed = staffing.total > 0 && staffing.filled >= staffing.total;
@@ -146,6 +153,7 @@ export default function EventsView({
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
             >
+              <option value="active">Active Events</option>
               <option value="all">All Events</option>
               <option value="needs-staff">Needs Staff</option>
               <option value="confirmed">Confirmed</option>
@@ -162,9 +170,10 @@ export default function EventsView({
               onChange={(e) => setDateRangeFilter(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
             >
-              <option value="all">All Time</option>
+              <option value="next-30">Next 30 Days</option>
               <option value="this-week">Next 7 Days</option>
               <option value="this-month">This Month</option>
+              <option value="all">All Time</option>
             </select>
           </div>
 
@@ -198,17 +207,18 @@ export default function EventsView({
         </div>
 
         {/* Active Filters Summary */}
-        {(statusFilter !== 'all' || dateRangeFilter !== 'all' || searchTerm) && (
+        {(statusFilter !== 'active' || dateRangeFilter !== 'next-30' || searchTerm) && (
           <div className="flex items-center space-x-2 text-sm">
             <span className="text-gray-600">Active filters:</span>
-            {statusFilter !== 'all' && (
+            {statusFilter !== 'active' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Status: {statusFilter}
+                Status: {statusFilter === 'all' ? 'All Events' : statusFilter}
               </span>
             )}
-            {dateRangeFilter !== 'all' && (
+            {dateRangeFilter !== 'next-30' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                {dateRangeFilter === 'this-week' ? 'Next 7 Days' : 'This Month'}
+                {dateRangeFilter === 'this-week' ? 'Next 7 Days' : 
+                 dateRangeFilter === 'this-month' ? 'This Month' : 'All Time'}
               </span>
             )}
             {searchTerm && (
@@ -218,14 +228,14 @@ export default function EventsView({
             )}
             <button
               onClick={() => {
-                setStatusFilter('all');
-                setDateRangeFilter('all');
+                setStatusFilter('active');
+                setDateRangeFilter('next-30');
                 setSearchTerm('');
                 setSortBy('date');
               }}
               className="text-red-600 hover:text-red-800 font-medium ml-2"
             >
-              Clear All
+              Reset Filters
             </button>
           </div>
         )}
