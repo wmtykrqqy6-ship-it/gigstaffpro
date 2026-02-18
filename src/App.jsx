@@ -267,6 +267,41 @@ const handleSaveWorker = async (formData) => {
   }
 };
 
+  // Handler for assigning workers
+  const handleAssignWorker = (workerId, position, existingAssignment, defaultHours) => {
+    setAssignmentPaymentData({
+      workerId,
+      position,
+      existingAssignment,
+      defaultHours
+    });
+    setShowPaymentModal(true);
+  };
+
+  // Handler for unassigning workers
+  const handleUnassignWorker = async (assignmentId) => {
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('id', assignmentId);
+      
+      if (error) throw error;
+      
+      loadAssignments();
+    } catch (error) {
+      alert('Error removing assignment: ' + error.message);
+    }
+  };
+
+  // Handler for saving event payment settings
+  const handleSaveEventPaymentSettings = (eventId, settings) => {
+    setEventPaymentSettings({
+      ...eventPaymentSettings,
+      [eventId]: settings
+    });
+  };
+
   const loadTimeFormat = async () => {
     try {
       const { data, error } = await supabase
