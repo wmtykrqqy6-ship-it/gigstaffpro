@@ -298,10 +298,7 @@ export default function ScheduleView({
 
                       <div className="mt-3 flex space-x-2">
                         <button
-                          onClick={() => {
-                            setSelectedEvent(event);
-                            setShowAssignModal(true);
-                          }}
+                          onClick={() => setSelectedEvent(event)}
                           className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                         >
                           Manage Staff
