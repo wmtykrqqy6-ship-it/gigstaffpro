@@ -13,7 +13,10 @@ export default function EventsView({
   onDeleteEvent,
   onAutoArchive
 }) {
-  const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all'); // all, needs-staff, confirmed, cancelled, archived
+  const [dateRangeFilter, setDateRangeFilter] = useState('all'); // all, this-week, this-month
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('date'); // date, name, staffing
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -46,10 +49,72 @@ export default function EventsView({
     onOpenAssignModal(event);
   };
 
-  // Filter events based on archived status
+  // Get date range for filtering
+  const getDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (dateRangeFilter === 'this-week') {
+      const weekEnd = new Date(today);
+      weekEnd.setDate(today.getDate() + 7);
+      return { start: today, end: weekEnd };
+    } else if (dateRangeFilter === 'this-month') {
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      return { start: today, end: monthEnd };
+    }
+    return null; // 'all'
+  };
+
+  // Comprehensive filtering
   const filteredEvents = events.filter(event => {
-    const isArchived = event.status === 'archived';
-    return showArchived ? isArchived : !isArchived;
+    // Status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'needs-staff') {
+        const staffing = getEventStaffingStatus(event);
+        const isFullyStaffed = staffing.total > 0 && staffing.filled >= staffing.total;
+        if (isFullyStaffed || event.status === 'archived') return false;
+      } else if (event.status !== statusFilter) {
+        return false;
+      }
+    }
+    
+    // Date range filter
+    const dateRange = getDateRange();
+    if (dateRange) {
+      const eventDate = new Date(event.date);
+      eventDate.setHours(0, 0, 0, 0);
+      if (eventDate < dateRange.start || eventDate > dateRange.end) return false;
+    }
+    
+    // Search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesName = event.name?.toLowerCase().includes(searchLower);
+      const matchesVenue = event.venue?.toLowerCase().includes(searchLower);
+      if (!matchesName && !matchesVenue) return false;
+    }
+    
+    return true;
+  });
+
+  // Sorting
+  const sortedEvents = [...filteredEvents].sort((a, b) => {
+    if (sortBy === 'date') {
+      return new Date(a.date) - new Date(b.date);
+    } else if (sortBy === 'date-desc') {
+      return new Date(b.date) - new Date(a.date);
+    } else if (sortBy === 'name') {
+      return (a.name || '').localeCompare(b.name || '');
+    } else if (sortBy === 'staffing') {
+      const aStaffing = getEventStaffingStatus(a).percentage;
+      const bStaffing = getEventStaffingStatus(b).percentage;
+      return aStaffing - bStaffing; // Low to high
+    } else if (sortBy === 'staffing-desc') {
+      const aStaffing = getEventStaffingStatus(a).percentage;
+      const bStaffing = getEventStaffingStatus(b).percentage;
+      return bStaffing - aStaffing; // High to low
+    }
+    return 0;
   });
 
   return (
@@ -58,31 +123,112 @@ export default function EventsView({
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Events Management</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {showArchived 
-              ? `${filteredEvents.length} archived events` 
-              : `${filteredEvents.length} active events`}
+            {sortedEvents.length} {sortedEvents.length === 1 ? 'event' : 'events'} found
           </p>
         </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-              showArchived 
-                ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <Archive size={18} />
-            <span>{showArchived ? 'Show Active Events' : 'Show Archived Events'}</span>
-          </button>
-          <button 
-            onClick={onShowAddEvent}
-            className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center space-x-2 transition-colors"
-          >
-            <Plus size={20} />
-            <span>Create Event</span>
-          </button>
+        <button 
+          onClick={onShowAddEvent}
+          className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center space-x-2 transition-colors"
+        >
+          <Plus size={20} />
+          <span>Create Event</span>
+        </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="bg-white rounded-lg shadow p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="all">All Events</option>
+              <option value="needs-staff">Needs Staff</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          {/* Date Range Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
+            <select
+              value={dateRangeFilter}
+              onChange={(e) => setDateRangeFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="all">All Time</option>
+              <option value="this-week">Next 7 Days</option>
+              <option value="this-month">This Month</option>
+            </select>
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="date">Date (Earliest First)</option>
+              <option value="date-desc">Date (Latest First)</option>
+              <option value="name">Name (A-Z)</option>
+              <option value="staffing">Staffing (Low to High)</option>
+              <option value="staffing-desc">Staffing (High to Low)</option>
+            </select>
+          </div>
+
+          {/* Search */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
+            <input
+              type="text"
+              placeholder="Event name or venue..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
         </div>
+
+        {/* Active Filters Summary */}
+        {(statusFilter !== 'all' || dateRangeFilter !== 'all' || searchTerm) && (
+          <div className="flex items-center space-x-2 text-sm">
+            <span className="text-gray-600">Active filters:</span>
+            {statusFilter !== 'all' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Status: {statusFilter}
+              </span>
+            )}
+            {dateRangeFilter !== 'all' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                {dateRangeFilter === 'this-week' ? 'Next 7 Days' : 'This Month'}
+              </span>
+            )}
+            {searchTerm && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Search: "{searchTerm}"
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setDateRangeFilter('all');
+                setSearchTerm('');
+                setSortBy('date');
+              }}
+              className="text-red-600 hover:text-red-800 font-medium ml-2"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
       </div>
 
       {events.length === 0 ? (
@@ -99,7 +245,7 @@ export default function EventsView({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {filteredEvents.map(event => {
+          {sortedEvents.map(event => {
             const staffingStatus = getEventStaffingStatus(event);
             const isFullyStaffed = staffingStatus.filled >= staffingStatus.total && staffingStatus.total > 0;
             
