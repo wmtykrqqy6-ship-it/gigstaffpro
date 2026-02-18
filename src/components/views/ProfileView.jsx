@@ -1,7 +1,17 @@
-import React from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
-export default function ProfileView({ worker }) {
+export default function ProfileView({ worker, onProfileUpdate }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editData, setEditData] = useState({
+    email: worker?.email || '',
+    phone: worker?.phone || '',
+    address: worker?.address || '',
+    shirt_size: worker?.shirt_size || ''
+  });
+
   if (!worker) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -10,18 +20,89 @@ export default function ProfileView({ worker }) {
     );
   }
 
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('workers')
+        .update({
+          email: editData.email,
+          phone: editData.phone,
+          address: editData.address,
+          shirt_size: editData.shirt_size
+        })
+        .eq('id', worker.id);
+
+      if (error) throw error;
+
+      // Call parent callback to reload worker data
+      if (onProfileUpdate) {
+        await onProfileUpdate();
+      }
+
+      setIsEditing(false);
+      alert('✅ Profile updated successfully!');
+    } catch (error) {
+      alert('Error updating profile: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditData({
+      email: worker.email || '',
+      phone: worker.phone || '',
+      address: worker.address || '',
+      shirt_size: worker.shirt_size || ''
+    });
+    setIsEditing(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Profile Header */}
       <div className="bg-gradient-to-r from-red-900 to-red-800 rounded-lg shadow p-6 text-white">
-        <div className="flex items-center space-x-4">
-          <div className="bg-white bg-opacity-20 rounded-full p-4">
-            <User size={32} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-white bg-opacity-20 rounded-full p-4">
+              <User size={32} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{worker.name}</h2>
+              <p className="text-red-100">Worker Portal Profile</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">{worker.name}</h2>
-            <p className="text-red-100">Worker Portal Profile</p>
-          </div>
+          
+          {/* Edit/Save Buttons */}
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            >
+              <Edit2 size={18} />
+              <span>Edit Profile</span>
+            </button>
+          ) : (
+            <div className="flex space-x-2">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
+              >
+                <Save size={18} />
+                <span>{saving ? 'Saving...' : 'Save'}</span>
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={saving}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <X size={18} />
+                <span>Cancel</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -29,19 +110,87 @@ export default function ProfileView({ worker }) {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Contact Information</h3>
         <div className="space-y-4">
-          <div className="flex items-center space-x-3 text-gray-600">
-            <Mail size={20} className="text-gray-400" />
-            <div>
-              <p className="text-xs text-gray-500">Email</p>
-              <p className="text-base font-medium text-gray-900">{worker.email}</p>
-            </div>
+          {/* Email */}
+          <div>
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+              <Mail size={16} className="text-gray-400" />
+              <span>Email</span>
+            </label>
+            {isEditing ? (
+              <input
+                type="email"
+                value={editData.email}
+                onChange={(e) => setEditData({...editData, email: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="your.email@example.com"
+              />
+            ) : (
+              <p className="text-base text-gray-900 pl-6">{worker.email}</p>
+            )}
           </div>
-          <div className="flex items-center space-x-3 text-gray-600">
-            <Phone size={20} className="text-gray-400" />
-            <div>
-              <p className="text-xs text-gray-500">Phone</p>
-              <p className="text-base font-medium text-gray-900">{worker.phone}</p>
-            </div>
+
+          {/* Phone */}
+          <div>
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+              <Phone size={16} className="text-gray-400" />
+              <span>Phone</span>
+            </label>
+            {isEditing ? (
+              <input
+                type="tel"
+                value={editData.phone}
+                onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="(555) 123-4567"
+              />
+            ) : (
+              <p className="text-base text-gray-900 pl-6">{worker.phone}</p>
+            )}
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+              <MapPin size={16} className="text-gray-400" />
+              <span>Address</span>
+            </label>
+            {isEditing ? (
+              <textarea
+                value={editData.address}
+                onChange={(e) => setEditData({...editData, address: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="123 Main St, City, State, ZIP"
+                rows={2}
+              />
+            ) : (
+              <p className="text-base text-gray-900 pl-6">{worker.address || 'Not provided'}</p>
+            )}
+          </div>
+
+          {/* Shirt Size */}
+          <div>
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+              <Shirt size={16} className="text-gray-400" />
+              <span>Shirt Size</span>
+            </label>
+            {isEditing ? (
+              <select
+                value={editData.shirt_size}
+                onChange={(e) => setEditData({...editData, shirt_size: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">Select Size</option>
+                <option value="XS">XS</option>
+                <option value="S">Small</option>
+                <option value="M">Medium</option>
+                <option value="L">Large</option>
+                <option value="XL">XL</option>
+                <option value="2XL">2XL</option>
+                <option value="3XL">3XL</option>
+              </select>
+            ) : (
+              <p className="text-base text-gray-900 pl-6">{worker.shirt_size || 'Not provided'}</p>
+            )}
           </div>
         </div>
       </div>

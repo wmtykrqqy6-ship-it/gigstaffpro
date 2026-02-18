@@ -17,6 +17,7 @@ export default function WorkerPortalView({
   eventPaymentSettings,
   payRates,
   onReloadAssignments,
+  onReloadWorker,
   currentTab = 'dashboard'
 }) {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
@@ -166,7 +167,7 @@ export default function WorkerPortalView({
 
         {/* Tab Content */}
         {currentTab === 'profile' ? (
-          <ProfileView worker={currentWorker} />
+          <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} />
         ) : (
           <>
         {/* Pending Applications Alert */}

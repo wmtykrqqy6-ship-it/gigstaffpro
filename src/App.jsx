@@ -590,6 +590,26 @@ setAppPositions(storedPositions);
     }
   };
 
+  const reloadLoggedInWorker = async () => {
+    if (!loggedInWorker?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('workers')
+        .select('*')
+        .eq('id', loggedInWorker.id)
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setLoggedInWorker(data);
+      }
+    } catch (error) {
+      console.error('Error reloading worker:', error);
+    }
+  };
+
   const loadEvents = async () => {
     try {
       const { data, error } = await supabase
@@ -739,6 +759,7 @@ setAppPositions(storedPositions);
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
           onReloadAssignments={loadAssignments}
+          onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
         />
       );
