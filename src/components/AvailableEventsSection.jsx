@@ -237,9 +237,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           alert(
             `⚠️ ALREADY ${statusText.toUpperCase()}!\n\n` +
             `You are already ${statusText} "${existingPosition}" at this event.\n\n` +
-            `Workers can only work ONE position per event.\n\n` +
-            `Exception: Host, Setup, and Cleanup can be combined with other positions.\n\n` +
-            `Please contact admin if you need to change your assignment.`
+            `Workers can only work ONE position per event.`
           );
           return;
         }

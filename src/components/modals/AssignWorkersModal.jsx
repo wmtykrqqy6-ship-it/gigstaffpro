@@ -203,9 +203,7 @@ export default function AssignWorkersModal({
           alert(
             `⚠️ ALREADY ASSIGNED!\n\n` +
             `${worker.name} is already assigned to "${existingPosition}" at this event.\n\n` +
-            `Workers can only work ONE position per event.\n\n` +
-            `Exception: Host, Setup, and Cleanup can be combined with other positions.\n\n` +
-            `Please remove the existing assignment first.`
+            `Workers can only work ONE position per event.`
           );
           return;
         }
