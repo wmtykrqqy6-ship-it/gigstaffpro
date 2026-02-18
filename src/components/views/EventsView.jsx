@@ -1,5 +1,5 @@
-import React from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 
@@ -10,14 +10,18 @@ export default function EventsView({
   onShowAddEvent,
   onOpenAssignModal,
   onOpenEditEvent,
-  onDeleteEvent
+  onDeleteEvent,
+  onAutoArchive
 }) {
+  const [showArchived, setShowArchived] = useState(false);
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'needs-staff': return 'bg-yellow-100 text-yellow-800';
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'archived': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -42,20 +46,43 @@ export default function EventsView({
     onOpenAssignModal(event);
   };
 
+  // Filter events based on archived status
+  const filteredEvents = events.filter(event => {
+    const isArchived = event.status === 'archived';
+    return showArchived ? isArchived : !isArchived;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Events Management</h2>
-          <p className="text-sm text-gray-600 mt-1">{events.length} total events</p>
+          <p className="text-sm text-gray-600 mt-1">
+            {showArchived 
+              ? `${filteredEvents.length} archived events` 
+              : `${filteredEvents.length} active events`}
+          </p>
         </div>
-        <button 
-          onClick={onShowAddEvent}
-          className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center space-x-2 transition-colors"
-        >
-          <Plus size={20} />
-          <span>Create Event</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+              showArchived 
+                ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <Archive size={18} />
+            <span>{showArchived ? 'Show Active Events' : 'Show Archived Events'}</span>
+          </button>
+          <button 
+            onClick={onShowAddEvent}
+            className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center space-x-2 transition-colors"
+          >
+            <Plus size={20} />
+            <span>Create Event</span>
+          </button>
+        </div>
       </div>
 
       {events.length === 0 ? (
@@ -72,7 +99,7 @@ export default function EventsView({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {events.map(event => {
+          {filteredEvents.map(event => {
             const staffingStatus = getEventStaffingStatus(event);
             const isFullyStaffed = staffingStatus.filled >= staffingStatus.total && staffingStatus.total > 0;
             

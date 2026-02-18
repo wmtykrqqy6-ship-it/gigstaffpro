@@ -94,6 +94,13 @@ const GigStaffPro = () => {
   useEffect(() => {
     generateNotifications();
   }, [assignments, events, workers, userRole, loggedInWorker]);
+
+  // Auto-archive past events when viewing Events tab
+  useEffect(() => {
+    if (currentView === 'events' && events.length > 0) {
+      autoArchivePastEvents();
+    }
+  }, [currentView, events.length]);
 const getDismissKey = () => {
   if (userRole === 'admin') return 'dismissed_notifications_admin';
   if (userRole === 'worker' && loggedInWorker?.id) return `dismissed_notifications_worker_${loggedInWorker.id}`;
@@ -647,6 +654,38 @@ setAppPositions(storedPositions);
       
       setEvents(migratedEvents);
     } catch (error) {
+    }
+  };
+
+  const autoArchivePastEvents = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      
+      // Find events that are in the past and not already archived
+      const pastEvents = events.filter(event => {
+        if (event.status === 'archived') return false;
+        const eventDate = new Date(event.date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate < today;
+      });
+      
+      if (pastEvents.length === 0) return;
+      
+      // Archive each past event
+      for (const event of pastEvents) {
+        await supabase
+          .from('events')
+          .update({ status: 'archived' })
+          .eq('id', event.id);
+      }
+      
+      // Reload events to show updated status
+      await loadEvents();
+      
+      console.log(`Auto-archived ${pastEvents.length} past event(s)`);
+    } catch (error) {
+      console.error('Error auto-archiving events:', error);
     }
   };
 
