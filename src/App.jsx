@@ -729,6 +729,12 @@ setAppPositions(storedPositions);
           assignments={assignments}
           workers={workers}
           timeFormat={timeFormat}
+          positions={positions}
+          eventPaymentSettings={eventPaymentSettings}
+          onAssign={handleAssignWorker}
+          onUnassign={handleUnassignWorker}
+          onSavePaymentSettings={handleSaveEventPaymentSettings}
+          onReloadAssignments={loadAssignments}
         />
       );
     }
