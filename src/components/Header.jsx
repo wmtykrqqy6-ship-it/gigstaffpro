@@ -1,5 +1,5 @@
-import React from 'react';
-import { Bell, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bell, LogOut, Menu, X, User, Calendar } from 'lucide-react';
 
 export default function Header({
   userRole,
@@ -7,8 +7,12 @@ export default function Header({
   notifications,
   onShowNotifications,
   onLogout,
-  onGoDashboard
+  onGoDashboard,
+  currentTab,
+  onTabChange
 }) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
     <div className="bg-gradient-to-r from-red-900 to-black text-white shadow-lg">
       <div className="px-4 py-3">
@@ -37,6 +41,52 @@ export default function Header({
 
           {/* Actions */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Worker Menu Button */}
+            {userRole === 'worker' && onTabChange && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="p-2 hover:bg-red-800 rounded-full transition-colors"
+                >
+                  {showMenu ? <X size={20} /> : <Menu size={20} />}
+                </button>
+                
+                {/* Dropdown Menu */}
+                {showMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+                    <button
+                      onClick={() => {
+                        onTabChange('dashboard');
+                        setShowMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
+                        currentTab === 'dashboard'
+                          ? 'bg-red-50 text-red-900 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Calendar size={18} />
+                      <span>Dashboard</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onTabChange('profile');
+                        setShowMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
+                        currentTab === 'profile'
+                          ? 'bg-red-50 text-red-900 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <User size={18} />
+                      <span>Profile</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={onShowNotifications}
               className="relative p-2 hover:bg-red-800 rounded-full transition-colors"

@@ -73,6 +73,7 @@ const GigStaffPro = () => {
   const [exportingCSV, setExportingCSV] = useState(false);
   const [rankAccessDays, setRankAccessDays] = useState(RANK_ACCESS_DAYS);
   const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24' hour format
+  const [workerTab, setWorkerTab] = useState('dashboard'); // 'dashboard' or 'profile'
   const [loggedInWorker, setLoggedInWorker] = useState(null); // Current logged in worker
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
@@ -738,6 +739,7 @@ setAppPositions(storedPositions);
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
           onReloadAssignments={loadAssignments}
+          currentTab={workerTab}
         />
       );
     }
@@ -916,6 +918,8 @@ setAppPositions(storedPositions);
   onShowNotifications={() => setShowNotifications(true)}
   onLogout={handleLogout}
   onGoDashboard={() => setCurrentView('dashboard')}
+  currentTab={workerTab}
+  onTabChange={setWorkerTab}
 />
   <Navigation
   userRole={userRole}
