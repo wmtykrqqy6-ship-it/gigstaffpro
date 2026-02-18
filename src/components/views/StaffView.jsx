@@ -18,6 +18,7 @@ export default function StaffView({
   const [rankFilter, setRankFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name'); // name, rating, gigs
   const [expandedCards, setExpandedCards] = useState({}); // Track which cards are expanded
+  const [showFilters, setShowFilters] = useState(false); // Toggle filter panel
 
   const toggleCard = (workerId) => {
     setExpandedCards(prev => ({
@@ -25,6 +26,12 @@ export default function StaffView({
       [workerId]: !prev[workerId]
     }));
   };
+
+  // Count active filters
+  const activeFilterCount = 
+    (skillFilter !== 'all' ? 1 : 0) + 
+    (rankFilter !== 'all' ? 1 : 0) + 
+    (sortBy !== 'name' ? 1 : 0);
 
   if (loading) {
     return (
@@ -123,11 +130,11 @@ export default function StaffView({
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* Compact Search Bar + Filter Button */}
       <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex items-center space-x-3">
           {/* Search */}
-          <div className="lg:col-span-1">
+          <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -140,79 +147,106 @@ export default function StaffView({
             </div>
           </div>
 
-          {/* Skill Filter */}
-          <div>
-            <select
-              value={skillFilter}
-              onChange={(e) => setSkillFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="all">All Skills</option>
-              {allSkills.map(skill => (
-                <option key={skill} value={skill}>{getPositionLabel(skill)}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Rank Filter */}
-          <div>
-            <select
-              value={rankFilter}
-              onChange={(e) => setRankFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="all">All Ranks</option>
-              <option value="1">Rank 1</option>
-              <option value="2">Rank 2</option>
-              <option value="3">Rank 3</option>
-              <option value="4">Rank 4</option>
-              <option value="5">Rank 5</option>
-              <option value="5-star">⭐ 5.0 Rating Only</option>
-            </select>
-          </div>
-
-          {/* Sort By */}
-          <div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="name">Sort: Name (A-Z)</option>
-              <option value="rank">Sort: Rank (Low to High)</option>
-              <option value="rating">Sort: Rating (High to Low)</option>
-              <option value="gigs">Sort: Total Gigs (High to Low)</option>
-            </select>
-          </div>
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center space-x-2 transition-colors relative"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            <span className="hidden sm:inline">Filter</span>
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Active Filters Summary */}
-        {(searchTerm || skillFilter !== 'all' || rankFilter !== 'all') && (
+        {/* Collapsible Filter Panel */}
+        {showFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+            {/* Skill Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Skill</label>
+              <select
+                value={skillFilter}
+                onChange={(e) => setSkillFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Skills</option>
+                {allSkills.map(skill => (
+                  <option key={skill} value={skill}>{getPositionLabel(skill)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Rank Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Rank</label>
+              <select
+                value={rankFilter}
+                onChange={(e) => setRankFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Ranks</option>
+                <option value="1">Rank 1</option>
+                <option value="2">Rank 2</option>
+                <option value="3">Rank 3</option>
+                <option value="4">Rank 4</option>
+                <option value="5">Rank 5</option>
+                <option value="5-star">⭐ 5.0 Rating Only</option>
+              </select>
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="name">Name (A-Z)</option>
+                <option value="rank">Rank (Low to High)</option>
+                <option value="rating">Rating (High to Low)</option>
+                <option value="gigs">Total Gigs (High to Low)</option>
+              </select>
+            </div>
+
+            {/* Clear Filters Button */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => {
+                  setSkillFilter('all');
+                  setRankFilter('all');
+                  setSortBy('name');
+                }}
+                className="w-full px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Active Search Badge (only if searching) */}
+        {searchTerm && (
           <div className="flex items-center space-x-2 text-sm mt-3">
-            <span className="text-gray-600">Active filters:</span>
-            {searchTerm && (
-              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Search: "{searchTerm}"
-              </span>
-            )}
-            {skillFilter !== 'all' && (
-              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Skill: {getPositionLabel(skillFilter)}
-              </span>
-            )}
-            {rankFilter !== 'all' && (
-              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                {rankFilter === '5-star' ? '⭐ 5.0 Rating' : `Rank ${rankFilter}`}
-              </span>
-            )}
+            <span className="text-gray-600">Searching:</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+              "{searchTerm}"
+            </span>
             <button
-              onClick={() => {
-                setSearchTerm('');
-                setSkillFilter('all');
-                setRankFilter('all');
-              }}
-              className="text-red-600 hover:text-red-800 font-medium ml-2"
+              onClick={() => setSearchTerm('')}
+              className="text-red-600 hover:text-red-800 font-medium"
             >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
               Clear All
             </button>
           </div>
@@ -254,7 +288,7 @@ export default function StaffView({
                   className="p-4 cursor-pointer hover:bg-gray-50"
                   onClick={() => toggleCard(worker.id)}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
                       <div className="flex items-center space-x-2 mt-1">
@@ -271,26 +305,31 @@ export default function StaffView({
                       {worker.total_gigs || 0} gigs
                     </div>
                   </div>
+                  
+                  {/* Phone Number - Always Visible */}
+                  {worker.phone && (
+                    <div className="flex items-center space-x-1.5 text-sm text-gray-600">
+                      <Phone size={13} className="text-gray-400 flex-shrink-0" />
+                      <span>{worker.phone}</span>
+                    </div>
+                  )}
+                </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Expanded Details */}
                 {isExpanded && (
                   <div className="px-4 pb-4 border-t border-gray-100 space-y-3">
-                    {/* Contact Info */}
-                    <div className="space-y-1.5 pt-3">
-                      {worker.phone && (
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Phone size={13} className="text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{worker.phone}</span>
-                        </div>
-                      )}
-                      {worker.email && (
+                    {/* Email */}
+                    {worker.email && (
+                      <div className="pt-3">
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                           <Mail size={13} className="text-gray-400 flex-shrink-0" />
                           <span className="truncate">{worker.email}</span>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Skills */}
                     {worker.skills && worker.skills.length > 0 && (
