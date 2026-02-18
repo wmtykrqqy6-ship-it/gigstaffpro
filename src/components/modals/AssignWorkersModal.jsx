@@ -18,6 +18,7 @@ export default function AssignWorkersModal({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  const [hideBlockedWorkers, setHideBlockedWorkers] = useState(true); // Hide by default
   const [showEventPaymentSettings, setShowEventPaymentSettings] = useState(false);
   const [eventHours, setEventHours] = useState(0);
   const [eventMiles, setEventMiles] = useState(0);
@@ -379,6 +380,18 @@ export default function AssignWorkersModal({
                   Show only unassigned workers
                 </label>
               </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="hideBlockedWorkers"
+                  checked={hideBlockedWorkers}
+                  onChange={(e) => setHideBlockedWorkers(e.target.checked)}
+                  className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                />
+                <label htmlFor="hideBlockedWorkers" className="text-sm text-gray-700 cursor-pointer">
+                  Hide workers with time conflicts
+                </label>
+              </div>
             </div>
 
             <div className="space-y-6">
@@ -518,6 +531,11 @@ export default function AssignWorkersModal({
                                   hasTimeConflict = true;
                                   conflictEvent = events.find(e => e.id === conflicts[0].event_id);
                                 }
+                              }
+                              
+                              // Skip this worker if hiding blocked workers and they have a time conflict
+                              if (hideBlockedWorkers && hasTimeConflict) {
+                                return null;
                               }
                               
                               return (
