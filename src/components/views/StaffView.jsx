@@ -1,5 +1,6 @@
-import React from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Star } from 'lucide-react';
+import React, { useState } from 'react';
+import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone } from 'lucide-react';
+import { getPositionLabel } from '../../utils/positionHelpers';
 
 export default function StaffView({
   loading,
@@ -12,6 +13,11 @@ export default function StaffView({
   onDeleteWorker,
   onRetryLoad
 }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [skillFilter, setSkillFilter] = useState('all');
+  const [rankFilter, setRankFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('name'); // name, rating, gigs
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -38,12 +44,57 @@ export default function StaffView({
     );
   }
 
+  // Get all unique skills for filter dropdown
+  const allSkills = [...new Set(workers.flatMap(w => w.skills || []))].sort();
+
+  // Filter workers
+  const filteredWorkers = workers.filter(worker => {
+    // Search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesName = worker.name?.toLowerCase().includes(searchLower);
+      const matchesEmail = worker.email?.toLowerCase().includes(searchLower);
+      const matchesPhone = worker.phone?.toLowerCase().includes(searchLower);
+      if (!matchesName && !matchesEmail && !matchesPhone) return false;
+    }
+
+    // Skill filter
+    if (skillFilter !== 'all') {
+      if (!worker.skills || !worker.skills.includes(skillFilter)) return false;
+    }
+
+    // Rank filter
+    if (rankFilter !== 'all') {
+      if (rankFilter === '5-star' && worker.reliability !== 5) return false;
+      if (rankFilter !== '5-star' && worker.rank !== parseInt(rankFilter)) return false;
+    }
+
+    return true;
+  });
+
+  // Sort workers
+  const sortedWorkers = [...filteredWorkers].sort((a, b) => {
+    if (sortBy === 'name') {
+      return (a.name || '').localeCompare(b.name || '');
+    } else if (sortBy === 'rating') {
+      return (b.reliability || 0) - (a.reliability || 0);
+    } else if (sortBy === 'gigs') {
+      return (b.total_gigs || 0) - (a.total_gigs || 0);
+    } else if (sortBy === 'rank') {
+      return (a.rank || 999) - (b.rank || 999);
+    }
+    return 0;
+  });
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Staff Management</h2>
-          <p className="text-sm text-green-600 mt-1">Connected to Supabase • {workers.length} workers</p>
+          <p className="text-sm text-green-600 mt-1">
+            Connected to Supabase • {sortedWorkers.length} of {workers.length} workers
+          </p>
         </div>
         <div className="flex space-x-3">
           <button 
@@ -63,101 +114,210 @@ export default function StaffView({
         </div>
       </div>
 
-      {workers.length === 0 ? (
+      {/* Filter Bar */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Search */}
+          <div className="lg:col-span-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search workers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Skill Filter */}
+          <div>
+            <select
+              value={skillFilter}
+              onChange={(e) => setSkillFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="all">All Skills</option>
+              {allSkills.map(skill => (
+                <option key={skill} value={skill}>{getPositionLabel(skill)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Rank Filter */}
+          <div>
+            <select
+              value={rankFilter}
+              onChange={(e) => setRankFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="all">All Ranks</option>
+              <option value="1">Rank 1</option>
+              <option value="2">Rank 2</option>
+              <option value="3">Rank 3</option>
+              <option value="4">Rank 4</option>
+              <option value="5">Rank 5</option>
+              <option value="5-star">⭐ 5-Star Only</option>
+            </select>
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="name">Sort: Name (A-Z)</option>
+              <option value="rank">Sort: Rank (Low to High)</option>
+              <option value="rating">Sort: Rating (High to Low)</option>
+              <option value="gigs">Sort: Total Gigs (High to Low)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Active Filters Summary */}
+        {(searchTerm || skillFilter !== 'all' || rankFilter !== 'all') && (
+          <div className="flex items-center space-x-2 text-sm mt-3">
+            <span className="text-gray-600">Active filters:</span>
+            {searchTerm && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Search: "{searchTerm}"
+              </span>
+            )}
+            {skillFilter !== 'all' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Skill: {getPositionLabel(skillFilter)}
+              </span>
+            )}
+            {rankFilter !== 'all' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                {rankFilter === '5-star' ? '⭐ 5-Star Only' : `Rank ${rankFilter}`}
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSkillFilter('all');
+                setRankFilter('all');
+              }}
+              className="text-red-600 hover:text-red-800 font-medium ml-2"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Worker Cards Grid */}
+      {sortedWorkers.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <Users size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Workers Yet</h3>
-          <p className="text-gray-600 mb-4">Add your first worker to get started!</p>
-          <button 
-            onClick={onShowAddWorker}
-            className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800"
-          >
-            Add Worker
-          </button>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {workers.length === 0 ? 'No Workers Yet' : 'No Workers Found'}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {workers.length === 0 
+              ? 'Add your first casino party staff member to get started!'
+              : 'Try adjusting your filters or search term.'}
+          </p>
+          {workers.length === 0 && (
+            <button 
+              onClick={onShowAddWorker}
+              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800"
+            >
+              Add Worker
+            </button>
+          )}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Skills</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Rank</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Rating</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Total Gigs</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Contact</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {workers.map(worker => (
-                  <tr key={worker.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-semibold text-gray-900">{worker.name}</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex flex-wrap gap-1">
-                        {Array.isArray(worker.skills) && worker.skills.map((skill, idx) => (
-                          <span key={idx} className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded font-medium">
-                        Level {worker.rank}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-1">
-                        <Star size={16} className="text-yellow-500 fill-yellow-500" />
-                        <span className="font-semibold">{worker.reliability}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="font-semibold text-gray-900">{worker.total_gigs}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-600">
-                        <p>{worker.phone}</p>
-                        <p className="text-xs">{worker.email}</p>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => onSetPin(worker)}
-                          className={`${worker.pin_hash ? 'text-green-600 hover:text-green-800 hover:bg-green-50' : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'} p-1 rounded transition-colors`}
-                          title={worker.pin_hash ? 'Change PIN' : 'Set PIN (Required for Login)'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => onEditWorker(worker)}
-                          className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit worker"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={() => onDeleteWorker(worker.id)}
-                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition-colors"
-                          title="Delete worker"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sortedWorkers.map(worker => (
+            <div 
+              key={worker.id} 
+              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200"
+            >
+              {/* Worker Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900">{worker.name}</h3>
+                  <div className="flex items-center space-x-3 mt-2">
+                    {/* Rank Badge */}
+                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      Level {worker.rank || 1}
+                    </span>
+                    {/* Rating */}
+                    <div className="flex items-center space-x-1">
+                      <Star size={14} className="text-yellow-500 fill-yellow-500" />
+                      <span className="text-sm font-medium text-gray-700">{worker.reliability || 0}</span>
+                    </div>
+                    {/* Total Gigs */}
+                    <span className="text-xs text-gray-500">{worker.total_gigs || 0} gigs</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div className="space-y-2 mb-4 text-sm">
+                {worker.phone && (
+                  <div className="flex items-center space-x-2 text-gray-600">
+                    <Phone size={14} className="text-gray-400" />
+                    <span>{worker.phone}</span>
+                  </div>
+                )}
+                {worker.email && (
+                  <div className="flex items-center space-x-2 text-gray-600">
+                    <Mail size={14} className="text-gray-400" />
+                    <span className="truncate">{worker.email}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Skills */}
+              <div className="mb-4">
+                <p className="text-xs font-medium text-gray-700 mb-2">Skills:</p>
+                <div className="flex flex-wrap gap-1">
+                  {(worker.skills || []).map((skill, idx) => (
+                    <span 
+                      key={idx}
+                      className="px-2 py-1 bg-red-50 text-red-800 text-xs rounded border border-red-200"
+                    >
+                      {getPositionLabel(skill)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => onSetPin(worker)}
+                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors"
+                  title="Set PIN"
+                >
+                  <Lock size={14} />
+                  <span className="text-xs font-medium">PIN</span>
+                </button>
+                <button
+                  onClick={() => onEditWorker(worker)}
+                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                  title="Edit Worker"
+                >
+                  <Edit size={14} />
+                  <span className="text-xs font-medium">Edit</span>
+                </button>
+                <button
+                  onClick={() => onDeleteWorker(worker.id)}
+                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors"
+                  title="Delete Worker"
+                >
+                  <Trash2 size={14} />
+                  <span className="text-xs font-medium">Delete</span>
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
