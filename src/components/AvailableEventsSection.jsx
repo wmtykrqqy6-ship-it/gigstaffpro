@@ -85,6 +85,39 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             return false;
           }
           
+          // Check for time conflicts with APPROVED assignments
+          const workerApprovedAssignments = assignments.filter(a => 
+            a.worker_id === currentWorker.id && 
+            (a.status === 'approved' || !a.status) // Approved or admin-assigned
+          );
+          
+          if (workerApprovedAssignments.length > 0) {
+            for (const assignment of workerApprovedAssignments) {
+              const otherEvent = events.find(e => e.id === assignment.event_id);
+              if (!otherEvent || otherEvent.date !== event.date) continue;
+              
+              // Check time overlap
+              const parseTime = (timeStr) => {
+                if (!timeStr) return null;
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+              };
+              
+              const thisStart = parseTime(event.time);
+              const thisEnd = parseTime(event.end_time);
+              const otherStart = parseTime(otherEvent.time);
+              const otherEnd = parseTime(otherEvent.end_time);
+              
+              if (thisEnd && otherEnd) {
+                const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+                if (hasOverlap) {
+                  console.log(`❌ Time conflict with ${otherEvent.name}`);
+                  return false; // Hide this event
+                }
+              }
+            }
+          }
+          
           console.log('✅ Event is available!');
           return true;
         })
@@ -136,6 +169,53 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             );
             
             if (joinStandby) {
+              // Check for time conflicts with APPROVED assignments
+              const workerApprovedAssignments = assignments.filter(a => 
+                a.worker_id === currentWorker.id && 
+                (a.status === 'approved' || !a.status) // Approved or admin-assigned
+              );
+              
+              let hasConflict = false;
+              let conflictEventName = '';
+              
+              if (workerApprovedAssignments.length > 0) {
+                for (const assignment of workerApprovedAssignments) {
+                  const otherEvent = events.find(e => e.id === assignment.event_id);
+                  if (!otherEvent || otherEvent.date !== event.date) continue;
+                  
+                  // Check time overlap
+                  const parseTime = (timeStr) => {
+                    if (!timeStr) return null;
+                    const [hours, minutes] = timeStr.split(':').map(Number);
+                    return hours * 60 + minutes;
+                  };
+                  
+                  const thisStart = parseTime(event.time);
+                  const thisEnd = parseTime(event.end_time);
+                  const otherStart = parseTime(otherEvent.time);
+                  const otherEnd = parseTime(otherEvent.end_time);
+                  
+                  if (thisEnd && otherEnd) {
+                    const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+                    if (hasOverlap) {
+                      hasConflict = true;
+                      conflictEventName = otherEvent.name;
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              if (hasConflict) {
+                alert(
+                  `⚠️ TIME CONFLICT!\n\n` +
+                  `You're already confirmed for:\n"${conflictEventName}"\n\n` +
+                  `You cannot join standby for an event that conflicts with your confirmed assignments.\n\n` +
+                  `If you'd like to work this event instead, please cancel your other assignment first.`
+                );
+                return;
+              }
+              
               // Apply with status 'standby' instead of blocking
               setApplying(true);
               try {

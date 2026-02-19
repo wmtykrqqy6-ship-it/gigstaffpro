@@ -475,7 +475,68 @@ export default function AssignWorkersModal({
                                       </div>
                                       <div className="flex items-center space-x-2">
                                         <button
-                                          onClick={() => {
+                                          onClick={async () => {
+                                            // Check for time conflicts before promoting
+                                            const workerOtherAssignments = assignments.filter(a => 
+                                              a.worker_id === worker.id && 
+                                              a.event_id !== event.id &&
+                                              (a.status === 'approved' || !a.status) // Only approved
+                                            );
+                                            
+                                            let hasConflict = false;
+                                            let conflictEvent = null;
+                                            
+                                            if (workerOtherAssignments.length > 0) {
+                                              for (const otherAssignment of workerOtherAssignments) {
+                                                const otherEv = events.find(e => e.id === otherAssignment.event_id);
+                                                if (!otherEv || otherEv.date !== event.date) continue;
+                                                
+                                                const parseTime = (timeStr) => {
+                                                  if (!timeStr) return null;
+                                                  const [hours, minutes] = timeStr.split(':').map(Number);
+                                                  return hours * 60 + minutes;
+                                                };
+                                                
+                                                const thisStart = parseTime(event.time);
+                                                const thisEnd = parseTime(event.end_time);
+                                                const otherStart = parseTime(otherEv.time);
+                                                const otherEnd = parseTime(otherEv.end_time);
+                                                
+                                                if (thisEnd && otherEnd) {
+                                                  const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+                                                  if (hasOverlap) {
+                                                    hasConflict = true;
+                                                    conflictEvent = otherEv;
+                                                    break;
+                                                  }
+                                                }
+                                              }
+                                            }
+                                            
+                                            if (hasConflict) {
+                                              const shouldRemoveOther = confirm(
+                                                `⚠️ TIME CONFLICT!\n\n` +
+                                                `${worker.name} is already assigned to:\n` +
+                                                `"${conflictEvent.name}"\n` +
+                                                `${conflictEvent.time} - ${conflictEvent.end_time}\n\n` +
+                                                `This conflicts with:\n` +
+                                                `"${event.name}"\n` +
+                                                `${event.time} - ${event.end_time}\n\n` +
+                                                `Remove them from "${conflictEvent.name}" and promote to "${event.name}"?`
+                                              );
+                                              
+                                              if (!shouldRemoveOther) return;
+                                              
+                                              // Remove from conflicting event first
+                                              const conflictAssignment = workerOtherAssignments.find(a => a.event_id === conflictEvent.id);
+                                              if (conflictAssignment) {
+                                                await supabase
+                                                  .from('assignments')
+                                                  .delete()
+                                                  .eq('id', conflictAssignment.id);
+                                              }
+                                            }
+                                            
                                             if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
                                               // Update assignment to remove standby status
                                               supabase
