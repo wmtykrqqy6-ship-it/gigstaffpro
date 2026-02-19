@@ -6,11 +6,11 @@ import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/p
 export default function AssignWorkersModal({
   open,
   event,
-  workers = [],
-  events = [],
-  assignments = [],
+  workers,
+  events,
+  assignments,
   positions,
-  eventPaymentSettings = {},
+  eventPaymentSettings,
   onClose,
   onAssign,
   onUnassign,
@@ -18,7 +18,6 @@ export default function AssignWorkersModal({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
-  const [hideBlockedWorkers, setHideBlockedWorkers] = useState(true); // Hide by default
   const [showEventPaymentSettings, setShowEventPaymentSettings] = useState(false);
   const [eventHours, setEventHours] = useState(0);
   const [eventMiles, setEventMiles] = useState(0);
@@ -35,7 +34,7 @@ export default function AssignWorkersModal({
 
   // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
-    if (!event) return; // Safety check - don't run if no event
+    if (!event) return; // Guard against null event
     
     if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
@@ -55,7 +54,7 @@ export default function AssignWorkersModal({
       setEventMiles(0);
       setEventIsLakeGeneva(false);
       setEventIsHoliday(false);
-    } else if (eventPaymentSettings[event.id]) {
+    } else if (event && eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
       setEventHours(settings.hours);
@@ -85,14 +84,18 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = event ? assignments.filter(a => a.event_id === event.id) : [];
+  const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    return eventAssignments.filter(a => a.position === position);
+    // Only count approved assignments that are NOT standby
+    return eventAssignments.filter(a => 
+      a.position === position && 
+      a.status === 'approved' && 
+      !a.standby
+    );
   };
 
   const getPositionCount = (positionKey) => {
-    if (!event) return 0;
     // Find position by key OR by name (for backward compatibility)
     const pos = event.positions?.find(p => {
       const pKey = p.key || p.name || p;
@@ -111,31 +114,10 @@ export default function AssignWorkersModal({
     try {
       const worker = workers.find(w => w.id === workerId);
       
-      // Count current filled - admin direct assigns may have null/undefined status
-      const positionAssignments = getPositionAssignments(position).filter(a => {
-        const s = a.status;
-        return s !== 'pending' && s !== 'rejected' && s !== 'cancelled';
-      });
-      const currentFilled = existingAssignment 
-        ? positionAssignments.filter(a => a.id !== existingAssignment.id).length
-        : positionAssignments.length;
-      const maxNeeded = getPositionCount(position);
-      
-      if (currentFilled >= maxNeeded && maxNeeded > 0) {
-        alert(
-          `⚠️ POSITION FULL!\n\n` +
-          `${getPositionLabel(position)} is already fully staffed.\n\n` +
-          `Current: ${currentFilled}/${maxNeeded} assigned\n\n` +
-          `Please remove an existing assignment before adding a new one.`
-        );
-        return;
-      }
-      
-      // ✅ FIX #2: Check for time conflicts with other events
+      // Check for time conflicts with other events
       const workerOtherAssignments = assignments.filter(a => 
         a.worker_id === workerId && 
-        a.event_id !== event.id &&
-        a.status === 'approved'  // Only check approved assignments
+        a.event_id !== event.id
       );
       
       if (workerOtherAssignments.length > 0) {
@@ -163,48 +145,15 @@ export default function AssignWorkersModal({
         
         if (conflicts.length > 0) {
           const conflictEvent = events.find(e => e.id === conflicts[0].event_id);
-          const conflictPosition = getPositionLabel(conflicts[0].position);
+          const conflictPosition = conflicts[0].position;
           
           alert(
-            `⚠️ TIME CONFLICT!\n\n` +
-            `${worker.name} is already assigned to:\n\n` +
-            `Event: "${conflictEvent.name}"\n` +
-            `Time: ${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
+            `⚠️ Time Conflict!\n\n` +
+            `${worker.name} is already assigned to:\n` +
+            `"${conflictEvent.name}"\n` +
+            `${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
             `Position: ${conflictPosition}\n\n` +
-            `This overlaps with:\n\n` +
-            `Event: "${event.name}"\n` +
-            `Time: ${event.time}${event.end_time ? ` - ${event.end_time}` : ''}\n\n` +
-            `A worker cannot be in two places at once!`
-          );
-          return;
-        }
-      }
-      
-      // ✅ FIX #3: Check if worker already assigned to a DIFFERENT position at this event
-      // Exception: Host, Setup, and Cleanup can be combined with other positions
-      const combinablePositions = ['host', 'setup', 'cleanup'];
-      const positionKey = getPositionKey(position);
-      const isCombinablePosition = combinablePositions.includes(positionKey);
-      
-      const workerSameEventAssignments = assignments.filter(a => 
-        a.worker_id === workerId && 
-        a.event_id === event.id &&
-        (!existingAssignment || a.id !== existingAssignment.id) // Exclude current assignment if reassigning
-      );
-      
-      if (workerSameEventAssignments.length > 0 && !isCombinablePosition) {
-        // Check if any existing assignments are NOT combinable positions
-        const nonCombinableExisting = workerSameEventAssignments.filter(a => {
-          const existingKey = getPositionKey(a.position);
-          return !combinablePositions.includes(existingKey);
-        });
-        
-        if (nonCombinableExisting.length > 0) {
-          const existingPosition = getPositionLabel(nonCombinableExisting[0].position);
-          alert(
-            `⚠️ ALREADY ASSIGNED!\n\n` +
-            `${worker.name} is already assigned to "${existingPosition}" at this event.\n\n` +
-            `Workers can only work ONE position per event.`
+            `This overlaps with "${event.name}" (${event.time}${event.end_time ? ` - ${event.end_time}` : ''})`
           );
           return;
         }
@@ -212,7 +161,7 @@ export default function AssignWorkersModal({
       
       // If worker is already assigned to a different position, confirm reassignment
       if (existingAssignment) {
-        if (!confirm(`${worker.name} is currently assigned to ${getPositionLabel(existingAssignment.position)}. Move them to ${getPositionLabel(position)} instead?`)) {
+        if (!confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`)) {
           return;
         }
         
@@ -222,6 +171,12 @@ export default function AssignWorkersModal({
           .eq('id', existingAssignment.id);
         
         if (deleteError) throw deleteError;
+      }
+
+      // Check if position is full
+      if (isPositionFilled(position)) {
+        alert(`${position} is already fully staffed`);
+        return;
       }
 
       // Calculate default hours from event times
@@ -238,7 +193,7 @@ export default function AssignWorkersModal({
       }
 
       // Call parent's assign handler
-      onAssign(workerId, position, existingAssignment, defaultHours, event);
+      onAssign(workerId, position, existingAssignment, defaultHours);
 
     } catch (error) {
       alert('Error in assignment process: ' + error.message);
@@ -380,18 +335,6 @@ export default function AssignWorkersModal({
                   Show only unassigned workers
                 </label>
               </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="hideBlockedWorkers"
-                  checked={hideBlockedWorkers}
-                  onChange={(e) => setHideBlockedWorkers(e.target.checked)}
-                  className="rounded border-gray-300 text-red-900 focus:ring-red-500"
-                />
-                <label htmlFor="hideBlockedWorkers" className="text-sm text-gray-700 cursor-pointer">
-                  Hide workers with time conflicts
-                </label>
-              </div>
             </div>
 
             <div className="space-y-6">
@@ -531,11 +474,6 @@ export default function AssignWorkersModal({
                                   hasTimeConflict = true;
                                   conflictEvent = events.find(e => e.id === conflicts[0].event_id);
                                 }
-                              }
-                              
-                              // Skip this worker if hiding blocked workers and they have a time conflict
-                              if (hideBlockedWorkers && hasTimeConflict) {
-                                return null;
                               }
                               
                               return (
