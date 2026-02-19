@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload } from 'lucide-react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
@@ -329,9 +329,12 @@ export default function ProfileView({ worker, onProfileUpdate }) {
           </div>
           
           <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <Award size={24} className="mx-auto mb-2 text-purple-600" />
+            <Star size={24} className="mx-auto mb-2 text-yellow-500 fill-yellow-500" />
             <p className="text-sm text-gray-600 mb-1">Reliability</p>
-            <p className="text-2xl font-bold text-gray-900">{worker.reliability || 0}</p>
+            <div className="flex items-center justify-center space-x-1">
+              <p className="text-2xl font-bold text-gray-900">{worker.reliability || 0}</p>
+              <Star size={16} className="text-yellow-500 fill-yellow-500" />
+            </div>
           </div>
         </div>
       </div>

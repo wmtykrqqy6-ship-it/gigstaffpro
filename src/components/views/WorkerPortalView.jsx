@@ -5,6 +5,7 @@ import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
 import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
+import HistoryView from './HistoryView';
 
 export default function WorkerPortalView({
   loggedInWorker,
@@ -170,6 +171,14 @@ export default function WorkerPortalView({
         {/* Tab Content */}
         {currentTab === 'profile' ? (
           <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} />
+        ) : currentTab === 'history' ? (
+          <HistoryView 
+            worker={currentWorker}
+            assignments={assignments}
+            events={events}
+            timeFormat={timeFormat}
+            paymentTrackingEnabled={paymentTrackingEnabled}
+          />
         ) : (
           <>
         {/* Pending Applications Alert */}
@@ -188,52 +197,6 @@ export default function WorkerPortalView({
             </div>
           </div>
         )}
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Upcoming Events</p>
-                <p className="text-3xl font-bold text-gray-900">{upcomingAssignments.length}</p>
-              </div>
-              <Calendar className="text-blue-600" size={40} />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Total Gigs</p>
-                <p className="text-3xl font-bold text-gray-900">{currentWorker.total_gigs}</p>
-              </div>
-              <Briefcase className="text-green-600" size={40} />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-600">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Reliability Rating</p>
-                <div className="flex items-center space-x-1">
-                  <p className="text-3xl font-bold text-gray-900">{currentWorker.reliability}</p>
-                  <Star size={24} className="text-yellow-500 fill-yellow-500" />
-                </div>
-              </div>
-              <Award className="text-yellow-600" size={40} />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-600">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Total Earnings</p>
-                <p className="text-3xl font-bold text-gray-900">${totalEarnings.toLocaleString()}</p>
-              </div>
-              <DollarSign className="text-purple-600" size={40} />
-            </div>
-          </div>
-        </div>
 
         {/* Available Events - Events worker can apply to */}
         <AvailableEventsSection 

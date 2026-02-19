@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, LogOut, Menu, X, User, Calendar } from 'lucide-react';
+import { Bell, LogOut, Menu, X, User, Calendar, History } from 'lucide-react';
 
 export default function Header({
   userRole,
@@ -81,6 +81,20 @@ export default function Header({
                     >
                       <User size={18} />
                       <span>Profile</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onTabChange('history');
+                        setShowMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
+                        currentTab === 'history'
+                          ? 'bg-red-50 text-red-900 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <History size={18} />
+                      <span>History</span>
                     </button>
                   </div>
                 )}
