@@ -37,10 +37,9 @@ export default function EventsView({
   const getEventStaffingStatus = (event) => {
     if (!event.positions || event.positions.length === 0) return { filled: 0, total: 0, percentage: 0 };
     
-    // Count all assignments EXCEPT standby (check both fields)
+    // Count all assignments EXCEPT those with status='standby'
     const eventAssignments = assignments.filter(a => 
       a.event_id === event.id && 
-      !a.standby &&
       a.status !== 'standby'
     );
     const total = event.positions.reduce((sum, p) => sum + p.count, 0);
