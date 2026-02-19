@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getPositionLabel } from '../../utils/positionHelpers';
 
 export default function ProfileView({ worker, onProfileUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -296,7 +297,7 @@ export default function ProfileView({ worker, onProfileUpdate }) {
                 key={idx} 
                 className="bg-red-50 text-red-800 text-sm px-4 py-2 rounded-full font-medium border border-red-200"
               >
-                {skill}
+                {getPositionLabel(skill)}
               </span>
             ))
           ) : (
