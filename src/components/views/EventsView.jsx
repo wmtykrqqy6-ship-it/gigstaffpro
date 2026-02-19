@@ -37,11 +37,11 @@ export default function EventsView({
   const getEventStaffingStatus = (event) => {
     if (!event.positions || event.positions.length === 0) return { filled: 0, total: 0, percentage: 0 };
     
-    // Only count approved assignments that are NOT standby
+    // Count all assignments EXCEPT standby (check both fields)
     const eventAssignments = assignments.filter(a => 
       a.event_id === event.id && 
-      a.status === 'approved' && 
-      !a.standby
+      !a.standby &&
+      a.status !== 'standby'
     );
     const total = event.positions.reduce((sum, p) => sum + p.count, 0);
     const filled = eventAssignments.length;

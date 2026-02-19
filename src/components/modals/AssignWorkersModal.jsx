@@ -87,20 +87,22 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Count all assignments for this position EXCEPT standby
+    // Count all assignments for this position EXCEPT standby (check both fields)
     const filtered = eventAssignments.filter(a => 
       a.position === position && 
-      !a.standby
+      !a.standby &&
+      a.status !== 'standby'
     );
     
     // Debug logging
     console.log(`Position "${position}":`, {
       totalForPosition: eventAssignments.filter(a => a.position === position).length,
-      standbyCount: eventAssignments.filter(a => a.position === position && a.standby).length,
+      standbyCount: eventAssignments.filter(a => a.position === position && (a.standby || a.status === 'standby')).length,
       regularCount: filtered.length,
       assignments: eventAssignments.filter(a => a.position === position).map(a => ({
         worker: workers.find(w => w.id === a.worker_id)?.name,
-        standby: a.standby
+        standby: a.standby,
+        status: a.status
       }))
     });
     
@@ -413,7 +415,9 @@ export default function AssignWorkersModal({
                           <div className="mb-4">
                             <p className="text-sm font-medium text-gray-700 mb-2">Assigned:</p>
                             <div className="space-y-2">
-                              {posAssignments.map(assignment => {
+                              {posAssignments
+                                .filter(assignment => !assignment.standby && assignment.status !== 'standby') // Only non-standby
+                                .map(assignment => {
                                 const worker = workers.find(w => w.id === assignment.worker_id);
                                 if (!worker) return null;
                                 
