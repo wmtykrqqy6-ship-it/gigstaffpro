@@ -1046,6 +1046,7 @@ setAppPositions(storedPositions);
             alert('Error removing assignment: ' + error.message);
           }
         }}
+        onReloadAssignments={loadAssignments}
         onSavePaymentSettings={(eventId, settings) => {
           setEventPaymentSettings({
             ...eventPaymentSettings,

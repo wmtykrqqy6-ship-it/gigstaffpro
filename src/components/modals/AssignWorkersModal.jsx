@@ -14,7 +14,8 @@ export default function AssignWorkersModal({
   onClose,
   onAssign,
   onUnassign,
-  onSavePaymentSettings
+  onSavePaymentSettings,
+  onReloadAssignments
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
@@ -546,7 +547,10 @@ export default function AssignWorkersModal({
                                                     alert('Error promoting worker: ' + error.message);
                                                   } else {
                                                     alert(`${worker.name} promoted from standby!`);
-                                                    window.location.reload(); // Reload to refresh
+                                                    // Refresh assignments data instead of reloading page
+                                                    if (onReloadAssignments) {
+                                                      onReloadAssignments();
+                                                    }
                                                   }
                                                 })
                                                 .catch(err => alert('Error: ' + err.message));
