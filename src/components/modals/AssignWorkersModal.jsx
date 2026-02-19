@@ -87,12 +87,24 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Only count approved assignments that are NOT standby
-    return eventAssignments.filter(a => 
+    // Count all assignments for this position EXCEPT standby
+    const filtered = eventAssignments.filter(a => 
       a.position === position && 
-      a.status === 'approved' && 
       !a.standby
     );
+    
+    // Debug logging
+    console.log(`Position "${position}":`, {
+      totalForPosition: eventAssignments.filter(a => a.position === position).length,
+      standbyCount: eventAssignments.filter(a => a.position === position && a.standby).length,
+      regularCount: filtered.length,
+      assignments: eventAssignments.filter(a => a.position === position).map(a => ({
+        worker: workers.find(w => w.id === a.worker_id)?.name,
+        standby: a.standby
+      }))
+    });
+    
+    return filtered;
   };
 
   const getPositionCount = (positionKey) => {
@@ -427,6 +439,72 @@ export default function AssignWorkersModal({
                             </div>
                           </div>
                         )}
+
+                        {/* Standby List */}
+                        {(() => {
+                          const standbyAssignments = eventAssignments
+                            .filter(a => a.position === positionKey && a.status === 'standby')
+                            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Oldest first
+                          
+                          if (standbyAssignments.length === 0) return null;
+                          
+                          return (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-700 mb-2">
+                                Standby List ({standbyAssignments.length}):
+                              </p>
+                              <div className="space-y-2">
+                                {standbyAssignments.map((assignment, index) => {
+                                  const worker = workers.find(w => w.id === assignment.worker_id);
+                                  if (!worker) return null;
+                                  
+                                  return (
+                                    <div key={assignment.id} className="flex items-center justify-between bg-orange-50 border border-orange-200 p-3 rounded">
+                                      <div className="flex items-center space-x-3">
+                                        <div className="bg-orange-200 text-orange-800 font-bold text-sm w-7 h-7 rounded-full flex items-center justify-center">
+                                          {index + 1}
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-gray-900">{worker.name}</p>
+                                          <p className="text-xs text-gray-600">{worker.phone}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => {
+                                            if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
+                                              // Update assignment to remove standby status
+                                              supabase
+                                                .from('assignments')
+                                                .update({ status: 'approved', standby: false })
+                                                .eq('id', assignment.id)
+                                                .then(() => {
+                                                  alert(`${worker.name} promoted from standby!`);
+                                                  window.location.reload(); // Reload to refresh
+                                                })
+                                                .catch(err => alert('Error: ' + err.message));
+                                            }
+                                          }}
+                                          className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                          title="Promote to assigned"
+                                        >
+                                          Promote
+                                        </button>
+                                        <button
+                                          onClick={() => unassignWorker(assignment.id)}
+                                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                          title="Remove from standby"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Available Workers */}
                         {!isFull && (

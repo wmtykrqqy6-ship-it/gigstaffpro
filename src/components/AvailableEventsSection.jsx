@@ -390,13 +390,24 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       );
 
                       if (onStandby) {
+                        // Calculate standby position (1st, 2nd, 3rd in line)
+                        const standbyList = assignments
+                          .filter(a =>
+                            a.event_id === event.id &&
+                            a.status === 'standby' &&
+                            (getPositionKey(a.position) === positionKey || a.position === position)
+                          )
+                          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Oldest first
+                        
+                        const standbyPosition = standbyList.findIndex(a => a.worker_id === currentWorker.id) + 1;
+                        
                         return (
                           <div
                             key={position}
                             className="bg-orange-100 border-2 border-orange-400 text-orange-800 text-xs px-3 py-1 rounded-lg font-medium flex items-center space-x-1"
                           >
                             <Clock size={14} />
-                            <span>On Standby: {position}</span>
+                            <span>On Standby #{standbyPosition}: {position}</span>
                           </div>
                         );
                       }
