@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X } from 'lucide-react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 export default function ProfileView({ worker, onProfileUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editData, setEditData] = useState({
     email: worker?.email || '',
     phone: worker?.phone || '',
@@ -19,6 +20,62 @@ export default function ProfileView({ worker, onProfileUpdate }) {
       </div>
     );
   }
+
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${worker.id}-${Date.now()}.${fileExt}`;
+      const filePath = `profile-photos/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('worker-photos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('worker-photos')
+        .getPublicUrl(filePath);
+
+      // Update worker record with photo URL
+      const { error: updateError } = await supabase
+        .from('workers')
+        .update({ photo_url: publicUrl })
+        .eq('id', worker.id);
+
+      if (updateError) throw updateError;
+
+      // Reload worker data
+      if (onProfileUpdate) {
+        await onProfileUpdate();
+      }
+
+      alert('✅ Profile photo updated!');
+    } catch (error) {
+      alert('Error uploading photo: ' + error.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -65,9 +122,42 @@ export default function ProfileView({ worker, onProfileUpdate }) {
       <div className="bg-gradient-to-r from-red-900 to-red-800 rounded-lg shadow p-6 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="bg-white bg-opacity-20 rounded-full p-4">
-              <User size={32} />
+            {/* Profile Photo */}
+            <div className="relative">
+              <div className="bg-white bg-opacity-20 rounded-full p-1 w-24 h-24 flex items-center justify-center overflow-hidden">
+                {worker.photo_url ? (
+                  <img 
+                    src={worker.photo_url} 
+                    alt={worker.name}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <User size={48} />
+                )}
+              </div>
+              
+              {/* Upload Photo Button */}
+              <label 
+                htmlFor="photo-upload"
+                className="absolute bottom-0 right-0 bg-white text-red-900 rounded-full p-2 cursor-pointer hover:bg-gray-100 transition-colors shadow-lg"
+                title="Change profile photo"
+              >
+                {uploadingPhoto ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900"></div>
+                ) : (
+                  <Camera size={20} />
+                )}
+              </label>
+              <input
+                id="photo-upload"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={uploadingPhoto}
+                className="hidden"
+              />
             </div>
+            
             <div>
               <h2 className="text-2xl font-bold">{worker.name}</h2>
               <p className="text-red-100">Worker Portal Profile</p>

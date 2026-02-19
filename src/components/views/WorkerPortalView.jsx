@@ -155,15 +155,17 @@ export default function WorkerPortalView({
 
     return (
       <div className="space-y-6">
-        {/* Header with worker info */}
-        <div className="bg-gradient-to-r from-red-900 to-black text-white rounded-lg shadow-lg p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Welcome, {currentWorker.name}!</h2>
-              <p className="text-red-200">Your worker portal</p>
+        {/* Header with worker info - Only show on dashboard */}
+        {currentTab === 'dashboard' && (
+          <div className="bg-gradient-to-r from-red-900 to-black text-white rounded-lg shadow-lg p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-3xl font-bold mb-2">Welcome, {currentWorker.name}!</h2>
+                <p className="text-red-200">Your worker portal</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Tab Content */}
         {currentTab === 'profile' ? (
