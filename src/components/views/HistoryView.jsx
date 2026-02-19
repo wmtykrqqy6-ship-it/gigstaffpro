@@ -58,7 +58,7 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-600">
           <div className="flex items-center justify-between">
             <div>
@@ -66,16 +66,6 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
               <p className="text-2xl font-bold text-gray-900">{pastAssignments.length}</p>
             </div>
             <Calendar className="text-blue-600" size={32} />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Total Hours</p>
-              <p className="text-2xl font-bold text-gray-900">{totalHours.toFixed(1)}</p>
-            </div>
-            <Clock className="text-green-600" size={32} />
           </div>
         </div>
 
@@ -90,16 +80,6 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
             </div>
           </div>
         )}
-
-        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Venues Worked</p>
-              <p className="text-2xl font-bold text-gray-900">{uniqueVenues}</p>
-            </div>
-            <MapPin className="text-orange-600" size={32} />
-          </div>
-        </div>
       </div>
 
       {/* View Toggle */}
@@ -109,7 +89,7 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
         </h3>
         <button
           onClick={() => setViewMode(viewMode === 'recent' ? 'all' : 'recent')}
-          className="text-red-900 hover:text-red-700 font-medium text-sm"
+          className="bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
           {viewMode === 'recent' ? `View All (${pastAssignments.length})` : 'View Recent (10)'}
         </button>
