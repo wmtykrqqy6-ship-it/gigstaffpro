@@ -67,6 +67,8 @@ export default function ApplicationsView({
         const currentApproved = assignments.filter(a => {
           if (a.event_id !== app.event_id) return false;
           if (a.id === applicationId) return false;
+          // Exclude standby workers from count
+          if (a.status === 'standby') return false;
           // Admin-assigned directly = null/undefined status. Count anything NOT pending/rejected/cancelled.
           const s = a.status;
           if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
