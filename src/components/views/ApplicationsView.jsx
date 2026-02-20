@@ -119,9 +119,14 @@ export default function ApplicationsView({
         if (positionDef) {
           const maxCount = positionDef.count || 1;
           
+          // Fetch FRESH assignments data (we just updated one!)
+          const { data: freshAssignments } = await supabase
+            .from('assignments')
+            .select('*')
+            .eq('event_id', app.event_id);
+          
           // Count currently approved workers (excluding standby)
-          const currentApproved = assignments.filter(a => {
-            if (a.event_id !== app.event_id) return false;
+          const currentApproved = (freshAssignments || []).filter(a => {
             if (a.status === 'standby') return false;
             const s = a.status;
             if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
@@ -131,10 +136,11 @@ export default function ApplicationsView({
                    getPositionKey(a.position) === getPositionKey(app.position);
           }).length;
           
+          console.log(`Position check: ${app.position} | Approved: ${currentApproved} | Max: ${maxCount}`);
+          
           // If position is now full, convert all pending applications to standby
           if (currentApproved >= maxCount) {
-            const pendingApps = assignments.filter(a => {
-              if (a.event_id !== app.event_id) return false;
+            const pendingApps = (freshAssignments || []).filter(a => {
               if (a.status !== 'pending') return false;
               return a.position === app.position ||
                      a.position === positionDef.key ||
