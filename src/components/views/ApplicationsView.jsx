@@ -460,11 +460,11 @@ export default function ApplicationsView({
 
                   {/* Actions */}
                   {app.status === 'pending' && (
-                    <div className="flex space-x-2 ml-4">
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 mt-3 sm:mt-0">
                       <button
                         onClick={() => handleApprove(app.id)}
                         disabled={processingId === app.id}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
                       >
                         <CheckCircle size={18} />
                         <span>Approve</span>
@@ -472,7 +472,7 @@ export default function ApplicationsView({
                       <button
                         onClick={() => handleReject(app.id)}
                         disabled={processingId === app.id}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
                       >
                         <XCircle size={18} />
                         <span>Reject</span>
@@ -480,11 +480,11 @@ export default function ApplicationsView({
                     </div>
                   )}
                   {app.status === 'standby' && (
-                    <div className="flex space-x-2 ml-4">
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 mt-3 sm:mt-0">
                       <button
                         onClick={() => handleApprove(app.id)}
                         disabled={processingId === app.id}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
                       >
                         <CheckCircle size={18} />
                         <span>Promote to Approved</span>
@@ -492,7 +492,7 @@ export default function ApplicationsView({
                       <button
                         onClick={() => handleReject(app.id)}
                         disabled={processingId === app.id}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
                       >
                         <XCircle size={18} />
                         <span>Remove</span>
