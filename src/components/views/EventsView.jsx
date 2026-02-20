@@ -280,6 +280,22 @@ export default function EventsView({
                           {staffingStatus.filled}/{staffingStatus.total} staffed
                         </span>
                       )}
+                      {(() => {
+                        // Count standby workers for this event
+                        const standbyCount = assignments.filter(a => 
+                          a.event_id === event.id && 
+                          a.status === 'standby'
+                        ).length;
+                        
+                        if (standbyCount > 0) {
+                          return (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                              {standbyCount} on standby
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                   <div className="flex space-x-2">
@@ -351,10 +367,32 @@ export default function EventsView({
                         const posLabel = getPositionLabel(posKey);
                         const count = pos.count || 1;
                         
+                        // Count pending and standby for this position
+                        const pendingCount = assignments.filter(a => 
+                          a.event_id === event.id && 
+                          a.status === 'pending' &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        ).length;
+                        
+                        const standbyCount = assignments.filter(a => 
+                          a.event_id === event.id && 
+                          a.status === 'standby' &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        ).length;
+                        
                         return (
-                        <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded flex justify-between items-center">
-                          <span className="font-medium">{posLabel}</span>
-                          <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
+                        <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-medium">{posLabel}</span>
+                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
+                          </div>
+                          {(pendingCount > 0 || standbyCount > 0) && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              {pendingCount > 0 && <span>{pendingCount} pending</span>}
+                              {pendingCount > 0 && standbyCount > 0 && <span>, </span>}
+                              {standbyCount > 0 && <span className="text-orange-700">{standbyCount} standby</span>}
+                            </div>
+                          )}
                         </div>
                         );
                       })}
