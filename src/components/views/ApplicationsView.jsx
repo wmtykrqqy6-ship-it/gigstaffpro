@@ -105,6 +105,60 @@ export default function ApplicationsView({
       
       if (error) throw error;
       
+      // ✅ AUTO-CONVERT: Check if position is now full, convert pending to standby
+      const event = events.find(e => e.id === app.event_id);
+      if (event && event.positions) {
+        const positionDef = event.positions.find(p => {
+          const pKey = p.key || p.name;
+          return pKey === app.position ||
+                 p.name === app.position ||
+                 p.key === app.position ||
+                 getPositionKey(p.name || p.key) === getPositionKey(app.position);
+        });
+        
+        if (positionDef) {
+          const maxCount = positionDef.count || 1;
+          
+          // Count currently approved workers (excluding standby)
+          const currentApproved = assignments.filter(a => {
+            if (a.event_id !== app.event_id) return false;
+            if (a.status === 'standby') return false;
+            const s = a.status;
+            if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
+            return a.position === app.position ||
+                   a.position === positionDef.key ||
+                   a.position === positionDef.name ||
+                   getPositionKey(a.position) === getPositionKey(app.position);
+          }).length;
+          
+          // If position is now full, convert all pending applications to standby
+          if (currentApproved >= maxCount) {
+            const pendingApps = assignments.filter(a => {
+              if (a.event_id !== app.event_id) return false;
+              if (a.status !== 'pending') return false;
+              return a.position === app.position ||
+                     a.position === positionDef.key ||
+                     a.position === positionDef.name ||
+                     getPositionKey(a.position) === getPositionKey(app.position);
+            });
+            
+            if (pendingApps.length > 0) {
+              // Convert all pending to standby
+              const { error: standbyError } = await supabase
+                .from('assignments')
+                .update({ status: 'standby' })
+                .in('id', pendingApps.map(a => a.id));
+              
+              if (standbyError) {
+                console.error('Error converting to standby:', standbyError);
+              } else {
+                console.log(`✅ Auto-converted ${pendingApps.length} pending applications to standby`);
+              }
+            }
+          }
+        }
+      }
+      
       onReloadAssignments();
       alert('Application approved!');
     } catch (error) {
