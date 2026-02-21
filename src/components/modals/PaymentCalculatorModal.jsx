@@ -33,7 +33,7 @@ export default function PaymentCalculatorModal({
               event_id: selectedEvent.id,
               worker_id: assignmentData.workerId,
               position: assignmentData.position,
-              status: 'assigned'
+              status: 'approved'
             }]);
           
           if (error) throw error;
@@ -97,7 +97,7 @@ export default function PaymentCalculatorModal({
           event_id: selectedEvent.id,
           worker_id: assignmentData.workerId,
           position: assignmentData.position,
-          status: 'assigned',
+          status: 'approved',
           hours: hours,
           miles: miles,
           is_lake_geneva: isLakeGeneva,
@@ -136,6 +136,7 @@ export default function PaymentCalculatorModal({
             if (a.status === 'standby') return false;
             const s = a.status;
             if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
+            if (s !== 'approved' && s !== null && s !== undefined) return false;
             return a.position === assignmentData.position ||
                    a.position === positionDef.key ||
                    a.position === positionDef.name;
