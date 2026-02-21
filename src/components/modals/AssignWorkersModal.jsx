@@ -88,23 +88,11 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Count all assignments for this position EXCEPT those with status='standby'
+    // Only count approved (or legacy null/undefined status) assignments - not standby, pending, rejected, or cancelled
     const filtered = eventAssignments.filter(a => 
       a.position === position && 
-      a.status !== 'standby'
+      (a.status === 'approved' || a.status === null || a.status === undefined)
     );
-    
-    // Debug logging
-    console.log(`Position "${position}":`, {
-      totalForPosition: eventAssignments.filter(a => a.position === position).length,
-      standbyCount: eventAssignments.filter(a => a.position === position && a.status === 'standby').length,
-      regularCount: filtered.length,
-      assignments: eventAssignments.filter(a => a.position === position).map(a => ({
-        worker: workers.find(w => w.id === a.worker_id)?.name,
-        status: a.status
-      }))
-    });
-    
     return filtered;
   };
 
