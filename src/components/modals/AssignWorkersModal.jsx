@@ -88,10 +88,10 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Only count approved (or legacy null/undefined status) assignments - not standby, pending, rejected, or cancelled
+    // Count approved/assigned (legacy) assignments only - exclude standby, pending, rejected, cancelled
     const filtered = eventAssignments.filter(a => 
       a.position === position && 
-      (a.status === 'approved' || a.status === null || a.status === undefined)
+      (a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined)
     );
     return filtered;
   };
