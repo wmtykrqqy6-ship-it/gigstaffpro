@@ -1,508 +1,717 @@
-import React, { useState } from 'react';
-import { Clock, CheckCircle, FileText, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Search, CheckCircle, Trash2 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel, getPositionKey } from '../../utils/positionHelpers';
-import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
+import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 
-export default function ApplicationsView({
-  assignments,
+export default function AssignWorkersModal({
+  open,
+  event,
   workers,
   events,
-  timeFormat,
+  assignments,
+  positions,
+  eventPaymentSettings,
+  onClose,
+  onAssign,
+  onUnassign,
+  onSavePaymentSettings,
   onReloadAssignments
 }) {
-  const [filter, setFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
   const [searchTerm, setSearchTerm] = useState('');
-  const [processingId, setProcessingId] = useState(null);
+  const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  const [showEventPaymentSettings, setShowEventPaymentSettings] = useState(false);
+  const [eventHours, setEventHours] = useState(0);
+  const [eventMiles, setEventMiles] = useState(0);
+  const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
+  const [eventIsHoliday, setEventIsHoliday] = useState(false);
+  const [expandedPositions, setExpandedPositions] = useState({});
+  
+  const togglePosition = (position) => {
+    setExpandedPositions(prev => ({
+      ...prev,
+      [position]: !prev[position]
+    }));
+  };
 
-  // Get all applications with worker and event details
-  const applications = assignments
-    .map(assignment => {
-      const worker = workers.find(w => w.id === assignment.worker_id);
-      const event = events.find(e => e.id === assignment.event_id);
-      return { ...assignment, worker, event };
-    })
-    .filter(app => app.worker && app.event) // Only include valid applications
-    .sort((a, b) => new Date(b.applied_at || b.created_at) - new Date(a.applied_at || a.created_at)); // Newest first
-
-  // Apply filters
-  const filteredApplications = applications.filter(app => {
-    // Status filter
-    if (filter === 'pending' && app.status !== 'pending') return false;
-    if (filter === 'approved' && app.status !== 'approved') return false;
-    if (filter === 'rejected' && app.status !== 'rejected') return false;
-    if (filter === 'standby' && app.status !== 'standby') return false;
+  // Initialize event payment settings from event or calculate defaults
+  useEffect(() => {
+    if (!event) return; // Guard against null event
     
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      const matchesWorker = app.worker.name.toLowerCase().includes(search);
-      const matchesEvent = app.event.name.toLowerCase().includes(search);
-      const matchesPosition = (app.position || '').toLowerCase().includes(search);
-      if (!matchesWorker && !matchesEvent && !matchesPosition) return false;
+    if (!eventPaymentSettings[event.id]) {
+      // Calculate default hours
+      let defaultHours = 4;
+      if (event.time && event.end_time) {
+        const parseTime = (timeStr) => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours + minutes / 60;
+        };
+        const startHours = parseTime(event.time);
+        const endHours = parseTime(event.end_time);
+        defaultHours = endHours - startHours;
+        if (defaultHours < 0) defaultHours += 24;
+      }
+      
+      setEventHours(defaultHours);
+      setEventMiles(0);
+      setEventIsLakeGeneva(false);
+      setEventIsHoliday(false);
+    } else if (event && eventPaymentSettings[event.id]) {
+      // Load saved settings
+      const settings = eventPaymentSettings[event.id];
+      setEventHours(settings.hours);
+      setEventMiles(settings.miles);
+      setEventIsLakeGeneva(settings.isLakeGeneva);
+      setEventIsHoliday(settings.isHoliday);
+    }
+  }, [event, eventPaymentSettings]);
+
+  // Early return AFTER all hooks
+  if (!open || !event) return null;
+
+  const saveEventPaymentSettings = () => {
+    if (eventHours <= 0) {
+      alert('Hours must be greater than 0');
+      return;
     }
     
-    return true;
-  });
+    onSavePaymentSettings(event.id, {
+      hours: eventHours,
+      miles: eventMiles,
+      isLakeGeneva: eventIsLakeGeneva,
+      isHoliday: eventIsHoliday
+    });
+    
+    setShowEventPaymentSettings(false);
+    alert('Payment settings saved! All new assignments will use these settings.');
+  };
 
-  const handleApprove = async (applicationId) => {
-    const app = applications.find(a => a.id === applicationId);
-    if (!app) return;
+  const eventAssignments = assignments.filter(a => a.event_id === event.id);
+  
+  const getPositionAssignments = (position) => {
+    // Only count approved (or legacy null/undefined status) assignments - not standby, pending, rejected, or cancelled
+    const filtered = eventAssignments.filter(a => 
+      a.position === position && 
+      (a.status === 'approved' || a.status === null || a.status === undefined)
+    );
+    return filtered;
+  };
 
-    const isStandbyPromotion = app.status === 'standby';
+  const getPositionCount = (positionKey) => {
+    // Find position by key OR by name (for backward compatibility)
+    const pos = event.positions?.find(p => {
+      const pKey = p.key || p.name || p;
+      return pKey === positionKey || p.name === positionKey;
+    });
+    return pos ? pos.count : 0;
+  };
 
-    // ✅ Check if position is already full - SKIP this check for standby promotions
-    // (admin is intentionally promoting someone from the standby list)
-    const event = events.find(e => e.id === app.event_id);
-    if (!isStandbyPromotion && event && event.positions && Array.isArray(event.positions)) {
-      const positionDef = event.positions.find(p => {
-        const pKey = p.key || p.name;
-        return pKey === app.position ||
-               p.name === app.position ||
-               p.key === app.position ||
-               getPositionKey(p.name || p.key) === getPositionKey(app.position) ||
-               getPositionLabel(p.key) === app.position ||
-               getPositionLabel(p.name) === app.position;
-      });
+  const isPositionFilled = (position) => {
+    const needed = getPositionCount(position);
+    const assigned = getPositionAssignments(position).length;
+    return assigned >= needed;
+  };
 
-      if (positionDef) {
-        const maxCount = positionDef.count || 1;
-        const currentApproved = assignments.filter(a => {
-          if (a.event_id !== app.event_id) return false;
-          if (a.id === applicationId) return false;
-          // Exclude standby workers from count
-          if (a.status === 'standby') return false;
-          // Admin-assigned directly = null/undefined status. Count anything NOT pending/rejected/cancelled.
-          const s = a.status;
-          if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
-          return a.position === app.position ||
-                 a.position === positionDef.key ||
-                 a.position === positionDef.name ||
-                 getPositionKey(a.position) === getPositionKey(app.position) ||
-                 getPositionLabel(a.position) === getPositionLabel(app.position);
-        }).length;
-
-        console.log(`Approve check: "${app.position}" | approved: ${currentApproved} | max: ${maxCount}`);
-
-        if (currentApproved >= maxCount) {
+  const assignWorker = async (workerId, position, existingAssignment = null) => {
+    try {
+      const worker = workers.find(w => w.id === workerId);
+      
+      // Check for time conflicts with other events
+      const workerOtherAssignments = assignments.filter(a => 
+        a.worker_id === workerId && 
+        a.event_id !== event.id
+      );
+      
+      if (workerOtherAssignments.length > 0) {
+        const conflicts = workerOtherAssignments.filter(assignment => {
+          const otherEvent = events.find(e => e.id === assignment.event_id);
+          if (!otherEvent) return false;
+          if (otherEvent.date !== event.date) return false;
+          
+          const parseTime = (timeStr) => {
+            if (!timeStr) return null;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+          
+          const thisStart = parseTime(event.time);
+          const thisEnd = parseTime(event.end_time);
+          const otherStart = parseTime(otherEvent.time);
+          const otherEnd = parseTime(otherEvent.end_time);
+          
+          if (!thisEnd || !otherEnd) return false;
+          
+          const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+          return hasOverlap;
+        });
+        
+        if (conflicts.length > 0) {
+          const conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+          const conflictPosition = conflicts[0].position;
+          
           alert(
-            `⚠️ POSITION FULL!\n\n` +
-            `Cannot approve this application.\n\n` +
-            `${app.position} for "${event.name}" is already fully staffed.\n` +
-            `Current: ${currentApproved}/${maxCount}\n\n` +
-            `Please reject this application or increase the position count in the event.`
+            `⚠️ Time Conflict!\n\n` +
+            `${worker.name} is already assigned to:\n` +
+            `"${conflictEvent.name}"\n` +
+            `${conflictEvent.time}${conflictEvent.end_time ? ` - ${conflictEvent.end_time}` : ''}\n` +
+            `Position: ${conflictPosition}\n\n` +
+            `This overlaps with "${event.name}" (${event.time}${event.end_time ? ` - ${event.end_time}` : ''})`
           );
           return;
         }
       }
-    }
-
-    if (!confirm('Approve this application?')) return;
-    
-    setProcessingId(applicationId);
-    try {
-      const { error } = await supabase
-        .from('assignments')
-        .update({ status: 'approved' })
-        .eq('id', applicationId);
       
-      if (error) throw error;
-      
-      // ✅ AUTO-CONVERT: Check if position is now full, convert pending to standby
-      const event = events.find(e => e.id === app.event_id);
-      if (event && event.positions) {
-        const positionDef = event.positions.find(p => {
-          const pKey = p.key || p.name;
-          return pKey === app.position ||
-                 p.name === app.position ||
-                 p.key === app.position ||
-                 getPositionKey(p.name || p.key) === getPositionKey(app.position);
-        });
-        
-        if (positionDef) {
-          const maxCount = positionDef.count || 1;
-          
-          // Fetch FRESH assignments data (we just updated one!)
-          const { data: freshAssignments } = await supabase
-            .from('assignments')
-            .select('*')
-            .eq('event_id', app.event_id);
-          
-          // Count currently approved workers (excluding standby)
-          const currentApproved = (freshAssignments || []).filter(a => {
-            if (a.status === 'standby') return false;
-            const s = a.status;
-            if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
-            return a.position === app.position ||
-                   a.position === positionDef.key ||
-                   a.position === positionDef.name ||
-                   getPositionKey(a.position) === getPositionKey(app.position);
-          }).length;
-          
-          console.log(`Position check: ${app.position} | Approved: ${currentApproved} | Max: ${maxCount}`);
-          
-          // If position is now full, convert all pending applications to standby
-          if (currentApproved >= maxCount) {
-            const pendingApps = (freshAssignments || []).filter(a => {
-              if (a.status !== 'pending') return false;
-              return a.position === app.position ||
-                     a.position === positionDef.key ||
-                     a.position === positionDef.name ||
-                     getPositionKey(a.position) === getPositionKey(app.position);
-            });
-            
-            if (pendingApps.length > 0) {
-              // Convert all pending to standby
-              const { error: standbyError } = await supabase
-                .from('assignments')
-                .update({ status: 'standby' })
-                .in('id', pendingApps.map(a => a.id));
-              
-              if (standbyError) {
-                console.error('Error converting to standby:', standbyError);
-              } else {
-                console.log(`✅ Auto-converted ${pendingApps.length} pending applications to standby`);
-              }
-            }
-          }
+      // If worker is already assigned to a different position, confirm reassignment
+      if (existingAssignment) {
+        if (!confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`)) {
+          return;
         }
+        
+        const { error: deleteError } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('id', existingAssignment.id);
+        
+        if (deleteError) throw deleteError;
       }
-      
-      onReloadAssignments();
-      alert('Application approved!');
-    } catch (error) {
-      alert('Error approving application: ' + error.message);
-    } finally {
-      setProcessingId(null);
-    }
-  };
 
-  const handleBulkApprove = async () => {
-    const pendingApps = filteredApplications.filter(app => app.status === 'pending');
-    
-    if (pendingApps.length === 0) {
-      alert('No pending applications to approve.');
-      return;
-    }
-
-    // ✅ Check each application for position capacity before bulk approving
-    const overfilledApps = [];
-    const approvableApps = [];
-
-    for (const app of pendingApps) {
-      const event = events.find(e => e.id === app.event_id);
-      if (!event) { approvableApps.push(app); continue; }
-
-      const positionDef = event.positions?.find(p => 
-        p.key === app.position || p.name === app.position
-      );
-      if (!positionDef) { approvableApps.push(app); continue; }
-
-      const maxCount = positionDef.count || 1;
-      // Count currently approved + any we've already added to approvableApps
-      const currentApproved = assignments.filter(a => 
-        a.event_id === app.event_id && 
-        a.position === app.position && 
-        a.status === 'approved'
-      ).length;
-      const pendingApprovalCount = approvableApps.filter(a =>
-        a.event_id === app.event_id && a.position === app.position
-      ).length;
-
-      if (currentApproved + pendingApprovalCount >= maxCount) {
-        overfilledApps.push(app);
-      } else {
-        approvableApps.push(app);
+      // Check if position is full
+      if (isPositionFilled(position)) {
+        alert(`${position} is already fully staffed`);
+        return;
       }
-    }
 
-    // Warn about overfilled positions
-    if (overfilledApps.length > 0) {
-      const names = overfilledApps.map(a => `• ${a.worker?.name} - ${a.position} @ ${a.event?.name}`).join('\n');
-      const proceed = confirm(
-        `⚠️ ${overfilledApps.length} application(s) cannot be approved - position already full:\n\n${names}\n\n` +
-        `Approve the remaining ${approvableApps.length} application(s)?`
-      );
-      if (!proceed) return;
-    } else {
-      if (!confirm(`Approve ${approvableApps.length} pending application(s)?`)) return;
-    }
+      // Calculate default hours from event times
+      let defaultHours = 4;
+      if (event.time && event.end_time) {
+        const parseTime = (timeStr) => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours + minutes / 60;
+        };
+        const startHours = parseTime(event.time);
+        const endHours = parseTime(event.end_time);
+        defaultHours = endHours - startHours;
+        if (defaultHours < 0) defaultHours += 24; // Handle overnight events
+      }
 
-    if (approvableApps.length === 0) {
-      alert('No applications could be approved - all positions are full.');
-      return;
-    }
-    
-    setProcessingId('bulk');
-    try {
-      const ids = approvableApps.map(app => app.id);
-      
-      const { error } = await supabase
-        .from('assignments')
-        .update({ status: 'approved' })
-        .in('id', ids);
-      
-      if (error) throw error;
-      
-      onReloadAssignments();
-      alert(`✓ ${approvableApps.length} application(s) approved!${overfilledApps.length > 0 ? `\n${overfilledApps.length} skipped (position full).` : ''}`);
+      // Call parent's assign handler
+      onAssign(workerId, position, existingAssignment, defaultHours);
+
     } catch (error) {
-      alert('Error bulk approving: ' + error.message);
-    } finally {
-      setProcessingId(null);
+      alert('Error in assignment process: ' + error.message);
     }
   };
 
-  const handleReject = async (applicationId) => {
-    if (!confirm('Reject this application? This will remove the assignment.')) return;
-    
-    setProcessingId(applicationId);
-    try {
-      const { error } = await supabase
-        .from('assignments')
-        .delete()
-        .eq('id', applicationId);
-      
-      if (error) throw error;
-      
-      onReloadAssignments();
-      alert('Application rejected and removed.');
-    } catch (error) {
-      alert('Error rejecting application: ' + error.message);
-    } finally {
-      setProcessingId(null);
-    }
+  const unassignWorker = async (assignmentId) => {
+    if (!confirm('Remove this worker assignment?')) return;
+    onUnassign(assignmentId);
   };
-
-  const pendingCount = applications.filter(a => a.status === 'pending').length;
-  const approvedCount = applications.filter(a => a.status === 'approved').length;
-  const standbyCount = applications.filter(a => a.status === 'standby').length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-gray-900">Applications</h2>
-        <p className="text-sm text-gray-600 mt-1">Review and manage worker applications</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-yellow-600 font-medium">Pending Review</p>
-              <p className="text-3xl font-bold text-yellow-900 mt-1">{pendingCount}</p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+      <div className="min-h-screen flex items-center justify-center p-4 py-8">
+        <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full">
+          <div className="p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Assign Workers</h3>
+                <p className="text-sm text-gray-600 mt-1">{event.name}</p>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                <X size={24} />
+              </button>
             </div>
-            <Clock size={32} className="text-yellow-600" />
-          </div>
-        </div>
 
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 font-medium">Approved</p>
-              <p className="text-3xl font-bold text-green-900 mt-1">{approvedCount}</p>
-            </div>
-            <CheckCircle size={32} className="text-green-600" />
-          </div>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600 font-medium">Total Applications</p>
-              <p className="text-3xl font-bold text-blue-900 mt-1">{applications.length}</p>
-            </div>
-            <FileText size={32} className="text-blue-600" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Status filter */}
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'all'
-                  ? 'bg-red-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'pending'
-                  ? 'bg-yellow-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Pending ({pendingCount})
-            </button>
-            <button
-              onClick={() => setFilter('approved')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'approved'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Approved
-            </button>
-            <button
-              onClick={() => setFilter('standby')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'standby'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Standby ({standbyCount})
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="flex-1">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by worker, event, or position..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-          
-          {/* Bulk Actions */}
-          {pendingCount > 0 && (
-            <button
-              onClick={handleBulkApprove}
-              disabled={processingId === 'bulk'}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium whitespace-nowrap flex items-center space-x-2"
-            >
-              <CheckCircle size={18} />
-              <span>Approve All Pending ({pendingCount})</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Applications List */}
-      <div className="bg-white rounded-lg shadow">
-        {filteredApplications.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Found</h3>
-            <p className="text-gray-600">
-              {filter === 'pending' 
-                ? 'No pending applications to review.' 
-                : 'Try adjusting your filters or search terms.'}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {filteredApplications.map(app => (
-              <div key={app.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                {/* Application Info */}
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <h3 className="text-lg font-bold text-gray-900">{app.worker.name}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    app.status === 'approved' ? 'bg-green-100 text-green-800' :
-                    app.status === 'standby' ? 'bg-orange-100 text-orange-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {app.status === 'pending' ? 'Pending Review' : 
-                     app.status === 'approved' ? 'Approved' :
-                     app.status === 'standby' ? 'Standby' : 'Rejected'}
-                  </span>
-                  {app.worker.rank <= 2 && (
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      app.worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      Rank {app.worker.rank}
-                    </span>
-                  )}
-                  {app.worker.reliability >= 4.5 && (
-                    <span className="text-sm text-yellow-600">⭐ {app.worker.reliability.toFixed(1)}</span>
-                  )}
+            {/* Event Payment Settings */}
+            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-gray-900">Event Payment Settings</h4>
+                <button
+                  onClick={() => setShowEventPaymentSettings(!showEventPaymentSettings)}
+                  className="text-sm text-green-700 hover:text-green-900 font-medium"
+                >
+                  {showEventPaymentSettings ? 'Hide' : eventPaymentSettings[event.id] ? 'Edit Settings' : 'Set Payment Details'}
+                </button>
+              </div>
+              
+              {eventPaymentSettings[event.id] && !showEventPaymentSettings && (
+                <div className="text-sm text-gray-700">
+                  <p>✓ Payment configured: {eventPaymentSettings[event.id].hours} hrs, {eventPaymentSettings[event.id].miles} miles
+                    {eventPaymentSettings[event.id].isLakeGeneva && ', Lake Geneva'}
+                    {eventPaymentSettings[event.id].isHoliday && ', Holiday'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">New assignments will automatically use these settings</p>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm mb-4">
-                  <div>
-                    <p className="text-gray-500">Event</p>
-                    <p className="font-medium text-gray-900">{app.event.name}</p>
-                    <p className="text-xs text-gray-600">
-                      {parseDateSafe(app.event.date).toLocaleDateString('en-US', { 
-                        weekday: 'short', month: 'short', day: 'numeric' 
-                      })} • {formatTime(app.event.time, timeFormat)}
-                    </p>
-                  </div>
+              {!eventPaymentSettings[event.id] && !showEventPaymentSettings && (
+                <p className="text-sm text-gray-600">
+                  Set payment details once for this event - all assignments will use the same settings
+                </p>
+              )}
 
-                  <div>
-                    <p className="text-gray-500">Position</p>
-                    <p className="font-medium text-gray-900">{getPositionLabel(app.position)}</p>
+              {showEventPaymentSettings && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Hours *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={eventHours}
+                        onChange={(e) => setEventHours(parseFloat(e.target.value) || 0)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Miles *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={eventMiles}
+                        onChange={(e) => setEventMiles(parseInt(e.target.value, 10) || 0)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
                   </div>
-
-                  <div>
-                    <p className="text-gray-500">Applied</p>
-                    <p className="font-medium text-gray-900">
-                      {app.applied_at 
-                        ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                        : 'N/A'}
-                    </p>
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={eventIsLakeGeneva}
+                        onChange={(e) => setEventIsLakeGeneva(e.target.checked)}
+                        className="rounded border-gray-300 text-green-700 focus:ring-green-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Lake Geneva (+$15)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={eventIsHoliday}
+                        onChange={(e) => setEventIsHoliday(e.target.checked)}
+                        className="rounded border-gray-300 text-green-700 focus:ring-green-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Holiday (1.5×)</span>
+                    </label>
                   </div>
+                  <button
+                    onClick={saveEventPaymentSettings}
+                    className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    Save Payment Settings
+                  </button>
                 </div>
+              )}
+            </div>
 
-                {/* Actions - always full width below info */}
-                {app.status === 'pending' && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => handleApprove(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <CheckCircle size={18} />
-                      <span>Approve</span>
-                    </button>
-                    <button
-                      onClick={() => handleReject(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <XCircle size={18} />
-                      <span>Reject</span>
-                    </button>
-                  </div>
-                )}
-                {app.status === 'standby' && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => handleApprove(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <CheckCircle size={18} />
-                      <span>Promote to Approved</span>
-                    </button>
-                    <button
-                      onClick={() => handleReject(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <XCircle size={18} />
-                      <span>Remove</span>
-                    </button>
-                  </div>
+            {/* Search and Filter Controls */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-3">
+              <div className="flex items-center space-x-3">
+                <Search size={20} className="text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search workers by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={20} />
+                  </button>
                 )}
               </div>
-            ))}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="showOnlyAvailable"
+                  checked={showOnlyAvailable}
+                  onChange={(e) => setShowOnlyAvailable(e.target.checked)}
+                  className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                />
+                <label htmlFor="showOnlyAvailable" className="text-sm text-gray-700 cursor-pointer">
+                  Show only unassigned workers
+                </label>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {event.positions?.map((pos, idx) => {
+                // Use a consistent key for this position
+                const positionKey = pos.key || pos.name || pos;
+                
+                const posAssignments = getPositionAssignments(positionKey);
+                const filled = posAssignments.length;
+                const needed = pos.count;
+                const isFull = filled >= needed;
+                const isExpanded = expandedPositions[positionKey];
+
+                // Get and sort qualified workers
+                const qualifiedWorkers = workers
+                  .filter(worker => {
+                    if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                    if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
+                    
+                    // Use position key matching
+                    const workerSkillKeys = Array.isArray(worker.skills) ? worker.skills : [];
+                    const posKey = pos.key || getPositionKey(pos.name || pos);
+                    
+                    // Check if any worker skill matches this position
+                    return workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
+                  })
+                  .sort((a, b) => {
+                    // Sort by rank first (lower is better)
+                    if (a.rank !== b.rank) return a.rank - b.rank;
+                    // Then by reliability (higher is better)
+                    return b.reliability - a.reliability;
+                  });
+
+                return (
+                  <div key={idx} className="border rounded-lg overflow-hidden">
+                    {/* Collapsible Header */}
+                    <div 
+                      onClick={() => togglePosition(positionKey)}
+                      className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <button className="text-gray-600">
+                          {isExpanded ? '▼' : '▶'}
+                        </button>
+                        <h4 className="text-lg font-semibold text-gray-900">{getPositionLabel(pos.key || pos.name)}</h4>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          isFull ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {filled} / {needed} filled
+                        </span>
+                        {!isFull && (
+                          <span className="text-xs text-gray-500">
+                            {qualifiedWorkers.length} available
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expandable Content */}
+                    {isExpanded && (
+                      <div className="p-4">
+                        {/* Assigned Workers */}
+                        {posAssignments.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Assigned:</p>
+                            <div className="space-y-2">
+                              {posAssignments
+                                .filter(assignment => assignment.status !== 'standby') // Only non-standby
+                                .map(assignment => {
+                                const worker = workers.find(w => w.id === assignment.worker_id);
+                                if (!worker) return null;
+                                
+                                return (
+                                  <div key={assignment.id} className="flex items-center justify-between bg-green-50 p-3 rounded">
+                                    <div className="flex items-center space-x-3">
+                                      <CheckCircle size={20} className="text-green-600" />
+                                      <div>
+                                        <p className="font-medium text-gray-900">{worker.name}</p>
+                                        <p className="text-xs text-gray-600">{worker.phone}</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => unassignWorker(assignment.id)}
+                                      className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                      title="Remove assignment"
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Standby List */}
+                        {(() => {
+                          const standbyAssignments = eventAssignments
+                            .filter(a => a.position === positionKey && a.status === 'standby')
+                            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Oldest first
+                          
+                          if (standbyAssignments.length === 0) return null;
+                          
+                          return (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-700 mb-2">
+                                Standby List ({standbyAssignments.length}):
+                              </p>
+                              <div className="space-y-2">
+                                {standbyAssignments.map((assignment, index) => {
+                                  const worker = workers.find(w => w.id === assignment.worker_id);
+                                  if (!worker) return null;
+                                  
+                                  return (
+                                    <div key={assignment.id} className="flex items-center justify-between bg-orange-50 border border-orange-200 p-3 rounded">
+                                      <div className="flex items-center space-x-3">
+                                        <div className="bg-orange-200 text-orange-800 font-bold text-sm w-7 h-7 rounded-full flex items-center justify-center">
+                                          {index + 1}
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-gray-900">{worker.name}</p>
+                                          <p className="text-xs text-gray-600">{worker.phone}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={async () => {
+                                            // Check for time conflicts before promoting
+                                            const workerOtherAssignments = assignments.filter(a => 
+                                              a.worker_id === worker.id && 
+                                              a.event_id !== event.id &&
+                                              (a.status === 'approved' || !a.status) // Only approved
+                                            );
+                                            
+                                            let hasConflict = false;
+                                            let conflictEvent = null;
+                                            
+                                            if (workerOtherAssignments.length > 0) {
+                                              for (const otherAssignment of workerOtherAssignments) {
+                                                const otherEv = events.find(e => e.id === otherAssignment.event_id);
+                                                if (!otherEv || otherEv.date !== event.date) continue;
+                                                
+                                                const parseTime = (timeStr) => {
+                                                  if (!timeStr) return null;
+                                                  const [hours, minutes] = timeStr.split(':').map(Number);
+                                                  return hours * 60 + minutes;
+                                                };
+                                                
+                                                const thisStart = parseTime(event.time);
+                                                const thisEnd = parseTime(event.end_time);
+                                                const otherStart = parseTime(otherEv.time);
+                                                const otherEnd = parseTime(otherEv.end_time);
+                                                
+                                                if (thisEnd && otherEnd) {
+                                                  const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
+                                                  if (hasOverlap) {
+                                                    hasConflict = true;
+                                                    conflictEvent = otherEv;
+                                                    break;
+                                                  }
+                                                }
+                                              }
+                                            }
+                                            
+                                            if (hasConflict) {
+                                              const shouldRemoveOther = confirm(
+                                                `⚠️ TIME CONFLICT!\n\n` +
+                                                `${worker.name} is already assigned to:\n` +
+                                                `"${conflictEvent.name}"\n` +
+                                                `${conflictEvent.time} - ${conflictEvent.end_time}\n\n` +
+                                                `This conflicts with:\n` +
+                                                `"${event.name}"\n` +
+                                                `${event.time} - ${event.end_time}\n\n` +
+                                                `Remove them from "${conflictEvent.name}" and promote to "${event.name}"?`
+                                              );
+                                              
+                                              if (!shouldRemoveOther) return;
+                                              
+                                              // Remove from conflicting event first
+                                              const conflictAssignment = workerOtherAssignments.find(a => a.event_id === conflictEvent.id);
+                                              if (conflictAssignment) {
+                                                await supabase
+                                                  .from('assignments')
+                                                  .delete()
+                                                  .eq('id', conflictAssignment.id);
+                                              }
+                                            }
+                                            
+                                            if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
+                                              // Update assignment to change status from 'standby' to 'approved'
+                                              supabase
+                                                .from('assignments')
+                                                .update({ status: 'approved' })
+                                                .eq('id', assignment.id)
+                                                .then(({ error }) => {
+                                                  if (error) {
+                                                    alert('Error promoting worker: ' + error.message);
+                                                  } else {
+                                                    alert(`${worker.name} promoted from standby!`);
+                                                    // Refresh assignments data instead of reloading page
+                                                    if (onReloadAssignments) {
+                                                      onReloadAssignments();
+                                                    }
+                                                  }
+                                                })
+                                                .catch(err => alert('Error: ' + err.message));
+                                            }
+                                          }}
+                                          className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                          title="Promote to assigned"
+                                        >
+                                          Promote
+                                        </button>
+                                        <button
+                                          onClick={() => unassignWorker(assignment.id)}
+                                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                          title="Remove from standby"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Available Workers */}
+                        {!isFull && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">
+                              Available Workers: ({qualifiedWorkers.length})
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                              {qualifiedWorkers.map(worker => {
+                                // Check if worker is assigned to a different position in this event
+                                const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== pos.name);
+                                const isAvailable = !otherAssignment;
+                              
+                              // Check for time conflicts with other events on the same day
+                              const workerOtherAssignments = assignments.filter(a => 
+                                a.worker_id === worker.id && 
+                                a.event_id !== event.id
+                              );
+                              
+                              let hasTimeConflict = false;
+                              let conflictEvent = null;
+                              
+                              if (workerOtherAssignments.length > 0) {
+                                const conflicts = workerOtherAssignments.filter(assignment => {
+                                  const otherEvent = events.find(e => e.id === assignment.event_id);
+                                  if (!otherEvent || otherEvent.date !== event.date) return false;
+                                  
+                                  const parseTime = (timeStr) => {
+                                    if (!timeStr) return null;
+                                    const [hours, minutes] = timeStr.split(':').map(Number);
+                                    return hours * 60 + minutes;
+                                  };
+                                  
+                                  const thisStart = parseTime(event.time);
+                                  const thisEnd = parseTime(event.end_time);
+                                  const otherStart = parseTime(otherEvent.time);
+                                  const otherEnd = parseTime(otherEvent.end_time);
+                                  
+                                  if (!thisEnd || !otherEnd) return false;
+                                  
+                                  return (thisStart < otherEnd) && (thisEnd > otherStart);
+                                });
+                                
+                                if (conflicts.length > 0) {
+                                  hasTimeConflict = true;
+                                  conflictEvent = events.find(e => e.id === conflicts[0].event_id);
+                                }
+                              }
+                              
+                              return (
+                                <div key={worker.id} className={`flex items-center justify-between p-3 rounded ${
+                                  hasTimeConflict
+                                    ? 'bg-red-50 border-2 border-red-300'
+                                    : isAvailable 
+                                    ? 'bg-gray-50 hover:bg-gray-100' 
+                                    : 'bg-orange-50 border border-orange-200'
+                                }`}>
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2">
+                                      <p className={`font-medium ${
+                                        hasTimeConflict 
+                                          ? 'text-red-900' 
+                                          : isAvailable 
+                                          ? 'text-gray-900' 
+                                          : 'text-orange-900'
+                                      }`}>
+                                        {worker.name}
+                                      </p>
+                                      <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                                        worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
+                                        worker.rank === 2 ? 'bg-blue-100 text-blue-800' :
+                                        'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        Rank {worker.rank}
+                                      </span>
+                                      <span className="text-xs text-gray-600 flex items-center">
+                                        ⭐ {worker.reliability.toFixed(1)}
+                                      </span>
+                                      {hasTimeConflict && (
+                                        <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
+                                          TIME CONFLICT
+                                        </span>
+                                      )}
+                                      {otherAssignment && !hasTimeConflict && (
+                                        <span className="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded">
+                                          Currently: {otherAssignment.position}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {hasTimeConflict && conflictEvent && (
+                                      <p className="text-xs text-red-700 mt-1">
+                                        Conflicts with: {conflictEvent.name} ({conflictEvent.time}-{conflictEvent.end_time})
+                                      </p>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => assignWorker(worker.id, positionKey, otherAssignment)}
+                                    disabled={hasTimeConflict}
+                                    className={`ml-3 px-3 py-1 rounded text-sm ${
+                                      hasTimeConflict
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : isAvailable 
+                                        ? 'bg-red-900 text-white hover:bg-red-800' 
+                                        : 'bg-orange-600 text-white hover:bg-orange-700'
+                                    }`}
+                                  >
+                                    {hasTimeConflict ? 'Blocked' : isAvailable ? 'Assign' : 'Reassign'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {qualifiedWorkers.length === 0 && (
+                              <p className="text-sm text-gray-500 col-span-2 text-center py-4">
+                                No qualified workers available for this position
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setShowOnlyAvailable(false);
+                  setExpandedPositions({});
+                  onClose();
+                }}
+                className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium"
+              >
+                Done
+              </button>
+
+              <button
+                onClick={onClose}
+                className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
