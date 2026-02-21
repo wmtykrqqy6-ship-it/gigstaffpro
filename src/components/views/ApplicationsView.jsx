@@ -49,9 +49,12 @@ export default function ApplicationsView({
     const app = applications.find(a => a.id === applicationId);
     if (!app) return;
 
-    // ✅ Check if position is already full - handle both key and label formats
+    const isStandbyPromotion = app.status === 'standby';
+
+    // ✅ Check if position is already full - SKIP this check for standby promotions
+    // (admin is intentionally promoting someone from the standby list)
     const event = events.find(e => e.id === app.event_id);
-    if (event && event.positions && Array.isArray(event.positions)) {
+    if (!isStandbyPromotion && event && event.positions && Array.isArray(event.positions)) {
       const positionDef = event.positions.find(p => {
         const pKey = p.key || p.name;
         return pKey === app.position ||
@@ -403,103 +406,99 @@ export default function ApplicationsView({
         ) : (
           <div className="divide-y divide-gray-200">
             {filteredApplications.map(app => (
-              <div key={app.id} className="p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
-                  {/* Application Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-bold text-gray-900">{app.worker.name}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        app.status === 'approved' ? 'bg-green-100 text-green-800' :
-                        app.status === 'standby' ? 'bg-orange-100 text-orange-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {app.status === 'pending' ? 'Pending Review' : 
-                         app.status === 'approved' ? 'Approved' :
-                         app.status === 'standby' ? 'Standby' : 'Rejected'}
-                      </span>
-                      {app.worker.rank <= 2 && (
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${
-                          app.worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          Rank {app.worker.rank}
-                        </span>
-                      )}
-                      {app.worker.reliability >= 4.5 && (
-                        <span className="text-sm text-yellow-600">⭐ {app.worker.reliability.toFixed(1)}</span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-500">Event</p>
-                        <p className="font-medium text-gray-900">{app.event.name}</p>
-                        <p className="text-xs text-gray-600">
-                          {parseDateSafe(app.event.date).toLocaleDateString('en-US', { 
-                            weekday: 'short', month: 'short', day: 'numeric' 
-                          })} • {formatTime(app.event.time, timeFormat)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-gray-500">Position</p>
-                        <p className="font-medium text-gray-900">{getPositionLabel(app.position)}</p>
-                      </div>
-
-                      <div>
-                        <p className="text-gray-500">Applied</p>
-                        <p className="font-medium text-gray-900">
-                          {app.applied_at 
-                            ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                            : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  {app.status === 'pending' && (
-                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 mt-3 sm:mt-0">
-                      <button
-                        onClick={() => handleApprove(app.id)}
-                        disabled={processingId === app.id}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                      >
-                        <CheckCircle size={18} />
-                        <span>Approve</span>
-                      </button>
-                      <button
-                        onClick={() => handleReject(app.id)}
-                        disabled={processingId === app.id}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                      >
-                        <XCircle size={18} />
-                        <span>Reject</span>
-                      </button>
-                    </div>
+              <div key={app.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                {/* Application Info */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <h3 className="text-lg font-bold text-gray-900">{app.worker.name}</h3>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                    app.status === 'standby' ? 'bg-orange-100 text-orange-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {app.status === 'pending' ? 'Pending Review' : 
+                     app.status === 'approved' ? 'Approved' :
+                     app.status === 'standby' ? 'Standby' : 'Rejected'}
+                  </span>
+                  {app.worker.rank <= 2 && (
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+                      app.worker.rank === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      Rank {app.worker.rank}
+                    </span>
                   )}
-                  {app.status === 'standby' && (
-                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 ml-0 sm:ml-4 mt-3 sm:mt-0">
-                      <button
-                        onClick={() => handleApprove(app.id)}
-                        disabled={processingId === app.id}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                      >
-                        <CheckCircle size={18} />
-                        <span>Promote to Approved</span>
-                      </button>
-                      <button
-                        onClick={() => handleReject(app.id)}
-                        disabled={processingId === app.id}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                      >
-                        <XCircle size={18} />
-                        <span>Remove</span>
-                      </button>
-                    </div>
+                  {app.worker.reliability >= 4.5 && (
+                    <span className="text-sm text-yellow-600">⭐ {app.worker.reliability.toFixed(1)}</span>
                   )}
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm mb-4">
+                  <div>
+                    <p className="text-gray-500">Event</p>
+                    <p className="font-medium text-gray-900">{app.event.name}</p>
+                    <p className="text-xs text-gray-600">
+                      {parseDateSafe(app.event.date).toLocaleDateString('en-US', { 
+                        weekday: 'short', month: 'short', day: 'numeric' 
+                      })} • {formatTime(app.event.time, timeFormat)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-gray-500">Position</p>
+                    <p className="font-medium text-gray-900">{getPositionLabel(app.position)}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-gray-500">Applied</p>
+                    <p className="font-medium text-gray-900">
+                      {app.applied_at 
+                        ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions - always full width below info */}
+                {app.status === 'pending' && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={() => handleApprove(app.id)}
+                      disabled={processingId === app.id}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                    >
+                      <CheckCircle size={18} />
+                      <span>Approve</span>
+                    </button>
+                    <button
+                      onClick={() => handleReject(app.id)}
+                      disabled={processingId === app.id}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                    >
+                      <XCircle size={18} />
+                      <span>Reject</span>
+                    </button>
+                  </div>
+                )}
+                {app.status === 'standby' && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={() => handleApprove(app.id)}
+                      disabled={processingId === app.id}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                    >
+                      <CheckCircle size={18} />
+                      <span>Promote to Approved</span>
+                    </button>
+                    <button
+                      onClick={() => handleReject(app.id)}
+                      disabled={processingId === app.id}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                    >
+                      <XCircle size={18} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
