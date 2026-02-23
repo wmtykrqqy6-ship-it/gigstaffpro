@@ -50,6 +50,9 @@ export default function WorkerPortalView({
       })
       .filter(a => a.event);
 
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
     const standbyAssignments = assignments
       .filter(a => a.worker_id === currentWorker.id && a.status === 'standby')
       .map(assignment => {
@@ -72,9 +75,6 @@ export default function WorkerPortalView({
         return eventDateOnly >= todayOnly;
       })
       .sort((a, b) => new Date(a.event.date) - new Date(b.event.date));
-
-    const today = new Date();
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
     const upcomingAssignments = workerAssignments
       .filter(a => {
