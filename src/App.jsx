@@ -189,8 +189,9 @@ const saveDismissedNotificationIds = (ids) => {
           const hoursUntil = (eventDate - now) / (1000 * 60 * 60);
           
           if (hoursUntil > 0 && hoursUntil <= 24) {
+            const eventDay = parseDateSafe(event.date).toISOString().split('T')[0];
             newNotifications.push({
-              id: `reminder-${assignment.id}`,
+              id: `reminder-${assignment.id}-${eventDay}`,
               type: 'reminder',
               title: 'Event Tomorrow!',
               message: `${event.name} at ${formatTime(event.time, timeFormat)}`,
@@ -215,8 +216,10 @@ const saveDismissedNotificationIds = (ids) => {
         if (daysAgo <= 7) {
           const event = events.find(e => e.id === assignment.event_id);
           if (event) {
+            // Use date-truncated ID so dismissal persists across reloads
+            const approvalDay = updatedDate.toISOString().split('T')[0];
             newNotifications.push({
-              id: `approved-${assignment.id}`,
+              id: `approved-${assignment.id}-${approvalDay}`,
               type: 'success',
               title: 'Application Approved!',
               message: `You're confirmed for ${event.name}`,
