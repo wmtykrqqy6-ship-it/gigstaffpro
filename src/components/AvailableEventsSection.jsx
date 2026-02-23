@@ -69,14 +69,12 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             return false;
           }
           
-          // Not already assigned or applied (but standby is OK - show those events)
+          // Not already assigned, applied, or on standby - hide all of these from available events
           const alreadyAssigned = assignments.some(a => {
             if (a.event_id !== event.id) return false;
             if (a.worker_id !== currentWorker.id) return false;
             const status = a.status;
-            // Consider them "assigned" if status is approved, pending, or null/undefined (admin direct assign)
-            // But NOT if status is 'standby' - we want to show standby events
-            return status === 'approved' || status === 'pending' || (!status && status !== 'standby');
+            return status === 'approved' || status === 'pending' || status === 'standby' || (!status);
           });
           console.log('Already Assigned:', alreadyAssigned);
           
