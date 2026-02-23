@@ -3,7 +3,7 @@ import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Sa
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
-export default function ProfileView({ worker, onProfileUpdate }) {
+export default function ProfileView({ worker, onProfileUpdate, assignments = [], events = [] }) {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -21,6 +21,19 @@ export default function ProfileView({ worker, onProfileUpdate }) {
       </div>
     );
   }
+
+  // Calculate total gigs dynamically from past completed assignments
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const totalGigs = assignments.filter(a => {
+    if (a.worker_id !== worker.id) return false;
+    if (a.status !== 'approved' && a.status !== 'assigned') return false;
+    const event = events.find(e => e.id === a.event_id);
+    if (!event) return false;
+    const eventDate = new Date(event.date);
+    eventDate.setHours(0, 0, 0, 0);
+    return eventDate < today;
+  }).length;
 
   const handlePhotoUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -319,7 +332,7 @@ export default function ProfileView({ worker, onProfileUpdate }) {
           <div className="text-center p-4 bg-yellow-50 rounded-lg">
             <Briefcase size={24} className="mx-auto mb-2 text-yellow-600" />
             <p className="text-sm text-gray-600 mb-1">Total Gigs</p>
-            <p className="text-2xl font-bold text-gray-900">{worker.total_gigs || 0}</p>
+            <p className="text-2xl font-bold text-gray-900">{totalGigs}</p>
           </div>
           
           <div className="text-center p-4 bg-red-50 rounded-lg">

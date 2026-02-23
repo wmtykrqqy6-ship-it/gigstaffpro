@@ -170,7 +170,7 @@ export default function WorkerPortalView({
 
         {/* Tab Content */}
         {currentTab === 'profile' ? (
-          <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} />
+          <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} assignments={assignments} events={events} />
         ) : currentTab === 'history' ? (
           <HistoryView 
             worker={currentWorker}
