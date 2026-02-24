@@ -997,6 +997,7 @@ setAppPositions(storedPositions);
       <AddEventModal
         open={showAddEvent}
         positions={positions}
+        workers={workers}
         onClose={() => setShowAddEvent(false)}
         onSuccess={loadEvents}
       />
@@ -1004,6 +1005,7 @@ setAppPositions(storedPositions);
         open={showEditEvent}
         event={selectedEvent}
         positions={positions}
+        workers={workers}
         onClose={() => {
           setShowEditEvent(false);
           setSelectedEvent(null);

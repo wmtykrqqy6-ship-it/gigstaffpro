@@ -17,7 +17,8 @@ export default function EditWorkerModal({
     phone: '',
     skills: [],
     rank: WORKER_DEFAULTS.RANK,
-    reliability: WORKER_DEFAULTS.RELIABILITY
+    reliability: WORKER_DEFAULTS.RELIABILITY,
+    is_host: false
   });
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +43,8 @@ export default function EditWorkerModal({
         phone: worker.phone || '',
         skills: migratedSkills,
         rank: worker.rank || WORKER_DEFAULTS.RANK,
-        reliability: worker.reliability || WORKER_DEFAULTS.RELIABILITY
+        reliability: worker.reliability || WORKER_DEFAULTS.RELIABILITY,
+        is_host: worker.is_host || false
       });
     }
   }, [worker, positions]);
@@ -219,6 +221,30 @@ export default function EditWorkerModal({
                 onChange={(e) => setFormData({...formData, reliability: parseFloat(e.target.value)})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
+            </div>
+
+            {/* Host Designation */}
+            <div className="border border-orange-200 bg-orange-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Event Host / Team Leader</p>
+                  <p className="text-xs text-gray-500 mt-1">Hosts can submit post-event attendance reports</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({...formData, is_host: !formData.is_host})}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    formData.is_host ? 'bg-orange-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    formData.is_host ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+              {formData.is_host && (
+                <p className="text-xs text-orange-700 mt-2 font-medium">✓ This worker is designated as a host</p>
+              )}
             </div>
 
             <div className="flex space-x-3 pt-4">

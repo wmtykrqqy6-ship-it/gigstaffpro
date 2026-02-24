@@ -8,6 +8,7 @@ export default function EditEventModal({
   open,
   event,
   positions,
+  workers = [],
   onClose,
   onSuccess
 }) {
@@ -25,7 +26,8 @@ export default function EditEventModal({
     dress_code: '',
     parking: '',
     notes: '',
-    status: STATUS.EVENT.CONFIRMED
+    status: STATUS.EVENT.CONFIRMED,
+    host_worker_id: null
   });
   const [saving, setSaving] = useState(false);
 
@@ -70,7 +72,8 @@ export default function EditEventModal({
         dress_code: event.dress_code || '',
         parking: event.parking || '',
         notes: event.notes || '',
-        status: event.status || STATUS.EVENT.CONFIRMED
+        status: event.status || STATUS.EVENT.CONFIRMED,
+        host_worker_id: event.host_worker_id || null
       });
     }
   }, [event]);
@@ -359,6 +362,27 @@ export default function EditEventModal({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Event Host */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Event Host / Team Leader</h4>
+                <div className="border border-orange-200 bg-orange-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 mb-3">Assign a host who can submit the post-event attendance report. Only workers designated as hosts are shown.</p>
+                  <select
+                    value={formData.host_worker_id || ''}
+                    onChange={(e) => setFormData({...formData, host_worker_id: e.target.value || null})}
+                    className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">-- Admin will submit report --</option>
+                    {workers.filter(w => w.is_host).map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                  {workers.filter(w => w.is_host).length === 0 && (
+                    <p className="text-xs text-orange-600 mt-2">No hosts designated yet. Edit a worker and toggle "Event Host" to enable them.</p>
+                  )}
                 </div>
               </div>
 
