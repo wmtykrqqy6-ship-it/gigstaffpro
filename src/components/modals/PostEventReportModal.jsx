@@ -116,6 +116,21 @@ export default function PostEventReportModal({
 
     setSubmitting(true);
     try {
+      // Check for existing report to prevent duplicates
+      const { data: existing } = await supabase
+        .from('post_event_reports')
+        .select('id')
+        .eq('event_id', event.id)
+        .eq('submitted_by', submittedBy)
+        .maybeSingle();
+
+      if (existing) {
+        alert('A report has already been submitted for this event.');
+        setSubmitting(false);
+        if (onSuccess) await onSuccess();
+        onClose();
+        return;
+      }
       // 1. Create the report record
       const { data: report, error: reportError } = await supabase
         .from('post_event_reports')

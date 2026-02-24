@@ -28,6 +28,26 @@ export default function WorkerPortalView({
     const [selectedEventModal, setSelectedEventModal] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportEvent, setReportEvent] = useState(null);
+    const [submittedReportEventIds, setSubmittedReportEventIds] = useState(new Set());
+
+    // Load already-submitted report event IDs for this host
+    React.useEffect(() => {
+      if (!currentWorker?.is_host) return;
+      const loadSubmittedReports = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('post_event_reports')
+            .select('event_id')
+            .eq('submitted_by', currentWorker.id);
+          if (!error && data) {
+            setSubmittedReportEventIds(new Set(data.map(r => r.event_id)));
+          }
+        } catch (e) {
+          console.error('Error loading submitted reports:', e);
+        }
+      };
+      loadSubmittedReports();
+    }, [currentWorker?.id]);
 
     const currentWorker = loggedInWorker;
     if (!currentWorker) {
@@ -664,10 +684,13 @@ export default function WorkerPortalView({
         {/* Host: Submit Post-Event Reports */}
         {currentWorker.is_host && (() => {
           // Find past events where this worker was assigned AND is the designated host
+          // AND a report hasn't been submitted yet
           const hostableEvents = pastAssignments
             .filter(a => {
               const event = a.event;
-              return event && event.host_worker_id === currentWorker.id;
+              return event && 
+                event.host_worker_id === currentWorker.id &&
+                !submittedReportEventIds.has(event.id);
             })
             .map(a => a.event)
             .filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i); // unique events
@@ -997,6 +1020,8 @@ export default function WorkerPortalView({
             setReportEvent(null);
           }}
           onSuccess={() => {
+            // Mark this event as submitted so it disappears from the list
+            setSubmittedReportEventIds(prev => new Set([...prev, reportEvent.id]));
             setShowReportModal(false);
             setReportEvent(null);
           }}
