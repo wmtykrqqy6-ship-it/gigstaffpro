@@ -270,19 +270,10 @@ export default function EventsView({
 
                 {/* Mobile-friendly header */}
                 <div className="mb-4">
-                  {/* Row 1: Name + action buttons */}
+                  {/* Row 1: Name + icon buttons */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-xl font-bold text-gray-900 leading-tight">{event.name}</h3>
-                    {/* Action buttons - icon only on mobile, icon+text on desktop */}
                     <div className="flex items-center space-x-1 flex-shrink-0">
-                      <button 
-                        onClick={() => openAssignModal(event)}
-                        className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center space-x-1 text-sm"
-                        title="Assign workers"
-                      >
-                        <Users size={16} />
-                        <span className="hidden sm:inline">Assign Staff</span>
-                      </button>
                       <button 
                         onClick={() => onOpenEditEvent(event)}
                         className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded transition-colors"
@@ -300,7 +291,7 @@ export default function EventsView({
                     </div>
                   </div>
                   {/* Row 2: Status badges */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 mb-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
                       {event.status === 'needs-staff' ? 'Needs Staff' : event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
@@ -317,6 +308,14 @@ export default function EventsView({
                       </span>
                     )}
                   </div>
+                  {/* Row 3: Assign Staff - full width on mobile */}
+                  <button 
+                    onClick={() => openAssignModal(event)}
+                    className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center space-x-2 text-sm font-medium"
+                  >
+                    <Users size={16} />
+                    <span>Assign Staff</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
