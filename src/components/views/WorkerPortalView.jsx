@@ -10,6 +10,7 @@ import PostEventReportModal from '../modals/PostEventReportModal';
 
 export default function WorkerPortalView({
   loggedInWorker,
+  workers = [],
   assignments,
   events,
   positions,

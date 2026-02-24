@@ -768,6 +768,7 @@ setAppPositions(storedPositions);
       return (
         <WorkerPortalView
           loggedInWorker={loggedInWorker}
+          workers={workers}
           assignments={assignments}
           events={events}
           positions={positions}
