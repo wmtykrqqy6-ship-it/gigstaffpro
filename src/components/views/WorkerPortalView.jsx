@@ -980,7 +980,7 @@ export default function WorkerPortalView({
             </div>
           </div>
         )}
-      </div>
+      
 
       {/* Host: Post-Event Report Modal */}
       {showReportModal && reportEvent && (
@@ -988,7 +988,7 @@ export default function WorkerPortalView({
           open={showReportModal}
           event={reportEvent}
           assignments={assignments}
-          workers={[currentWorker]}
+          workers={workers}
           submittedBy={currentWorker.id}
           timeFormat={timeFormat}
           onClose={() => {
@@ -1001,6 +1001,6 @@ export default function WorkerPortalView({
           }}
         />
       )}
-    </div>
+      </div>
     );
 }
