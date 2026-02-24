@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
 import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
 import HistoryView from './HistoryView';
+import PostEventReportModal from '../modals/PostEventReportModal';
 
 export default function WorkerPortalView({
   loggedInWorker,
@@ -24,6 +25,8 @@ export default function WorkerPortalView({
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedEventModal, setSelectedEventModal] = useState(null);
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [reportEvent, setReportEvent] = useState(null);
 
     const currentWorker = loggedInWorker;
     if (!currentWorker) {
@@ -657,6 +660,59 @@ export default function WorkerPortalView({
           )}
         </div>
 
+        {/* Host: Submit Post-Event Reports */}
+        {currentWorker.is_host && (() => {
+          // Find past events where this worker was assigned AND is the designated host
+          const hostableEvents = pastAssignments
+            .filter(a => {
+              const event = a.event;
+              return event && event.host_worker_id === currentWorker.id;
+            })
+            .map(a => a.event)
+            .filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i); // unique events
+
+          if (hostableEvents.length === 0) return null;
+
+          return (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-400">
+              <div className="flex items-center space-x-3 mb-4">
+                <ClipboardList size={24} className="text-orange-500" />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Submit Event Reports</h3>
+                  <p className="text-sm text-gray-500">You are the designated host for these events</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {hostableEvents.map(event => {
+                  const eventDate = parseDateSafe(event.date);
+                  return (
+                    <div key={event.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div>
+                        <p className="font-semibold text-gray-900">{event.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          {event.time && ` • ${formatTime(event.time, timeFormat)}`}
+                          {event.venue && ` • ${event.venue}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setReportEvent(event);
+                          setShowReportModal(true);
+                        }}
+                        className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium flex items-center space-x-2"
+                      >
+                        <ClipboardList size={14} />
+                        <span>Submit Report</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Past Events */}
         {pastAssignments.length > 0 && (
           <div className="bg-white rounded-lg shadow p-6">
@@ -925,5 +981,26 @@ export default function WorkerPortalView({
           </div>
         )}
       </div>
+
+      {/* Host: Post-Event Report Modal */}
+      {showReportModal && reportEvent && (
+        <PostEventReportModal
+          open={showReportModal}
+          event={reportEvent}
+          assignments={assignments}
+          workers={[currentWorker]}
+          submittedBy={currentWorker.id}
+          timeFormat={timeFormat}
+          onClose={() => {
+            setShowReportModal(false);
+            setReportEvent(null);
+          }}
+          onSuccess={() => {
+            setShowReportModal(false);
+            setReportEvent(null);
+          }}
+        />
+      )}
+    </div>
     );
 }

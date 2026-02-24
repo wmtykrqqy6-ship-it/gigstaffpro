@@ -6,7 +6,8 @@ import {
   Clock,
   FileText,
   DollarSign,
-  Settings
+  Settings,
+  ClipboardList
 } from 'lucide-react';
 
 export default function Navigation({
@@ -14,7 +15,8 @@ export default function Navigation({
   assignments,
   paymentTrackingEnabled,
   currentView,
-  onNavigate
+  onNavigate,
+  pendingReportsCount = 0
 }) {
   if (userRole !== 'admin') return null;
 
@@ -27,6 +29,7 @@ export default function Navigation({
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'schedule', label: 'Schedule', icon: Clock },
     { id: 'applications', label: 'Applications', icon: FileText, badge: pendingCount },
+    { id: 'reports', label: 'Reports', icon: ClipboardList, badge: pendingReportsCount },
     ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
     { id: 'settings', label: 'Settings', icon: Settings }
   ];

@@ -30,6 +30,7 @@ import AssignWorkersModal from './components/modals/AssignWorkersModal';
 import PaymentCalculatorModal from './components/modals/PaymentCalculatorModal';
 import DashboardView from './components/views/DashboardView';
 import ApplicationsView from './components/views/ApplicationsView';
+import ReportsView from './components/views/ReportsView';
 import SettingsView from './components/views/SettingsView';
 import EventsView from './components/views/EventsView';
 import StaffView from './components/views/StaffView';
@@ -60,6 +61,7 @@ const GigStaffPro = () => {
   const [showBulkInvite, setShowBulkInvite] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedWorkerForEdit, setSelectedWorkerForEdit] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -89,6 +91,7 @@ const GigStaffPro = () => {
     loadPaymentTrackingSetting();
     loadRankAccessDays();
     loadTimeFormat();
+    loadPendingReportsCount();
   }, []);
 
   // Generate notifications whenever assignments change
@@ -315,6 +318,18 @@ const handleSaveWorker = async (formData) => {
       ...eventPaymentSettings,
       [eventId]: settings
     });
+  };
+
+  const loadPendingReportsCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('post_event_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('reviewed_by_admin', false);
+      if (!error) setPendingReportsCount(count || 0);
+    } catch (error) {
+      console.error('Error loading pending reports count:', error);
+    }
   };
 
   const loadTimeFormat = async () => {
@@ -853,6 +868,16 @@ setAppPositions(storedPositions);
         />
       );
     }
+    if (currentView === 'reports') {
+      return (
+        <ReportsView
+          events={events}
+          assignments={assignments}
+          workers={workers}
+          timeFormat={timeFormat}
+        />
+      );
+    }
     if (currentView === 'payments') {
       return (
         <PaymentsView
@@ -951,6 +976,7 @@ setAppPositions(storedPositions);
   paymentTrackingEnabled={paymentTrackingEnabled}
   currentView={currentView}
   onNavigate={(id) => setCurrentView(id)}
+  pendingReportsCount={pendingReportsCount}
 />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}
