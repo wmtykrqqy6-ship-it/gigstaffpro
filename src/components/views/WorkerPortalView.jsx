@@ -242,24 +242,24 @@ export default function WorkerPortalView({
           if (reportsDue.length === 0) return null;
 
           return (
-            <div className="bg-orange-500 text-white rounded-lg shadow-lg p-4 border-2 border-orange-600">
+            <div className="bg-red-900 text-white rounded-lg shadow-lg p-4 border-2 border-red-800">
               <div className="flex items-start space-x-3">
                 <ClipboardList size={28} className="flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-bold text-lg">
                     📋 {reportsDue.length} Event Report{reportsDue.length !== 1 ? 's' : ''} Due
                   </p>
-                  <p className="text-orange-100 text-sm mt-0.5">
+                  <p className="text-red-200 text-sm mt-0.5">
                     As the designated host, please submit attendance reports for:
                   </p>
                   <div className="mt-2 space-y-1">
                     {reportsDue.map(event => {
                       const eventDate = parseDateSafe(event.date);
                       return (
-                        <div key={event.id} className="flex items-center justify-between bg-orange-600 bg-opacity-50 rounded-lg px-3 py-2">
+                        <div key={event.id} className="flex items-center justify-between bg-red-800 bg-opacity-60 rounded-lg px-3 py-2">
                           <div>
                             <span className="font-semibold text-sm">{event.name}</span>
-                            <span className="text-orange-200 text-xs ml-2">
+                            <span className="text-red-300 text-xs ml-2">
                               {eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
@@ -268,7 +268,7 @@ export default function WorkerPortalView({
                               setReportEvent(event);
                               setShowReportModal(true);
                             }}
-                            className="bg-white text-orange-600 px-3 py-1 rounded-lg text-xs font-bold hover:bg-orange-50 transition-colors flex-shrink-0 ml-3"
+                            className="bg-white text-red-900 px-3 py-1 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
                           >
                             Submit Now
                           </button>
