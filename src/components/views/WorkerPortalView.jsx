@@ -242,41 +242,42 @@ export default function WorkerPortalView({
           if (reportsDue.length === 0) return null;
 
           return (
-            <div className="bg-red-900 text-white rounded-lg shadow-lg p-4 border-2 border-red-800">
-              <div className="flex items-start space-x-3">
-                <ClipboardList size={28} className="flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-bold text-lg">
-                    📋 {reportsDue.length} Event Report{reportsDue.length !== 1 ? 's' : ''} Due
-                  </p>
-                  <p className="text-red-200 text-sm mt-0.5">
-                    As the designated host, please submit attendance reports for:
-                  </p>
-                  <div className="mt-2 space-y-1">
-                    {reportsDue.map(event => {
-                      const eventDate = parseDateSafe(event.date);
-                      return (
-                        <div key={event.id} className="flex items-center justify-between bg-red-800 bg-opacity-60 rounded-lg px-3 py-2">
-                          <div>
-                            <span className="font-semibold text-sm">{event.name}</span>
-                            <span className="text-red-300 text-xs ml-2">
-                              {eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setReportEvent(event);
-                              setShowReportModal(true);
-                            }}
-                            className="bg-white text-red-900 px-3 py-1 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
-                          >
-                            Submit Now
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-900">
+              <div className="flex items-center space-x-3 mb-4">
+                <ClipboardList size={24} className="text-red-900" />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {reportsDue.length} Event Report{reportsDue.length !== 1 ? 's' : ''} Due
+                  </h3>
+                  <p className="text-sm text-gray-500">As the designated host, please submit attendance reports</p>
                 </div>
+              </div>
+              <div className="space-y-3">
+                {reportsDue.map(event => {
+                  const eventDate = parseDateSafe(event.date);
+                  return (
+                    <div key={event.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div>
+                        <p className="font-semibold text-gray-900">{event.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          {event.time && ` • ${formatTime(event.time, timeFormat)}`}
+                          {event.venue && ` • ${event.venue}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setReportEvent(event);
+                          setShowReportModal(true);
+                        }}
+                        className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 text-sm font-medium flex items-center space-x-2 flex-shrink-0 ml-3"
+                      >
+                        <ClipboardList size={14} />
+                        <span>Submit Report</span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
