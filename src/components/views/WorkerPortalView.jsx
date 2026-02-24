@@ -23,6 +23,8 @@ export default function WorkerPortalView({
   onReloadWorker,
   currentTab = 'dashboard'
 }) {
+    const currentWorker = loggedInWorker;
+
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedEventModal, setSelectedEventModal] = useState(null);
@@ -49,7 +51,6 @@ export default function WorkerPortalView({
       loadSubmittedReports();
     }, [currentWorker?.id]);
 
-    const currentWorker = loggedInWorker;
     if (!currentWorker) {
       return (
         <div className="bg-white rounded-lg shadow p-6">
