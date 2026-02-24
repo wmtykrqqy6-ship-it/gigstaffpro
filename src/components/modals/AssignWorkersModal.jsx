@@ -25,6 +25,25 @@ export default function AssignWorkersModal({
   const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
   const [eventIsHoliday, setEventIsHoliday] = useState(false);
   const [expandedPositions, setExpandedPositions] = useState({});
+  const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
+  const [savingHost, setSavingHost] = useState(false);
+
+  const hostWorkers = (workers || []).filter(w => w.is_host);
+
+  const handleSaveHost = async (newHostId) => {
+    setSavingHost(true);
+    try {
+      await supabase
+        .from('events')
+        .update({ host_worker_id: newHostId || null })
+        .eq('id', event.id);
+      setSelectedHostId(newHostId);
+    } catch (error) {
+      alert('Error saving host: ' + error.message);
+    } finally {
+      setSavingHost(false);
+    }
+  };
   
   const togglePosition = (position) => {
     setExpandedPositions(prev => ({
@@ -35,7 +54,8 @@ export default function AssignWorkersModal({
 
   // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
-    if (!event) return; // Guard against null event
+    if (!event) return;
+    setSelectedHostId(event.host_worker_id || '');
     
     if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
@@ -219,6 +239,36 @@ export default function AssignWorkersModal({
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                 <X size={24} />
               </button>
+            </div>
+
+            {/* Event Host */}
+            <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-semibold text-gray-700">Event Host / Team Leader:</span>
+                  {selectedHostId ? (
+                    <span className="text-sm font-medium text-orange-700">
+                      {hostWorkers.find(w => w.id === selectedHostId)?.name || 'Unknown'}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">None assigned</span>
+                  )}
+                </div>
+                <select
+                  value={selectedHostId}
+                  onChange={(e) => handleSaveHost(e.target.value)}
+                  disabled={savingHost}
+                  className="text-sm px-3 py-1.5 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white disabled:opacity-50"
+                >
+                  <option value="">-- No host --</option>
+                  {hostWorkers.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              {hostWorkers.length === 0 && (
+                <p className="text-xs text-orange-600 mt-2">No hosts designated yet. Edit a worker and toggle "Event Host" to enable them.</p>
+              )}
             </div>
 
             {/* Event Payment Settings */}
