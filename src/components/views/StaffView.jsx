@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
 export default function StaffView({
@@ -16,9 +16,11 @@ export default function StaffView({
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('all');
   const [rankFilter, setRankFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('name'); // name, rating, gigs
-  const [expandedCards, setExpandedCards] = useState({}); // Track which cards are expanded
-  const [showFilters, setShowFilters] = useState(false); // Toggle filter panel
+  const [reliabilityFilter, setReliabilityFilter] = useState('all');
+  const [hostFilter, setHostFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
+  const [expandedCards, setExpandedCards] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
 
   const toggleCard = (workerId) => {
     setExpandedCards(prev => ({
@@ -31,6 +33,8 @@ export default function StaffView({
   const activeFilterCount = 
     (skillFilter !== 'all' ? 1 : 0) + 
     (rankFilter !== 'all' ? 1 : 0) + 
+    (reliabilityFilter !== 'all' ? 1 : 0) +
+    (hostFilter !== 'all' ? 1 : 0) +
     (sortBy !== 'name' ? 1 : 0);
 
   if (loading) {
@@ -83,6 +87,20 @@ export default function StaffView({
       if (rankFilter === '5-star' && worker.reliability !== 5) return false;
       if (rankFilter !== '5-star' && worker.rank !== parseInt(rankFilter)) return false;
     }
+
+    // Reliability filter
+    if (reliabilityFilter !== 'all') {
+      const rating = worker.reliability ?? 5.0;
+      if (reliabilityFilter === 'excellent' && rating < 4.5) return false;
+      if (reliabilityFilter === 'good' && (rating < 3.5 || rating >= 4.5)) return false;
+      if (reliabilityFilter === 'fair' && (rating < 2.0 || rating >= 3.5)) return false;
+      if (reliabilityFilter === 'poor' && rating >= 2.0) return false;
+      if (reliabilityFilter === 'below4' && rating >= 4.0) return false;
+    }
+
+    // Host filter
+    if (hostFilter === 'hosts' && !worker.is_host) return false;
+    if (hostFilter === 'non-hosts' && worker.is_host) return false;
 
     return true;
   });
@@ -203,6 +221,37 @@ export default function StaffView({
               </select>
             </div>
 
+            {/* Reliability Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Reliability Rating</label>
+              <select
+                value={reliabilityFilter}
+                onChange={(e) => setReliabilityFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Ratings</option>
+                <option value="excellent">⭐ Excellent (4.5 - 5.0)</option>
+                <option value="good">✅ Good (3.5 - 4.4)</option>
+                <option value="fair">⚠️ Fair (2.0 - 3.4)</option>
+                <option value="poor">🔴 Poor (below 2.0)</option>
+                <option value="below4">Below 4.0</option>
+              </select>
+            </div>
+
+            {/* Host Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Host Status</label>
+              <select
+                value={hostFilter}
+                onChange={(e) => setHostFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Workers</option>
+                <option value="hosts">🎯 Hosts Only</option>
+                <option value="non-hosts">Non-Hosts Only</option>
+              </select>
+            </div>
+
             {/* Sort By */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
@@ -224,6 +273,8 @@ export default function StaffView({
                 onClick={() => {
                   setSkillFilter('all');
                   setRankFilter('all');
+                  setReliabilityFilter('all');
+                  setHostFilter('all');
                   setSortBy('name');
                 }}
                 className="w-full px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors"
@@ -288,18 +339,36 @@ export default function StaffView({
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
+                        {worker.is_host && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 flex-shrink-0">
+                            <Shield size={10} className="mr-0.5" />
+                            Host
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                           Rank {worker.rank || 1}
                         </span>
-                        <div className="flex items-center space-x-0.5">
-                          <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                          <span className="text-xs font-medium text-gray-700">{worker.reliability || 0}</span>
-                        </div>
+                        {/* Color-coded reliability badge */}
+                        {(() => {
+                          const rating = worker.reliability ?? 5.0;
+                          const color = rating >= 4.5 ? 'bg-green-100 text-green-800 border-green-200' :
+                                        rating >= 3.5 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                        rating >= 2.0 ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                                                        'bg-red-100 text-red-800 border-red-200';
+                          return (
+                            <span className={`inline-flex items-center space-x-0.5 px-2 py-0.5 rounded text-xs font-medium border ${color}`}>
+                              <Star size={10} className="fill-current flex-shrink-0" />
+                              <span>{rating.toFixed(1)}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500 ml-2">
+                    <div className="text-xs text-gray-500 ml-2 flex-shrink-0">
                       {worker.total_gigs || 0} gigs
                     </div>
                   </div>
