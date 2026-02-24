@@ -130,7 +130,7 @@ export default function EventsView({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Events Management</h2>
           <p className="text-sm text-gray-600 mt-1">
@@ -139,7 +139,7 @@ export default function EventsView({
         </div>
         <button 
           onClick={onShowAddEvent}
-          className="bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center space-x-2 transition-colors"
+          className="w-full sm:w-auto bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center justify-center space-x-2 transition-colors"
         >
           <Plus size={20} />
           <span>Create Event</span>
@@ -262,65 +262,60 @@ export default function EventsView({
           {sortedEvents.map(event => {
             const staffingStatus = getEventStaffingStatus(event);
             const isFullyStaffed = staffingStatus.filled >= staffingStatus.total && staffingStatus.total > 0;
+            const standbyCount = assignments.filter(a => a.event_id === event.id && a.status === 'standby').length;
             
             return (
             <div key={event.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-xl font-bold text-gray-900">{event.name}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                        {event.status === 'needs-staff' ? 'Needs Staff' : event.status.charAt(0).toUpperCase() + event.status.slice(1)}
-                      </span>
-                      {staffingStatus.total > 0 && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          {staffingStatus.filled}/{staffingStatus.total} staffed
-                        </span>
-                      )}
-                      {(() => {
-                        // Count standby workers for this event
-                        const standbyCount = assignments.filter(a => 
-                          a.event_id === event.id && 
-                          a.status === 'standby'
-                        ).length;
-                        
-                        if (standbyCount > 0) {
-                          return (
-                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              {standbyCount} on standby
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
+              <div className="p-4 md:p-6">
+
+                {/* Mobile-friendly header */}
+                <div className="mb-4">
+                  {/* Row 1: Name + action buttons */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3 className="text-xl font-bold text-gray-900 leading-tight">{event.name}</h3>
+                    {/* Action buttons - icon only on mobile, icon+text on desktop */}
+                    <div className="flex items-center space-x-1 flex-shrink-0">
+                      <button 
+                        onClick={() => openAssignModal(event)}
+                        className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center space-x-1 text-sm"
+                        title="Assign workers"
+                      >
+                        <Users size={16} />
+                        <span className="hidden sm:inline">Assign Staff</span>
+                      </button>
+                      <button 
+                        onClick={() => onOpenEditEvent(event)}
+                        className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit event"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button 
+                        onClick={() => onDeleteEvent(event.id)}
+                        className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded transition-colors"
+                        title="Delete event"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => openAssignModal(event)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center space-x-1 text-sm"
-                      title="Assign workers"
-                    >
-                      <Users size={16} />
-                      <span>Assign Staff</span>
-                    </button>
-                    <button 
-                      onClick={() => onOpenEditEvent(event)}
-                      className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded transition-colors"
-                      title="Edit event"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => onDeleteEvent(event.id)}
-                      className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded transition-colors"
-                      title="Delete event"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  {/* Row 2: Status badges */}
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                      {event.status === 'needs-staff' ? 'Needs Staff' : event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                    </span>
+                    {staffingStatus.total > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {staffingStatus.filled}/{staffingStatus.total} staffed
+                      </span>
+                    )}
+                    {standbyCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        {standbyCount} on standby
+                      </span>
+                    )}
                   </div>
                 </div>
 
