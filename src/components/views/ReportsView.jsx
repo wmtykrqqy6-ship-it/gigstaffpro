@@ -68,20 +68,45 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
       // Get attendance records for this report
       const records = attendanceRecords.filter(r => r.report_id === report.id);
 
+      if (records.length === 0) {
+        alert('No attendance records found for this report.');
+        setApprovingId(null);
+        return;
+      }
+
+      // Fetch fresh worker data directly from Supabase to avoid stale props
+      const workerIds = [...new Set(records.map(r => r.worker_id))];
+      const { data: freshWorkers, error: workerFetchError } = await supabase
+        .from('workers')
+        .select('id, name, reliability')
+        .in('id', workerIds);
+
+      if (workerFetchError) throw workerFetchError;
+
       // Apply rating changes to each worker
       for (const record of records) {
-        const worker = workers.find(w => w.id === record.worker_id);
-        if (!worker) continue;
+        const worker = freshWorkers.find(w => w.id === record.worker_id);
+        if (!worker) {
+          console.warn('Worker not found for record:', record.worker_id);
+          continue;
+        }
 
         const currentRating = worker.reliability ?? 5.0;
         const change = record.rating_change ?? 0;
-        const newRating = Math.min(5.0, Math.max(0.0, currentRating + change));
+        const newRating = Math.min(5.0, Math.max(0.0, parseFloat(currentRating) + parseFloat(change)));
+
+        console.log(`Updating ${worker.name}: ${currentRating} + ${change} = ${newRating}`);
 
         // Update worker reliability
-        await supabase
+        const { error: updateError } = await supabase
           .from('workers')
           .update({ reliability: parseFloat(newRating.toFixed(2)) })
           .eq('id', worker.id);
+
+        if (updateError) {
+          console.error('Error updating worker rating:', updateError);
+          throw updateError;
+        }
 
         // Log the change
         await supabase
@@ -90,9 +115,9 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
             worker_id: worker.id,
             event_id: report.event_id,
             report_id: report.id,
-            change_amount: change,
+            change_amount: parseFloat(change),
             reason: STATUS_LABELS[record.status]?.label || record.status,
-            previous_rating: currentRating,
+            previous_rating: parseFloat(currentRating),
             new_rating: parseFloat(newRating.toFixed(2))
           }]);
 
