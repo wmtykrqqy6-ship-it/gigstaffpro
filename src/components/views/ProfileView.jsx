@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
@@ -7,12 +7,35 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [reliabilityLog, setReliabilityLog] = useState([]);
+  const [loadingLog, setLoadingLog] = useState(false);
   const [editData, setEditData] = useState({
     email: worker?.email || '',
     phone: worker?.phone || '',
     address: worker?.address || '',
     shirt_size: worker?.shirt_size || ''
   });
+
+  useEffect(() => {
+    if (worker?.id) loadReliabilityLog();
+  }, [worker?.id]);
+
+  const loadReliabilityLog = async () => {
+    setLoadingLog(true);
+    try {
+      const { data, error } = await supabase
+        .from('reliability_log')
+        .select('*')
+        .eq('worker_id', worker.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (!error) setReliabilityLog(data || []);
+    } catch (e) {
+      console.error('Error loading reliability log:', e);
+    } finally {
+      setLoadingLog(false);
+    }
+  };
 
   if (!worker) {
     return (
@@ -381,6 +404,98 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
             </p>
           </div>
         </div>
+      </div>
+      {/* Reliability History */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-900">Reliability History</h3>
+          <div className="flex items-center space-x-2">
+            <Star size={18} className="text-yellow-500 fill-yellow-500" />
+            <span className="text-2xl font-bold text-gray-900">{worker.reliability ?? 5.0}</span>
+            <span className="text-sm text-gray-500">/ 5.0</span>
+          </div>
+        </div>
+
+        {/* Rating bar */}
+        <div className="mb-6">
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className={`h-3 rounded-full transition-all ${
+                (worker.reliability ?? 5.0) >= 4.5 ? 'bg-green-500' :
+                (worker.reliability ?? 5.0) >= 3.5 ? 'bg-yellow-500' :
+                (worker.reliability ?? 5.0) >= 2.0 ? 'bg-orange-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${((worker.reliability ?? 5.0) / 5.0) * 100}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <span>0.0</span>
+            <span className={`font-medium ${
+              (worker.reliability ?? 5.0) >= 4.5 ? 'text-green-600' :
+              (worker.reliability ?? 5.0) >= 3.5 ? 'text-yellow-600' :
+              (worker.reliability ?? 5.0) >= 2.0 ? 'text-orange-600' : 'text-red-600'
+            }`}>
+              {(worker.reliability ?? 5.0) >= 4.5 ? 'Excellent' :
+               (worker.reliability ?? 5.0) >= 3.5 ? 'Good' :
+               (worker.reliability ?? 5.0) >= 2.0 ? 'Fair' : 'Needs Improvement'}
+            </span>
+            <span>5.0</span>
+          </div>
+        </div>
+
+        {loadingLog ? (
+          <p className="text-gray-400 text-sm text-center py-4">Loading history...</p>
+        ) : reliabilityLog.length === 0 ? (
+          <div className="text-center py-6 text-gray-400">
+            <Star size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No rating changes yet.</p>
+            <p className="text-xs mt-1">Your rating will update after events are reported.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reliabilityLog.map((entry, idx) => {
+              const isPositive = entry.change_amount > 0;
+              const isNeutral = entry.change_amount === 0;
+              const Icon = isPositive ? TrendingUp : isNeutral ? Minus : TrendingDown;
+              const eventForEntry = events.find(e => e.id === entry.event_id);
+
+              return (
+                <div key={entry.id || idx} className={`flex items-center justify-between p-3 rounded-lg border ${
+                  isPositive ? 'bg-green-50 border-green-200' :
+                  isNeutral ? 'bg-gray-50 border-gray-200' :
+                  entry.change_amount <= -1.0 ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'
+                }`}>
+                  <div className="flex items-center space-x-3">
+                    <Icon size={18} className={
+                      isPositive ? 'text-green-600' :
+                      isNeutral ? 'text-gray-400' :
+                      entry.change_amount <= -1.0 ? 'text-red-600' : 'text-orange-500'
+                    } />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{entry.reason}</p>
+                      <p className="text-xs text-gray-500">
+                        {eventForEntry?.name && `${eventForEntry.name} • `}
+                        {new Date(entry.created_at).toLocaleDateString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${
+                      isPositive ? 'text-green-600' : isNeutral ? 'text-gray-400' : 'text-red-600'
+                    }`}>
+                      {isPositive ? '+' : ''}{entry.change_amount}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {entry.previous_rating?.toFixed(2)} → {entry.new_rating?.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
