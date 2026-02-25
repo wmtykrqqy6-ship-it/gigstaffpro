@@ -80,19 +80,19 @@ export default function DashboardView({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
         <div className="flex space-x-2">
           <button
             onClick={onShowAddEvent}
-            className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
+            className="flex-1 sm:flex-none bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center justify-center space-x-2 text-sm"
           >
             <Plus size={18} />
             <span>New Event</span>
           </button>
           <button
             onClick={onShowAddWorker}
-            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center space-x-2 text-sm"
+            className="flex-1 sm:flex-none bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center justify-center space-x-2 text-sm"
           >
             <Plus size={18} />
             <span>New Worker</span>
@@ -100,60 +100,60 @@ export default function DashboardView({
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         <button
           onClick={() => onNavigate('events')}
-          className="bg-white p-6 rounded-lg shadow border-l-4 border-red-600 hover:shadow-lg transition-shadow text-left"
+          className="bg-white p-4 md:p-6 rounded-lg shadow border-l-4 border-red-600 hover:shadow-lg transition-shadow text-left"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Upcoming Events</p>
-              <p className="text-3xl font-bold text-gray-900">{upcomingEvents}</p>
-              <p className="text-xs text-red-600 mt-1">Click to view all →</p>
+              <p className="text-gray-600 text-xs md:text-sm">Upcoming Events</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{upcomingEvents}</p>
+              <p className="text-xs text-red-600 mt-1">View all →</p>
             </div>
-            <Calendar className="text-red-600" size={40} />
+            <Calendar className="text-red-600" size={32} />
           </div>
         </button>
         
         <button
           onClick={() => viewEventsByFilter('needs-staff')}
-          className="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500 hover:shadow-lg transition-shadow text-left"
+          className="bg-white p-4 md:p-6 rounded-lg shadow border-l-4 border-yellow-500 hover:shadow-lg transition-shadow text-left"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Need Staffing</p>
-              <p className="text-3xl font-bold text-gray-900">{needStaffing}</p>
-              <p className="text-xs text-yellow-600 mt-1">Click to view →</p>
+              <p className="text-gray-600 text-xs md:text-sm">Need Staffing</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{needStaffing}</p>
+              <p className="text-xs text-yellow-600 mt-1">View →</p>
             </div>
-            <AlertCircle className="text-yellow-500" size={40} />
+            <AlertCircle className="text-yellow-500" size={32} />
           </div>
         </button>
 
         <button
           onClick={() => onNavigate('staff')}
-          className="bg-white p-6 rounded-lg shadow border-l-4 border-green-600 hover:shadow-lg transition-shadow text-left"
+          className="bg-white p-4 md:p-6 rounded-lg shadow border-l-4 border-green-600 hover:shadow-lg transition-shadow text-left"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Active Workers</p>
-              <p className="text-3xl font-bold text-gray-900">{workers.length}</p>
-              <p className="text-xs text-green-600 mt-1">Click to manage →</p>
+              <p className="text-gray-600 text-xs md:text-sm">Active Workers</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{workers.length}</p>
+              <p className="text-xs text-green-600 mt-1">Manage →</p>
             </div>
-            <Users className="text-green-600" size={40} />
+            <Users className="text-green-600" size={32} />
           </div>
         </button>
 
         <button
           onClick={() => onNavigate('schedule')}
-          className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-600 hover:shadow-lg transition-shadow text-left"
+          className="bg-white p-4 md:p-6 rounded-lg shadow border-l-4 border-blue-600 hover:shadow-lg transition-shadow text-left"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Total Events</p>
-              <p className="text-3xl font-bold text-gray-900">{events.length}</p>
-              <p className="text-xs text-blue-600 mt-1">View schedule →</p>
+              <p className="text-gray-600 text-xs md:text-sm">Total Events</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{events.length}</p>
+              <p className="text-xs text-blue-600 mt-1">Schedule →</p>
             </div>
-            <DollarSign className="text-blue-600" size={40} />
+            <DollarSign className="text-blue-600" size={32} />
           </div>
         </button>
       </div>
