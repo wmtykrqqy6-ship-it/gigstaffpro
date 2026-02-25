@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 export default function SettingsView({
   positions,
   onUpdatePositions
 }) {
+  const [activeTab, setActiveTab] = useState('general');
+
+  // --- Locations state ---
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [locationForm, setLocationForm] = useState({
+    name: '', city: '', state: '', timezone: 'America/Chicago',
+    rules: { default_dress_code: '', notes: '' },
+    is_active: true
+  });
+  const [savingLocation, setSavingLocation] = useState(false);
   const [newPosition, setNewPosition] = useState('');
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
@@ -31,7 +44,125 @@ export default function SettingsView({
     loadPaymentTrackingSetting();
     loadRankAccessSettings();
     loadTimeSettings();
+    loadLocations();
   }, []);
+
+  const loadLocations = async () => {
+    setLoadingLocations(true);
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setLocations(data || []);
+    } catch (err) {
+      console.error('Error loading locations:', err.message);
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
+  const resetLocationForm = () => {
+    setLocationForm({
+      name: '', city: '', state: '', timezone: 'America/Chicago',
+      rules: { default_dress_code: '', notes: '' },
+      is_active: true
+    });
+  };
+
+  const openAddLocation = () => {
+    resetLocationForm();
+    setEditingLocation(null);
+    setShowAddLocation(true);
+  };
+
+  const openEditLocation = (loc) => {
+    setLocationForm({
+      name: loc.name || '',
+      city: loc.city || '',
+      state: loc.state || '',
+      timezone: loc.timezone || 'America/Chicago',
+      rules: {
+        default_dress_code: loc.rules?.default_dress_code || '',
+        notes: loc.rules?.notes || ''
+      },
+      is_active: loc.is_active !== false
+    });
+    setEditingLocation(loc);
+    setShowAddLocation(true);
+  };
+
+  const saveLocation = async () => {
+    if (!locationForm.name.trim()) {
+      alert('Location name is required.');
+      return;
+    }
+    setSavingLocation(true);
+    try {
+      const payload = {
+        name: locationForm.name.trim(),
+        city: locationForm.city.trim() || null,
+        state: locationForm.state.trim() || null,
+        timezone: locationForm.timezone,
+        rules: locationForm.rules,
+        is_active: locationForm.is_active
+      };
+
+      if (editingLocation) {
+        const { error } = await supabase
+          .from('locations')
+          .update(payload)
+          .eq('id', editingLocation.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('locations')
+          .insert([payload]);
+        if (error) throw error;
+      }
+
+      await loadLocations();
+      setShowAddLocation(false);
+      setEditingLocation(null);
+      resetLocationForm();
+    } catch (err) {
+      alert('Error saving location: ' + err.message);
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const toggleLocationActive = async (loc) => {
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .update({ is_active: !loc.is_active })
+        .eq('id', loc.id);
+      if (error) throw error;
+      await loadLocations();
+    } catch (err) {
+      alert('Error updating location: ' + err.message);
+    }
+  };
+
+  const deleteLocation = async (loc) => {
+    if (loc.name === 'Main') {
+      alert('The default "Main" location cannot be deleted.');
+      return;
+    }
+    if (!confirm(`Delete "${loc.name}"? This cannot be undone. Events linked to this location will lose their location.`)) return;
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', loc.id);
+      if (error) throw error;
+      await loadLocations();
+    } catch (err) {
+      alert('Error deleting location: ' + err.message);
+    }
+  };
 
   const loadWarehouseAddress = async () => {
     try {
@@ -407,348 +538,491 @@ export default function SettingsView({
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold text-gray-900">Settings</h2>
-        <p className="text-sm text-gray-600 mt-1">Manage your position types and system settings</p>
+        <p className="text-sm text-gray-600 mt-1">Manage locations, positions, and system settings</p>
       </div>
 
-      {/* Positions Management */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Position Types</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Customize the positions available in your system. These positions will be used for:
-        </p>
-        <ul className="text-sm text-gray-600 mb-4 list-disc list-inside space-y-1">
-          <li><strong>Event Staffing:</strong> When creating events, you'll select how many of each position you need</li>
-          <li><strong>Worker Skills:</strong> When adding/editing workers, these become the available skills they can have</li>
-          <li><strong>Assignment Matching:</strong> Workers are automatically matched to positions based on their skills</li>
-        </ul>
-        <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded mb-4">
-          💡 Tip: When you add a new position like "Baccarat Dealer", it immediately becomes available both as an event position AND a worker skill.
-        </p>
-
-        {/* Add New Position */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Add New Position</label>
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              value={newPosition}
-              onChange={(e) => setNewPosition(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddPosition()}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              placeholder="e.g., Baccarat Dealer"
-              disabled={saving}
-            />
-            <button
-              onClick={handleAddPosition}
-              disabled={saving}
-              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2"
-            >
-              <Plus size={18} />
-              <span>Add</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Existing Positions */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Current Positions ({positions.length})</label>
-          <div className="space-y-2">
-            {positions.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4">No positions configured yet. Add your first position above.</p>
-            ) : (
-              positions.map((position, idx) => {
-                const posLabel = position.label || position;
-                const posKey = position.key || position.toLowerCase().replace(/\s+/g, '_');
-                const isEditing = editingPosition === posKey;
-                
-                return (
-                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  {isEditing ? (
-                    <>
-                      <input
-                        type="text"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
-                        className="flex-1 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        autoFocus
-                      />
-                      <div className="flex space-x-2 ml-3">
-                        <button
-                          onClick={handleSaveEdit}
-                          className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"
-                          title="Save"
-                        >
-                          <CheckCircle size={20} />
-                        </button>
-                        <button
-                          onClick={handleCancelEdit}
-                          className="text-gray-600 hover:text-gray-800 p-1 hover:bg-gray-200 rounded"
-                          title="Cancel"
-                        >
-                          <XCircle size={20} />
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium text-gray-900">{posLabel}</span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditPosition(position)}
-                          className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePosition(position)}
-                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+      {/* Tab Bar */}
+      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
+        {[
+          { id: 'locations', label: '📍 Locations' },
+          { id: 'general', label: '⚙️ General' },
+          { id: 'positions', label: '🎰 Positions' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-white shadow text-gray-900'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Warehouse Address */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-          <MapPin size={20} />
-          <span>Warehouse Address</span>
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          This address is used for calculating miles traveled to events.
-        </p>
-        
-        {loadingWarehouse ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={warehouseAddress}
-              onChange={(e) => setWarehouseAddress(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              placeholder="Enter warehouse address"
-              disabled={saving}
-            />
-            <button
-              onClick={saveWarehouseAddress}
-              disabled={saving}
-              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Address'}
-            </button>
-          </div>
-        )}
-      </div>
+      {/* ── LOCATIONS TAB ── */}
+      {activeTab === 'locations' && (
+        <div className="space-y-4">
 
-      {/* Payment Tracking Toggle */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Control whether workers see payment information for their assignments.
-        </p>
-        
-        {loadingPaymentSetting ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-          </div>
-        ) : (
+          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-gray-900 mb-1">
-                {paymentTrackingEnabled ? 'Payment Tracking Enabled' : 'Payment Tracking Disabled'}
-              </p>
-              <p className="text-sm text-gray-600">
-                {paymentTrackingEnabled 
-                  ? 'Payment tracking is currently enabled. Workers will see pay info on assignments.' 
-                  : 'Payment tracking is currently disabled. Payment features are hidden.'}
-              </p>
+              <h3 className="text-xl font-bold text-gray-900">Locations</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Manage the markets your business operates in</p>
             </div>
             <button
-              onClick={() => togglePaymentTracking(!paymentTrackingEnabled)}
-              disabled={saving}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                paymentTrackingEnabled ? 'bg-green-600' : 'bg-gray-300'
-              } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={openAddLocation}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
             >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
+              <Plus size={16} />
+              <span>Add Location</span>
             </button>
           </div>
-        )}
-      </div>
 
-      {/* Rank-Based Event Access */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Event Access (Rank-Based)</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Control when workers can see and sign up for events based on their rank. Lower rank numbers (better workers) get earlier access.
-        </p>
-        
-        {loadingRankAccess ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[1, 2, 3, 4, 5].map(rank => (
-                <div key={rank} className="border border-gray-200 rounded-lg p-4">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Rank {rank} {rank === 1 && '(Best)'}  {rank === 5 && '(New)'}
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      min="0"
-                      value={rankAccessDays[rank]}
-                      onChange={(e) => setRankAccessDays({
-                        ...rankAccessDays,
-                        [rank]: parseInt(e.target.value, 10) || 0
-                      })}
-                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      disabled={saving}
-                    />
-                    <span className="text-sm text-gray-600">
-                      days before event
-                    </span>
+          {/* Add / Edit Form */}
+          {showAddLocation && (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-900">
+              <h4 className="text-lg font-bold text-gray-900 mb-4">
+                {editingLocation ? `Edit: ${editingLocation.name}` : 'New Location'}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Location Name *</label>
+                  <input
+                    type="text"
+                    value={locationForm.name}
+                    onChange={e => setLocationForm({ ...locationForm, name: e.target.value })}
+                    placeholder="e.g. Milwaukee, Chicago North"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Timezone</label>
+                  <select
+                    value={locationForm.timezone}
+                    onChange={e => setLocationForm({ ...locationForm, timezone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Phoenix">Arizona (MST)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={locationForm.city}
+                    onChange={e => setLocationForm({ ...locationForm, city: e.target.value })}
+                    placeholder="e.g. Milwaukee"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={locationForm.state}
+                    onChange={e => setLocationForm({ ...locationForm, state: e.target.value })}
+                    placeholder="e.g. WI"
+                    maxLength={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Default Dress Code</label>
+                  <input
+                    type="text"
+                    value={locationForm.rules.default_dress_code}
+                    onChange={e => setLocationForm({ ...locationForm, rules: { ...locationForm.rules, default_dress_code: e.target.value } })}
+                    placeholder="e.g. Vegas on Wheels attire"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Active</label>
+                  <div className="flex items-center space-x-3 mt-2">
+                    <button
+                      onClick={() => setLocationForm({ ...locationForm, is_active: !locationForm.is_active })}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${locationForm.is_active ? 'bg-green-500' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${locationForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-sm text-gray-600">{locationForm.is_active ? 'Active' : 'Inactive'}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {rankAccessDays[rank] === 0 
-                      ? 'Can see events immediately' 
-                      : `Can see events ${rankAccessDays[rank]} days before`}
-                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={locationForm.rules.notes}
+                    onChange={e => setLocationForm({ ...locationForm, rules: { ...locationForm.rules, notes: e.target.value } })}
+                    placeholder="Any location-specific notes for admin reference..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={saveLocation}
+                  disabled={savingLocation}
+                  className="bg-red-900 text-white px-5 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2 text-sm"
+                >
+                  <Save size={15} />
+                  <span>{savingLocation ? 'Saving...' : editingLocation ? 'Save Changes' : 'Create Location'}</span>
+                </button>
+                <button
+                  onClick={() => { setShowAddLocation(false); setEditingLocation(null); resetLocationForm(); }}
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Location Cards */}
+          {loadingLocations ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-900"></div>
+            </div>
+          ) : locations.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <MapPin size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500">No locations yet. Add your first location above.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {locations.map(loc => (
+                <div
+                  key={loc.id}
+                  className={`bg-white rounded-lg shadow p-5 border-l-4 ${loc.is_active ? 'border-green-500' : 'border-gray-300'}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <MapPin size={16} className={loc.is_active ? 'text-green-600' : 'text-gray-400'} />
+                        <h4 className="font-bold text-gray-900 text-lg">{loc.name}</h4>
+                        {!loc.is_active && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
+                        )}
+                      </div>
+                      {(loc.city || loc.state) && (
+                        <p className="text-sm text-gray-500 mt-0.5 ml-6">
+                          {[loc.city, loc.state].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => openEditLocation(loc)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit size={15} />
+                      </button>
+                      <button
+                        onClick={() => toggleLocationActive(loc)}
+                        className={`p-2 rounded transition-colors ${loc.is_active ? 'text-yellow-600 hover:bg-yellow-50' : 'text-green-600 hover:bg-green-50'}`}
+                        title={loc.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        {loc.is_active ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                      </button>
+                      {loc.name !== 'Main' && (
+                        <button
+                          onClick={() => deleteLocation(loc)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ml-6 space-y-1 text-xs text-gray-500">
+                    <p>🕐 {loc.timezone}</p>
+                    {loc.rules?.default_dress_code && (
+                      <p>👔 {loc.rules.default_dress_code}</p>
+                    )}
+                    {loc.rules?.notes && (
+                      <p className="text-gray-400 italic">"{loc.rules.notes}"</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
-            
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-              <p className="text-blue-900 font-semibold mb-2">Example Timeline:</p>
-              <ul className="text-blue-800 space-y-1">
-                <li>• Event created: Rank 1 workers see it immediately</li>
-                <li>• {rankAccessDays[2]} days before: Rank 2 workers can sign up</li>
-                <li>• {rankAccessDays[3]} days before: Rank 3 workers can sign up</li>
-                <li>• {rankAccessDays[4]} days before: Rank 4 workers can sign up</li>
-                <li>• {rankAccessDays[5]} days before: Rank 5 workers can sign up</li>
-              </ul>
-            </div>
+          )}
+        </div>
+      )}
 
-            <button
-              onClick={saveRankAccessSettings}
-              disabled={saving}
-              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Access Settings'}
-            </button>
-          </div>
-        )}
-      </div>
+      {/* ── GENERAL TAB ── */}
+      {activeTab === 'general' && (
+        <div className="space-y-6">
 
-      {/* Time & Date Settings */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Time & Date Settings</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Configure timezone and time display format for your organization.
-        </p>
-        
-        {loadingTimeSettings ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Timezone Setting */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Timezone
-              </label>
-              <select
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                disabled={saving}
-              >
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Phoenix">Arizona (MST - No DST)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="America/Anchorage">Alaska Time (AKT)</option>
-                <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                All event times and dates will be displayed in this timezone
-              </p>
-            </div>
-
-            {/* Time Format Setting */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Time Format
-              </label>
-              <div className="flex space-x-4">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="12"
-                    checked={timeFormat === '12'}
-                    onChange={(e) => setTimeFormat(e.target.value)}
-                    disabled={saving}
-                    className="w-4 h-4 text-red-900 focus:ring-red-500"
-                  />
-                  <span className="text-sm">12-hour (2:30 PM)</span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="24"
-                    checked={timeFormat === '24'}
-                    onChange={(e) => setTimeFormat(e.target.value)}
-                    disabled={saving}
-                    className="w-4 h-4 text-red-900 focus:ring-red-500"
-                  />
-                  <span className="text-sm">24-hour (14:30)</span>
-                </label>
+          {/* Warehouse Address */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
+              <MapPin size={20} />
+              <span>Warehouse Address</span>
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This address is used for calculating miles traveled to events.
+            </p>
+            {loadingWarehouse ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Choose how times are displayed throughout the app
-              </p>
-            </div>
-
-            <button
-              onClick={saveTimeSettings}
-              disabled={saving}
-              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Time Settings'}
-            </button>
+            ) : (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={warehouseAddress}
+                  onChange={(e) => setWarehouseAddress(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Enter warehouse address"
+                  disabled={saving}
+                />
+                <button
+                  onClick={saveWarehouseAddress}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Address'}
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Future Settings Sections */}
-      <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">More Settings Coming Soon</h3>
-        <p className="text-sm text-gray-600">
-          Additional settings like worker skills, pay rates, and notification preferences will be added here.
-        </p>
-      </div>
+          {/* Payment Tracking Toggle */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Control whether workers see payment information for their assignments.
+            </p>
+            {loadingPaymentSetting ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 mb-1">
+                    {paymentTrackingEnabled ? 'Payment Tracking Enabled' : 'Payment Tracking Disabled'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {paymentTrackingEnabled
+                      ? 'Workers will see pay info on assignments.'
+                      : 'Payment features are hidden from workers.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => togglePaymentTracking(!paymentTrackingEnabled)}
+                  disabled={saving}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${paymentTrackingEnabled ? 'bg-green-600' : 'bg-gray-300'} ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Rank-Based Event Access */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Event Access (Rank-Based)</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Control when workers can see and sign up for events based on their rank.
+            </p>
+            {loadingRankAccess ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4, 5].map(rank => (
+                    <div key={rank} className="border border-gray-200 rounded-lg p-4">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
+                        Rank {rank} {rank === 1 && '(Best)'} {rank === 5 && '(New)'}
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={rankAccessDays[rank]}
+                          onChange={(e) => setRankAccessDays({ ...rankAccessDays, [rank]: parseInt(e.target.value, 10) || 0 })}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          disabled={saving}
+                        />
+                        <span className="text-sm text-gray-600">days before event</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {rankAccessDays[rank] === 0 ? 'Can see events immediately' : `Can see events ${rankAccessDays[rank]} days before`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="text-blue-900 font-semibold mb-2">Example Timeline:</p>
+                  <ul className="text-blue-800 space-y-1">
+                    <li>• Event created: Rank 1 workers see it immediately</li>
+                    <li>• {rankAccessDays[2]} days before: Rank 2 workers can sign up</li>
+                    <li>• {rankAccessDays[3]} days before: Rank 3 workers can sign up</li>
+                    <li>• {rankAccessDays[4]} days before: Rank 4 workers can sign up</li>
+                    <li>• {rankAccessDays[5]} days before: Rank 5 workers can sign up</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={saveRankAccessSettings}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Access Settings'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Time & Date Settings */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Time & Date Settings</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Configure timezone and time display format for your organization.
+            </p>
+            {loadingTimeSettings ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Timezone</label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    disabled={saving}
+                  >
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                    <option value="America/Chicago">Central Time (CT)</option>
+                    <option value="America/Denver">Mountain Time (MT)</option>
+                    <option value="America/Phoenix">Arizona (MST - No DST)</option>
+                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Time Format</label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="radio" value="12" checked={timeFormat === '12'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
+                      <span className="text-sm">12-hour (2:30 PM)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="radio" value="24" checked={timeFormat === '24'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
+                      <span className="text-sm">24-hour (14:30)</span>
+                    </label>
+                  </div>
+                </div>
+                <button
+                  onClick={saveTimeSettings}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Time Settings'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── POSITIONS TAB ── */}
+      {activeTab === 'positions' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Position Types</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Customize the positions available in your system. These are used for event staffing, worker skills, and assignment matching.
+          </p>
+          <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded mb-6">
+            💡 Adding a new position like "Baccarat Dealer" immediately makes it available as both an event position and a worker skill.
+          </p>
+
+          {/* Add New Position */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Add New Position</label>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newPosition}
+                onChange={(e) => setNewPosition(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddPosition()}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="e.g., Baccarat Dealer"
+                disabled={saving}
+              />
+              <button
+                onClick={handleAddPosition}
+                disabled={saving}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2"
+              >
+                <Plus size={18} />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Existing Positions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Current Positions ({positions.length})</label>
+            <div className="space-y-2">
+              {positions.length === 0 ? (
+                <p className="text-gray-500 text-sm py-4">No positions configured yet.</p>
+              ) : (
+                positions.map((position, idx) => {
+                  const posLabel = position.label || position;
+                  const posKey = position.key || position.toLowerCase().replace(/\s+/g, '_');
+                  const isEditing = editingPosition === posKey;
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      {isEditing ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                            className="flex-1 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-red-500"
+                            autoFocus
+                          />
+                          <div className="flex space-x-2 ml-3">
+                            <button onClick={handleSaveEdit} className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"><CheckCircle size={20} /></button>
+                            <button onClick={handleCancelEdit} className="text-gray-600 hover:text-gray-800 p-1 hover:bg-gray-200 rounded"><XCircle size={20} /></button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-900">{posLabel}</span>
+                          <div className="flex space-x-2">
+                            <button onClick={() => handleEditPosition(position)} className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"><Edit size={18} /></button>
+                            <button onClick={() => handleDeletePosition(position)} className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"><Trash2 size={18} /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
