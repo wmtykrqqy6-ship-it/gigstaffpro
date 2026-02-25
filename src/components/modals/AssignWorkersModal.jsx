@@ -243,28 +243,24 @@ export default function AssignWorkersModal({
 
             {/* Event Host */}
             <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-semibold text-gray-700">Event Host / Team Leader:</span>
-                  {selectedHostId ? (
-                    <span className="text-sm font-medium text-orange-700">
-                      {hostWorkers.find(w => w.id === selectedHostId)?.name || 'Unknown'}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-400 italic">None assigned</span>
-                  )}
-                </div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Event Host / Team Leader</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <select
                   value={selectedHostId}
                   onChange={(e) => handleSaveHost(e.target.value)}
                   disabled={savingHost}
-                  className="text-sm px-3 py-1.5 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white disabled:opacity-50"
+                  className="w-full sm:w-auto flex-1 text-sm px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white disabled:opacity-50"
                 >
-                  <option value="">-- No host --</option>
+                  <option value="">-- No host assigned --</option>
                   {hostWorkers.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
+                {selectedHostId && (
+                  <span className="text-xs text-orange-700 font-medium">
+                    ✓ {savingHost ? 'Saving...' : 'Saved'}
+                  </span>
+                )}
               </div>
               {hostWorkers.length === 0 && (
                 <p className="text-xs text-orange-600 mt-2">No hosts designated yet. Edit a worker and toggle "Event Host" to enable them.</p>
