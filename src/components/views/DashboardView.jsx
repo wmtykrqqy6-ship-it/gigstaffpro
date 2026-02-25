@@ -1,10 +1,224 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Calendar, Users, DollarSign, AlertCircle, Plus, Clock, 
-  Settings, History, MapPin 
+  MapPin, ChevronDown, CheckCircle, List
 } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
-import { formatTime } from '../../utils/dateHelpers';
+import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
+
+// --- Inline Schedule Section ---
+function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssignModal, onNavigate }) {
+  const [viewMode, setViewMode] = useState('calendar');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const getEventsForDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    return events.filter(e => (e.date || '').split('T')[0] === dateStr);
+  };
+
+  const generateCalendarDays = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days = [];
+    for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
+    for (let d = 1; d <= lastDay.getDate(); d++) days.push(new Date(year, month, d));
+    return days;
+  };
+
+  const changeMonth = (dir) => {
+    const d = new Date(selectedDate);
+    d.setMonth(d.getMonth() + dir);
+    setSelectedDate(d);
+  };
+
+  const isToday = (date) => date && date.toDateString() === new Date().toDateString();
+
+  const days = generateCalendarDays();
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // List view: events for selected date
+  const selectedDateStr = (() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  })();
+  const dayEvents = events
+    .filter(e => (e.date || '').split('T')[0] === selectedDateStr)
+    .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+  return (
+    <div className="bg-white rounded-lg shadow p-4 md:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold text-gray-900">Schedule</h3>
+        <div className="flex items-center space-x-2">
+          {/* Toggle */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
+                viewMode === 'calendar' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Calendar size={14} />
+              <span className="hidden sm:inline">Calendar</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
+                viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <List size={14} />
+              <span className="hidden sm:inline">List</span>
+            </button>
+          </div>
+          <button
+            onClick={() => onNavigate('schedule')}
+            className="text-xs text-red-900 hover:underline font-medium"
+          >
+            Full view →
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'calendar' ? (
+        <>
+          {/* Month nav */}
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-800">
+              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h4>
+            <div className="flex items-center space-x-1">
+              <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded">
+                <ChevronDown size={18} className="rotate-90" />
+              </button>
+              <button onClick={() => setSelectedDate(new Date())} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-medium">
+                Today
+              </button>
+              <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded">
+                <ChevronDown size={18} className="-rotate-90" />
+              </button>
+            </div>
+          </div>
+          {/* Grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {weekDays.map(d => (
+              <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d.charAt(0)}</div>
+            ))}
+            {days.map((date, i) => {
+              if (!date) return <div key={`e-${i}`} className="min-h-12 md:min-h-16 bg-gray-50 rounded" />;
+              const dayEvts = getEventsForDate(date);
+              return (
+                <div
+                  key={date.toISOString()}
+                  onClick={() => { setSelectedDate(date); if (dayEvts.length) setViewMode('list'); }}
+                  className={`min-h-12 md:min-h-16 p-1 border rounded cursor-pointer transition-colors ${
+                    isToday(date) ? 'bg-red-50 border-red-300 ring-1 ring-red-200'
+                    : dayEvts.length ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                    : 'bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="text-xs font-semibold text-gray-800 mb-0.5">{date.getDate()}</div>
+                  {dayEvts.slice(0, 2).map(ev => {
+                    const filled = assignments.filter(a => a.event_id === ev.id).length;
+                    const total = ev.positions?.reduce((s, p) => s + p.count, 0) || 0;
+                    return (
+                      <div key={ev.id} className={`text-xs p-0.5 rounded mb-0.5 truncate ${
+                        filled >= total && total > 0 ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
+                      }`}>
+                        {ev.name}
+                      </div>
+                    );
+                  })}
+                  {dayEvts.length > 2 && <div className="text-xs text-gray-500">+{dayEvts.length - 2}</div>}
+                </div>
+              );
+            })}
+          </div>
+          {/* Legend */}
+          <div className="flex items-center space-x-4 mt-3 text-xs text-gray-600">
+            <span className="flex items-center space-x-1"><span className="w-3 h-3 bg-green-600 rounded inline-block" /> Staffed</span>
+            <span className="flex items-center space-x-1"><span className="w-3 h-3 bg-yellow-500 rounded inline-block" /> Needs Staff</span>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* List view header */}
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-base font-semibold text-gray-800">
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </h4>
+            <button onClick={() => setViewMode('calendar')} className="text-xs text-red-900 hover:underline flex items-center space-x-1">
+              <Calendar size={13} />
+              <span>Calendar</span>
+            </button>
+          </div>
+          {dayEvents.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar size={40} className="mx-auto text-gray-300 mb-2" />
+              <p className="text-gray-500 text-sm">No events on this date</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {dayEvents.map(event => {
+                const eventAssignments = assignments.filter(a => a.event_id === event.id);
+                const total = event.positions?.reduce((s, p) => s + p.count, 0) || 0;
+                const filled = eventAssignments.length;
+                return (
+                  <div key={event.id} className="border rounded-lg p-3 hover:shadow-sm transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h5 className="font-bold text-gray-900">{event.name}</h5>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-600 mt-1">
+                          <span className="flex items-center space-x-1"><Clock size={12} /><span>{formatTime(event.time, timeFormat)}{event.end_time ? ` - ${formatTime(event.end_time, timeFormat)}` : ''}</span></span>
+                          <span className="flex items-center space-x-1"><MapPin size={12} /><span>{event.venue}</span></span>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
+                        filled >= total && total > 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>{filled}/{total}</span>
+                    </div>
+                    {eventAssignments.length > 0 && (
+                      <div className="mt-2 pt-2 border-t grid grid-cols-1 sm:grid-cols-2 gap-1">
+                        {eventAssignments.map(a => {
+                          const w = workers.find(w => w.id === a.worker_id);
+                          if (!w) return null;
+                          return (
+                            <div key={a.id} className="flex items-center space-x-2 text-xs bg-gray-50 p-1.5 rounded">
+                              <CheckCircle size={12} className="text-green-600 flex-shrink-0" />
+                              <span className="font-medium">{w.name}</span>
+                              <span className="text-gray-500">• {getPositionLabel(a.position)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => onOpenAssignModal(event)}
+                      className="mt-2 w-full text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center justify-center space-x-1"
+                    >
+                      <Users size={12} />
+                      <span>Assign Staff</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- Main Dashboard ---
 
 export default function DashboardView({
   events,
@@ -158,63 +372,15 @@ export default function DashboardView({
         </button>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
-            onClick={onShowAddEvent}
-            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all group"
-          >
-            <div className="bg-red-100 p-2 rounded group-hover:bg-red-200">
-              <Calendar className="text-red-600" size={24} />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-gray-900">Create Event</p>
-              <p className="text-xs text-gray-600">Add new casino party</p>
-            </div>
-          </button>
-
-          <button
-            onClick={onShowAddWorker}
-            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all group"
-          >
-            <div className="bg-green-100 p-2 rounded group-hover:bg-green-200">
-              <Users className="text-green-600" size={24} />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-gray-900">Add Worker</p>
-              <p className="text-xs text-gray-600">Onboard new staff</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigate('schedule')}
-            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group"
-          >
-            <div className="bg-blue-100 p-2 rounded group-hover:bg-blue-200">
-              <Clock className="text-blue-600" size={24} />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-gray-900">View Schedule</p>
-              <p className="text-xs text-gray-600">Calendar overview</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigate('settings')}
-            className="flex items-center space-x-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all group"
-          >
-            <div className="bg-purple-100 p-2 rounded group-hover:bg-purple-200">
-              <Settings className="text-purple-600" size={24} />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-gray-900">Settings</p>
-              <p className="text-xs text-gray-600">Manage positions</p>
-            </div>
-          </button>
-        </div>
-      </div>
+      {/* Schedule */}
+      <ScheduleSection
+        events={events}
+        assignments={assignments}
+        workers={workers}
+        timeFormat={timeFormat}
+        onOpenAssignModal={onOpenAssignModal}
+        onNavigate={onNavigate}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
