@@ -218,6 +218,26 @@ export default function StaffView({
           </button>
         </div>
 
+        {/* Market filter - always visible when multiple locations exist */}
+        {locations.length > 1 && (
+          <div className="mt-3">
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm ${
+                locationFilter !== 'all' ? 'border-purple-400 bg-purple-50 text-purple-900 font-medium' : 'border-gray-300'
+              }`}
+            >
+              <option value="all">📍 All Markets</option>
+              {locations.map(loc => (
+                <option key={loc.id} value={loc.id}>
+                  📍 {loc.name}{loc.city ? ` — ${loc.city}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Collapsible Filter Panel */}
         {showFilters && (
           <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
@@ -315,25 +335,6 @@ export default function StaffView({
               >
                 Clear Filters
               </button>
-            )}
-
-            {/* Location Filter - only shows if multiple locations */}
-            {locations.length > 1 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Market</label>
-                <select
-                  value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                >
-                  <option value="all">All Markets</option>
-                  {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}{loc.city ? ` — ${loc.city}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
             )}
           </div>
         )}
