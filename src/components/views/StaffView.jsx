@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
+import { supabase } from '../../supabaseClient';
 
 export default function StaffView({
   loading,
@@ -18,9 +19,34 @@ export default function StaffView({
   const [rankFilter, setRankFilter] = useState('all');
   const [reliabilityFilter, setReliabilityFilter] = useState('all');
   const [hostFilter, setHostFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [expandedCards, setExpandedCards] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [workerLocationMap, setWorkerLocationMap] = useState({}); // { worker_id: [location_id, ...] }
+
+  useEffect(() => {
+    supabase
+      .from('locations')
+      .select('id, name, city, state')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setLocations(data || []));
+
+    supabase
+      .from('worker_locations')
+      .select('worker_id, location_id')
+      .eq('approved', true)
+      .then(({ data }) => {
+        const map = {};
+        (data || []).forEach(({ worker_id, location_id }) => {
+          if (!map[worker_id]) map[worker_id] = [];
+          map[worker_id].push(location_id);
+        });
+        setWorkerLocationMap(map);
+      });
+  }, []);
 
   const toggleCard = (workerId) => {
     setExpandedCards(prev => ({
@@ -35,6 +61,7 @@ export default function StaffView({
     (rankFilter !== 'all' ? 1 : 0) + 
     (reliabilityFilter !== 'all' ? 1 : 0) +
     (hostFilter !== 'all' ? 1 : 0) +
+    (locationFilter !== 'all' ? 1 : 0) +
     (sortBy !== 'name' ? 1 : 0);
 
   if (loading) {
@@ -101,6 +128,12 @@ export default function StaffView({
     // Host filter
     if (hostFilter === 'hosts' && !worker.is_host) return false;
     if (hostFilter === 'non-hosts' && worker.is_host) return false;
+
+    // Location filter
+    if (locationFilter !== 'all') {
+      const workerLocs = workerLocationMap[worker.id] || [];
+      if (!workerLocs.includes(locationFilter)) return false;
+    }
 
     return true;
   });
@@ -275,12 +308,32 @@ export default function StaffView({
                   setRankFilter('all');
                   setReliabilityFilter('all');
                   setHostFilter('all');
+                  setLocationFilter('all');
                   setSortBy('name');
                 }}
                 className="w-full px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors"
               >
                 Clear Filters
               </button>
+            )}
+
+            {/* Location Filter - only shows if multiple locations */}
+            {locations.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Market</label>
+                <select
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                >
+                  <option value="all">All Markets</option>
+                  {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}{loc.city ? ` — ${loc.city}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
         )}

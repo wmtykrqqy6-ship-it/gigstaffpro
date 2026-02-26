@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
+import { supabase } from '../../supabaseClient';
 
 export default function EventsView({
   events,
@@ -13,10 +14,21 @@ export default function EventsView({
   onDeleteEvent,
   onAutoArchive
 }) {
-  const [statusFilter, setStatusFilter] = useState('active'); // active filters out archived by default
-  const [dateRangeFilter, setDateRangeFilter] = useState('next-30'); // Show next 30 days by default
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [dateRangeFilter, setDateRangeFilter] = useState('next-30');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('date'); // date, name, staffing
+  const [sortBy, setSortBy] = useState('date');
+  const [locations, setLocations] = useState([]);
+
+  useEffect(() => {
+    supabase
+      .from('locations')
+      .select('id, name, city, state')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setLocations(data || []));
+  }, []);
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -97,6 +109,11 @@ export default function EventsView({
       if (eventDate < dateRange.start || eventDate > dateRange.end) return false;
     }
     
+    // Location filter
+    if (locationFilter !== 'all') {
+      if (event.location_id !== locationFilter) return false;
+    }
+
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -181,21 +198,39 @@ export default function EventsView({
             </select>
           </div>
 
-          {/* Sort By */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="date">Date (Earliest First)</option>
-              <option value="date-desc">Date (Latest First)</option>
-              <option value="name">Name (A-Z)</option>
-              <option value="staffing">Staffing (Low to High)</option>
-              <option value="staffing-desc">Staffing (High to Low)</option>
-            </select>
-          </div>
+          {/* Location Filter - only shows if multiple locations */}
+          {locations.length > 1 ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Market</label>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="all">All Markets</option>
+                {locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}{loc.city ? ` — ${loc.city}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="date">Date (Earliest First)</option>
+                <option value="date-desc">Date (Latest First)</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="staffing">Staffing (Low to High)</option>
+                <option value="staffing-desc">Staffing (High to Low)</option>
+              </select>
+            </div>
+          )}
 
           {/* Search */}
           <div>
@@ -210,9 +245,29 @@ export default function EventsView({
           </div>
         </div>
 
+        {/* Sort By row - only shows when location filter is visible */}
+        {locations.length > 1 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="date">Date (Earliest First)</option>
+                <option value="date-desc">Date (Latest First)</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="staffing">Staffing (Low to High)</option>
+                <option value="staffing-desc">Staffing (High to Low)</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Active Filters Summary */}
-        {(statusFilter !== 'active' || dateRangeFilter !== 'next-30' || searchTerm) && (
-          <div className="flex items-center space-x-2 text-sm">
+        {(statusFilter !== 'active' || dateRangeFilter !== 'next-30' || searchTerm || locationFilter !== 'all') && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-gray-600">Active filters:</span>
             {statusFilter !== 'active' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
@@ -221,8 +276,13 @@ export default function EventsView({
             )}
             {dateRangeFilter !== 'next-30' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                {dateRangeFilter === 'this-week' ? 'Next 7 Days' : 
+                {dateRangeFilter === 'this-week' ? 'Next 7 Days' :
                  dateRangeFilter === 'this-month' ? 'This Month' : 'All Time'}
+              </span>
+            )}
+            {locationFilter !== 'all' && (
+              <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                Market: {locations.find(l => l.id === locationFilter)?.name || locationFilter}
               </span>
             )}
             {searchTerm && (
@@ -234,12 +294,12 @@ export default function EventsView({
               onClick={() => {
                 setStatusFilter('active');
                 setDateRangeFilter('next-30');
+                setLocationFilter('all');
                 setSearchTerm('');
-                setSortBy('date');
               }}
-              className="text-red-600 hover:text-red-800 font-medium ml-2"
+              className="text-red-600 hover:text-red-800 text-xs underline"
             >
-              Reset Filters
+              Clear all
             </button>
           </div>
         )}
