@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Users, DollarSign, AlertCircle, Plus, Clock, 
-  MapPin, ChevronDown, CheckCircle, List
+  MapPin, ChevronDown, CheckCircle, AlignJustify
 } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
@@ -75,7 +75,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                 viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <List size={14} />
+              <AlignJustify size={14} />
               <span className="hidden sm:inline">List</span>
             </button>
           </div>
