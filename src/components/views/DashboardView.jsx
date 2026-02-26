@@ -247,7 +247,15 @@ export default function DashboardView({
     ? workers.filter(w => scopedWorkerIds.includes(w.id))
     : workers;
 
-  const upcomingEvents = scopedEvents.filter(e => e.status !== 'completed' && e.status !== 'cancelled').length;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingEvents = scopedEvents.filter(e => {
+    if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
+    const eventDate = new Date(e.date);
+    eventDate.setHours(0, 0, 0, 0);
+    return eventDate >= today;
+  }).length;
   const needStaffing = scopedEvents.filter(e => {
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
     const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
