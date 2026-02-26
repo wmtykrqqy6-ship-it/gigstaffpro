@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
 
@@ -463,6 +463,57 @@ export default function StaffView({
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Markets / Location Approvals - only shows if multiple locations */}
+                    {locations.length > 1 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 mb-1.5">Approved Markets:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {locations.map(loc => {
+                            const approved = (workerLocationMap[worker.id] || []).includes(loc.id);
+                            return (
+                              <button
+                                key={loc.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (approved) {
+                                    // Remove approval
+                                    await supabase
+                                      .from('worker_locations')
+                                      .delete()
+                                      .eq('worker_id', worker.id)
+                                      .eq('location_id', loc.id);
+                                    setWorkerLocationMap(prev => ({
+                                      ...prev,
+                                      [worker.id]: (prev[worker.id] || []).filter(id => id !== loc.id)
+                                    }));
+                                  } else {
+                                    // Add approval
+                                    await supabase
+                                      .from('worker_locations')
+                                      .insert({ worker_id: worker.id, location_id: loc.id, approved: true });
+                                    setWorkerLocationMap(prev => ({
+                                      ...prev,
+                                      [worker.id]: [...(prev[worker.id] || []), loc.id]
+                                    }));
+                                  }
+                                }}
+                                className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                  approved
+                                    ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                    : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
+                                }`}
+                              >
+                                <MapPin size={10} />
+                                <span>{loc.name}</span>
+                                {approved && <span className="text-green-600">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Tap a market to approve or remove</p>
                       </div>
                     )}
 
