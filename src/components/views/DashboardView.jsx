@@ -410,107 +410,36 @@ export default function DashboardView({
         </button>
       </div>
 
-      {/* Schedule */}
-      <ScheduleSection
-        events={scopedEvents}
-        assignments={assignments}
-        workers={workers}
-        timeFormat={timeFormat}
-        onOpenAssignModal={onOpenAssignModal}
-        onNavigate={onNavigate}
-      />
+      {/* Next 7 Days - high priority, right after stat cards */}
+      {(() => {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const sevenDaysOut = new Date(now);
+        sevenDaysOut.setDate(now.getDate() + 7);
+        sevenDaysOut.setHours(23, 59, 59, 999);
 
-      {/* Bottom panels - Recent Activity full width on top, Next 7 Days below */}
-      <div className="space-y-6">
+        const weekEvents = scopedEvents
+          .filter(event => {
+            if (event.status === 'cancelled' || event.status === 'archived') return false;
+            const eventDate = new Date(event.date);
+            return eventDate >= now && eventDate <= sevenDaysOut;
+          })
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        {/* Recent Activity - full width */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Last 7 days</span>
-          </div>
-
-          {recentActivity.length === 0 ? (
-            <div className="text-center py-10">
-              <History size={40} className="mx-auto text-gray-200 mb-3" />
-              <p className="text-gray-400 text-sm">No activity in the last 7 days</p>
+        return (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Next 7 Days</h3>
+              <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline font-medium">View all →</button>
             </div>
-          ) : (
-            <div className="relative">
-              <div
-                className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-64 overflow-y-auto pr-1"
-                style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
-              >
-                {recentActivity.map((activity, index) => {
-                  const Icon = activity.icon;
-                  const colorClasses = {
-                    blue: 'bg-blue-100 text-blue-600',
-                    green: 'bg-green-100 text-green-600',
-                    red: 'bg-red-100 text-red-600',
-                    yellow: 'bg-yellow-100 text-yellow-600'
-                  };
-                  return (
-                    <div key={index} className="flex items-start space-x-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors">
-                      <div className={`p-1.5 rounded-lg flex-shrink-0 ${colorClasses[activity.color]}`}>
-                        <Icon size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-800 leading-snug">{activity.message}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {new Date(activity.date).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+
+            {weekEvents.length === 0 ? (
+              <div className="text-center py-10">
+                <Calendar size={40} className="mx-auto text-gray-200 mb-3" />
+                <p className="text-gray-400 text-sm">No events in the next 7 days</p>
+                <button onClick={() => onNavigate('events')} className="mt-3 text-xs text-red-600 hover:underline font-medium">+ Create an event</button>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none rounded-b" />
-            </div>
-          )}
-        </div>
-
-        {/* Next 7 Days */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-900">Next 7 Days</h3>
-            <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline font-medium">View all →</button>
-          </div>
-          {(() => {
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            const sevenDaysOut = new Date(now);
-            sevenDaysOut.setDate(now.getDate() + 7);
-            sevenDaysOut.setHours(23, 59, 59, 999);
-
-            const weekEvents = scopedEvents
-              .filter(event => {
-                if (event.status === 'cancelled' || event.status === 'archived') return false;
-                const eventDate = new Date(event.date);
-                return eventDate >= now && eventDate <= sevenDaysOut;
-              })
-              .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            if (weekEvents.length === 0) {
-              return (
-                <div className="text-center py-10">
-                  <Calendar size={40} className="mx-auto text-gray-200 mb-3" />
-                  <p className="text-gray-400 text-sm">No events in the next 7 days</p>
-                  <button
-                    onClick={() => onNavigate('events')}
-                    className="mt-3 text-xs text-red-600 hover:underline font-medium"
-                  >
-                    + Create an event
-                  </button>
-                </div>
-              );
-            }
-
-            return (
+            ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {weekEvents.map(event => {
                   const eventAssignments = assignments.filter(a => a.event_id === event.id);
@@ -519,7 +448,6 @@ export default function DashboardView({
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
                   const eventDate = new Date(event.date);
                   const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
-
                   const urgencyBorder = daysUntil === 0 ? 'border-l-red-500'
                     : daysUntil === 1 ? 'border-l-orange-400'
                     : !isFullyStaffed ? 'border-l-yellow-400'
@@ -565,10 +493,67 @@ export default function DashboardView({
                   );
                 })}
               </div>
-            );
-          })()}
-        </div>
+            )}
+          </div>
+        );
+      })()}
 
+      {/* Schedule Calendar */}
+      <ScheduleSection
+        events={scopedEvents}
+        assignments={assignments}
+        workers={workers}
+        timeFormat={timeFormat}
+        onOpenAssignModal={onOpenAssignModal}
+        onNavigate={onNavigate}
+      />
+
+      {/* Recent Activity - full width at bottom */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Last 7 days</span>
+        </div>
+        {recentActivity.length === 0 ? (
+          <div className="text-center py-10">
+            <History size={40} className="mx-auto text-gray-200 mb-3" />
+            <p className="text-gray-400 text-sm">No activity in the last 7 days</p>
+          </div>
+        ) : (
+          <div className="relative">
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-64 overflow-y-auto pr-1"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
+            >
+              {recentActivity.map((activity, index) => {
+                const Icon = activity.icon;
+                const colorClasses = {
+                  blue: 'bg-blue-100 text-blue-600',
+                  green: 'bg-green-100 text-green-600',
+                  red: 'bg-red-100 text-red-600',
+                  yellow: 'bg-yellow-100 text-yellow-600'
+                };
+                return (
+                  <div key={index} className="flex items-start space-x-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors">
+                    <div className={`p-1.5 rounded-lg flex-shrink-0 ${colorClasses[activity.color]}`}>
+                      <Icon size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800 leading-snug">{activity.message}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(activity.date).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric',
+                          hour: 'numeric', minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none rounded-b" />
+          </div>
+        )}
       </div>
     </div>
   );
