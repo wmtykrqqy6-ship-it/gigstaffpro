@@ -239,6 +239,7 @@ export default function InviteWorkersModal({
             {positions.map(pos => {
               const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.position).length;
               const open = pos.count - filled;
+              const isFull = open <= 0;
               const hasAccepted = invitations.filter(i => i.position === pos.position && i.status === 'accepted').length > 0;
               return (
                 <button
@@ -253,11 +254,11 @@ export default function InviteWorkersModal({
                   <span>{getPositionLabel(pos.position)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
                     selectedPosition === pos.position ? 'bg-red-700 text-white' :
-                    open === 0 ? 'bg-green-100 text-green-700' :
+                    isFull ? 'bg-green-100 text-green-700' :
                     hasAccepted ? 'bg-yellow-100 text-yellow-700' :
                     'bg-gray-100 text-gray-600'
                   }`}>
-                    {filled}/{pos.count}
+                    {isFull ? '✓ Full' : `${open} open`}
                   </span>
                 </button>
               );
@@ -268,11 +269,18 @@ export default function InviteWorkersModal({
         {selectedPosition && (
           <>
             {/* Slots summary */}
-            <div className="px-6 py-2 bg-blue-50 border-b flex items-center justify-between flex-shrink-0">
+            <div className="px-6 py-2 border-b flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-4 text-sm">
-                <span className="text-gray-600">
-                  <span className="font-bold text-gray-900">{openSlots}</span> open slot{openSlots !== 1 ? 's' : ''} for {getPositionLabel(selectedPosition)}
-                </span>
+                {openSlots <= 0 ? (
+                  <span className="flex items-center space-x-1.5 text-green-700 font-medium">
+                    <CheckCircle size={15} />
+                    <span>This position is fully staffed ({filledSlots}/{totalSlots})</span>
+                  </span>
+                ) : (
+                  <span className="text-gray-600">
+                    <span className="font-bold text-gray-900">{openSlots}</span> open slot{openSlots !== 1 ? 's' : ''} · {filledSlots}/{totalSlots} filled for {getPositionLabel(selectedPosition)}
+                  </span>
+                )}
                 {acceptedInvites.length > 0 && (
                   <span className="flex items-center space-x-1 text-green-700 font-medium">
                     <CheckCircle size={14} />
@@ -286,7 +294,7 @@ export default function InviteWorkersModal({
                   </span>
                 )}
               </div>
-              <button onClick={loadInvitations} className="p-1 hover:bg-blue-100 rounded text-blue-600">
+              <button onClick={loadInvitations} className="p-1 hover:bg-gray-100 rounded text-gray-400">
                 <RefreshCw size={14} />
               </button>
             </div>
@@ -611,14 +619,21 @@ export default function InviteWorkersModal({
             Close
           </button>
           {activeTab === 'invite' && (
-            <button
-              onClick={handleSendInvites}
-              disabled={selectedWorkers.size === 0 || sending || !selectedPosition}
-              className="flex items-center space-x-2 px-5 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              <Send size={15} />
-              <span>{sending ? 'Sending...' : `Send ${selectedWorkers.size > 0 ? `(${selectedWorkers.size})` : ''} Invite${selectedWorkers.size !== 1 ? 's' : ''}`}</span>
-            </button>
+            openSlots <= 0 ? (
+              <span className="flex items-center space-x-2 text-sm text-green-700 font-medium">
+                <CheckCircle size={15} />
+                <span>Position fully staffed — no invites needed</span>
+              </span>
+            ) : (
+              <button
+                onClick={handleSendInvites}
+                disabled={selectedWorkers.size === 0 || sending || !selectedPosition}
+                className="flex items-center space-x-2 px-5 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Send size={15} />
+                <span>{sending ? 'Sending...' : `Send ${selectedWorkers.size > 0 ? `(${selectedWorkers.size})` : ''} Invite${selectedWorkers.size !== 1 ? 's' : ''}`}</span>
+              </button>
+            )
           )}
         </div>
       </div>
