@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
@@ -202,6 +202,41 @@ export default function WorkerPortalView({
       }
     };
 
+    const [pendingInvites, setPendingInvites] = useState([]);
+    const [respondingInvite, setRespondingInvite] = useState(null);
+
+    React.useEffect(() => {
+      if (!currentWorker?.id) return;
+      const loadPendingInvites = async () => {
+        const { data } = await supabase
+          .from('invitations')
+          .select('*')
+          .eq('worker_id', currentWorker.id)
+          .eq('status', 'pending')
+          .order('invited_at', { ascending: false });
+        setPendingInvites(data || []);
+      };
+      loadPendingInvites();
+    }, [currentWorker?.id]);
+
+    const handleInviteResponse = async (invitation, response) => {
+      setRespondingInvite(invitation.id);
+      try {
+        await supabase.from('invitations')
+          .update({
+            status: response,
+            responded_at: new Date().toISOString()
+          })
+          .eq('id', invitation.id);
+        setPendingInvites(prev => prev.filter(i => i.id !== invitation.id));
+        if (onReloadAssignments) onReloadAssignments();
+      } catch (err) {
+        alert('Error responding to invite: ' + err.message);
+      } finally {
+        setRespondingInvite(null);
+      }
+    };
+
     return (
       <div className="space-y-6">
         {/* Header with worker info - Only show on dashboard */}
@@ -229,6 +264,110 @@ export default function WorkerPortalView({
           />
         ) : (
           <>
+        {/* Pending Invites Banner - highest priority */}
+        {pendingInvites.length > 0 && (
+          <div className="bg-white rounded-lg shadow border-l-4 border-red-900 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Send size={22} className="text-red-900 flex-shrink-0" />
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {pendingInvites.length} Event Invite{pendingInvites.length !== 1 ? 's' : ''} Waiting
+                </h3>
+                <p className="text-sm text-gray-500">Respond before the window closes to secure your spot</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {pendingInvites.map(inv => {
+                const invEvent = events.find(e => e.id === inv.event_id);
+                if (!invEvent) return null;
+                const eventDate = parseDateSafe(invEvent.date);
+
+                // How many spots remain for this position on this event
+                const totalForPos = (invEvent.positions || []).find(p => p.position === inv.position)?.count || 0;
+                const confirmedForPos = (assignments || []).filter(a =>
+                  a.event_id === inv.event_id && a.position === inv.position && a.status !== 'standby'
+                ).length;
+                const spotsLeft = Math.max(0, totalForPos - confirmedForPos);
+
+                const isExpired = inv.expires_at && new Date(inv.expires_at) < new Date();
+                const expiresIn = inv.expires_at ? (() => {
+                  const mins = Math.round((new Date(inv.expires_at) - new Date()) / 60000);
+                  if (mins <= 0) return 'Expired';
+                  if (mins < 60) return `${mins}m left`;
+                  return `${Math.round(mins / 60)}h left`;
+                })() : null;
+
+                return (
+                  <div key={inv.id} className={`p-4 rounded-lg border ${isExpired ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-gray-900">{invEvent.name}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
+                          <span className="flex items-center space-x-1">
+                            <Calendar size={13} />
+                            <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                          </span>
+                          {invEvent.time && (
+                            <span className="flex items-center space-x-1">
+                              <Clock size={13} />
+                              <span>{formatTime(invEvent.time, timeFormat)}</span>
+                            </span>
+                          )}
+                          {invEvent.venue && (
+                            <span className="flex items-center space-x-1">
+                              <MapPin size={13} />
+                              <span>{invEvent.venue}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3 mt-2">
+                          <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {getPositionLabel(inv.position)}
+                          </span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            spotsLeft <= 1 ? 'bg-red-100 text-red-700' :
+                            spotsLeft <= 2 ? 'bg-orange-100 text-orange-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left
+                          </span>
+                          {expiresIn && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              isExpired ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              ⏱ {expiresIn}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {!isExpired && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleInviteResponse(inv, 'accepted')}
+                          disabled={respondingInvite === inv.id}
+                          className="flex-1 flex items-center justify-center space-x-1.5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition-colors"
+                        >
+                          <CheckCircle size={15} />
+                          <span>{respondingInvite === inv.id ? 'Accepting...' : 'Accept'}</span>
+                        </button>
+                        <button
+                          onClick={() => handleInviteResponse(inv, 'declined')}
+                          disabled={respondingInvite === inv.id}
+                          className="flex-1 flex items-center justify-center space-x-1.5 py-2 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-600 border border-gray-300 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <XCircle size={15} />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Host Report Due Alert - Priority Banner */}
         {currentWorker.is_host && (() => {
           const reportsDue = pastAssignments.filter(a => {

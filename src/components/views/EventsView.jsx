@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -10,6 +10,7 @@ export default function EventsView({
   timeFormat,
   onShowAddEvent,
   onOpenAssignModal,
+  onOpenInviteModal,
   onOpenEditEvent,
   onDeleteEvent,
   onAutoArchive,
@@ -340,6 +341,13 @@ export default function EventsView({
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-xl font-bold text-gray-900 leading-tight">{event.name}</h3>
                     <div className="flex items-center space-x-1 flex-shrink-0">
+                      <button
+                        onClick={() => onOpenInviteModal && onOpenInviteModal(event)}
+                        className="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded transition-colors"
+                        title="Invite workers"
+                      >
+                        <Send size={18} />
+                      </button>
                       <button 
                         onClick={() => onOpenEditEvent(event)}
                         className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded transition-colors"

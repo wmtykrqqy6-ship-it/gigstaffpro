@@ -40,6 +40,7 @@ import WorkerPortalView from './components/views/WorkerPortalView';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
+import InviteWorkersModal from './components/modals/InviteWorkersModal';
 
 const GigStaffPro = () => {
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
@@ -80,6 +81,8 @@ const GigStaffPro = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [selectedWorkerForPin, setSelectedWorkerForPin] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [selectedEventForInvite, setSelectedEventForInvite] = useState(null);
   const [locations, setLocations] = useState([]);
   const [activeLocation, setActiveLocation] = useState(() => {
     return localStorage.getItem('gigstaffpro_active_location') || 'all';
@@ -876,6 +879,10 @@ setAppPositions(storedPositions);
             setSelectedEvent(event);
             setShowAssignModal(true);
           }}
+          onOpenInviteModal={(event) => {
+            setSelectedEventForInvite(event);
+            setShowInviteModal(true);
+          }}
           onOpenEditEvent={(event) => {
             setSelectedEvent(event);
             setShowEditEvent(true);
@@ -1033,6 +1040,14 @@ setAppPositions(storedPositions);
   onClose={() => setShowNotifications(false)}
   onClearAll={handleClearAllNotifications}
 />
+      <InviteWorkersModal
+        open={showInviteModal}
+        event={selectedEventForInvite}
+        workers={workers}
+        assignments={assignments}
+        onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
+        onReloadAssignments={loadAssignments}
+      />
      <AddWorkerModal
   open={showAddWorker}
   savingWorker={savingWorker}
