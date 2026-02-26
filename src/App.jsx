@@ -113,6 +113,26 @@ const GigStaffPro = () => {
     localStorage.setItem('gigstaffpro_active_location', locationId);
   };
 
+  // Browser back/forward button support
+  const navigate = (view) => {
+    window.history.pushState({ view }, '', window.location.pathname);
+    setCurrentView(view);
+  };
+
+  useEffect(() => {
+    // Set initial history entry so back works from the first view
+    window.history.replaceState({ view: 'dashboard' }, '', window.location.pathname);
+
+    const handlePopState = (e) => {
+      if (e.state?.view) {
+        setCurrentView(e.state.view);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Generate notifications whenever assignments change
   useEffect(() => {
     generateNotifications();
@@ -811,7 +831,7 @@ setAppPositions(storedPositions);
           workers={workers}
           assignments={assignments}
           timeFormat={timeFormat}
-          onNavigate={setCurrentView}
+          onNavigate={navigate}
           onShowAddEvent={() => setShowAddEvent(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
           activeLocation={activeLocation}
@@ -989,7 +1009,7 @@ setAppPositions(storedPositions);
   notifications={notifications}
   onShowNotifications={() => setShowNotifications(true)}
   onLogout={handleLogout}
-  onGoDashboard={() => setCurrentView('dashboard')}
+  onGoDashboard={() => navigate('dashboard')}
   currentTab={workerTab}
   onTabChange={setWorkerTab}
   locations={locations}
@@ -1001,7 +1021,7 @@ setAppPositions(storedPositions);
   assignments={assignments}
   paymentTrackingEnabled={paymentTrackingEnabled}
   currentView={currentView}
-  onNavigate={(id) => setCurrentView(id)}
+  onNavigate={(id) => navigate(id)}
   pendingReportsCount={pendingReportsCount}
 />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
