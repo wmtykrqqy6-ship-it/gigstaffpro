@@ -420,63 +420,65 @@ export default function DashboardView({
         onNavigate={onNavigate}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
+      {/* Bottom panels - Recent Activity full width on top, Next 7 Days below */}
+      <div className="space-y-6">
+
+        {/* Recent Activity - full width */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
-            <span className="text-xs text-gray-500">Last 7 days</span>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Last 7 days</span>
           </div>
-          
+
           {recentActivity.length === 0 ? (
-            <div className="text-center py-8">
-              <History size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-600">No recent activity</p>
+            <div className="text-center py-10">
+              <History size={40} className="mx-auto text-gray-200 mb-3" />
+              <p className="text-gray-400 text-sm">No activity in the last 7 days</p>
             </div>
           ) : (
             <div className="relative">
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1"
+              <div
+                className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-64 overflow-y-auto pr-1"
                 style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
               >
                 {recentActivity.map((activity, index) => {
-                const Icon = activity.icon;
-                const colorClasses = {
-                  blue: 'bg-blue-100 text-blue-600',
-                  green: 'bg-green-100 text-green-600',
-                  red: 'bg-red-100 text-red-600',
-                  yellow: 'bg-yellow-100 text-yellow-600'
-                };
-                
-                return (
-                  <div key={index} className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded">
-                    <div className={`p-2 rounded ${colorClasses[activity.color]}`}>
-                      <Icon size={16} />
+                  const Icon = activity.icon;
+                  const colorClasses = {
+                    blue: 'bg-blue-100 text-blue-600',
+                    green: 'bg-green-100 text-green-600',
+                    red: 'bg-red-100 text-red-600',
+                    yellow: 'bg-yellow-100 text-yellow-600'
+                  };
+                  return (
+                    <div key={index} className="flex items-start space-x-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors">
+                      <div className={`p-1.5 rounded-lg flex-shrink-0 ${colorClasses[activity.color]}`}>
+                        <Icon size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 leading-snug">{activity.message}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(activity.date).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(activity.date).toLocaleString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
               <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none rounded-b" />
             </div>
           )}
         </div>
 
-        {/* Upcoming Events Next 7 Days */}
+        {/* Next 7 Days */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-gray-900">Next 7 Days</h3>
-            <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline">View all →</button>
+            <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline font-medium">View all →</button>
           </div>
           {(() => {
             const now = new Date();
@@ -491,20 +493,25 @@ export default function DashboardView({
                 const eventDate = new Date(event.date);
                 return eventDate >= now && eventDate <= sevenDaysOut;
               })
-              .sort((a, b) => new Date(a.date) - new Date(b.date))
-              .slice(0, 5);
+              .sort((a, b) => new Date(a.date) - new Date(b.date));
 
             if (weekEvents.length === 0) {
               return (
-                <div className="text-center py-8">
-                  <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-sm">No events in the next 7 days</p>
+                <div className="text-center py-10">
+                  <Calendar size={40} className="mx-auto text-gray-200 mb-3" />
+                  <p className="text-gray-400 text-sm">No events in the next 7 days</p>
+                  <button
+                    onClick={() => onNavigate('events')}
+                    className="mt-3 text-xs text-red-600 hover:underline font-medium"
+                  >
+                    + Create an event
+                  </button>
                 </div>
               );
             }
 
             return (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {weekEvents.map(event => {
                   const eventAssignments = assignments.filter(a => a.event_id === event.id);
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
@@ -513,42 +520,45 @@ export default function DashboardView({
                   const eventDate = new Date(event.date);
                   const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
 
+                  const urgencyBorder = daysUntil === 0 ? 'border-l-red-500'
+                    : daysUntil === 1 ? 'border-l-orange-400'
+                    : !isFullyStaffed ? 'border-l-yellow-400'
+                    : 'border-l-green-500';
+
                   return (
                     <div
                       key={event.id}
-                      className="p-3 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                      className={`p-3 border border-l-4 ${urgencyBorder} rounded-lg hover:shadow-md transition-all cursor-pointer bg-white`}
                       onClick={() => onOpenAssignModal(event)}
                     >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center space-x-2 min-w-0">
-                          <h4 className="font-semibold text-gray-900 truncate">{event.name}</h4>
-                          {daysUntil === 0 && (
-                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0">TODAY</span>
-                          )}
-                          {daysUntil === 1 && (
-                            <span className="bg-orange-400 text-white text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0">TOMORROW</span>
-                          )}
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
+                          <div className="flex items-center space-x-1 mt-0.5">
+                            {daysUntil === 0 && <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded font-bold">TODAY</span>}
+                            {daysUntil === 1 && <span className="bg-orange-400 text-white text-xs px-1.5 py-0.5 rounded font-bold">TOMORROW</span>}
+                            {daysUntil > 1 && <span className="text-xs text-gray-400">in {daysUntil} days</span>}
+                          </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ml-2 ${
-                          isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ml-2 ${
+                          isFullyStaffed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {filled}/{totalNeeded}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-3 text-xs text-gray-500">
-                        <span className="flex items-center space-x-1">
-                          <Calendar size={11} />
+                      <div className="space-y-1 text-xs text-gray-500">
+                        <div className="flex items-center space-x-1">
+                          <Calendar size={11} className="flex-shrink-0" />
                           <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                        </span>
-                        <span className="flex items-center space-x-1">
-                          <Clock size={11} />
+                          <span className="text-gray-300">·</span>
+                          <Clock size={11} className="flex-shrink-0" />
                           <span>{formatTime(event.time, timeFormat)}</span>
-                        </span>
+                        </div>
                         {event.venue && (
-                          <span className="flex items-center space-x-1 truncate">
-                            <MapPin size={11} />
+                          <div className="flex items-center space-x-1">
+                            <MapPin size={11} className="flex-shrink-0" />
                             <span className="truncate">{event.venue}</span>
-                          </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -558,6 +568,7 @@ export default function DashboardView({
             );
           })()}
         </div>
+
       </div>
     </div>
   );
