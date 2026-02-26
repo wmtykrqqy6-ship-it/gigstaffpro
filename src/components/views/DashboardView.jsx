@@ -113,31 +113,37 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
               <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d.charAt(0)}</div>
             ))}
             {days.map((date, i) => {
-              if (!date) return <div key={`e-${i}`} className="min-h-12 md:min-h-16 bg-gray-50 rounded" />;
+              if (!date) return <div key={`e-${i}`} className="min-h-10 md:min-h-14 bg-gray-50 rounded" />;
               const dayEvts = getEventsForDate(date);
+              const isPast = date < new Date(today);
               return (
                 <div
                   key={date.toISOString()}
                   onClick={() => { setSelectedDate(date); if (dayEvts.length) setViewMode('list'); }}
                   className={`min-h-10 md:min-h-14 p-1 border rounded cursor-pointer transition-colors ${
                     isToday(date) ? 'bg-red-50 border-red-300 ring-1 ring-red-200'
+                    : isPast ? 'bg-gray-50 border-gray-100'
                     : dayEvts.length ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
                     : 'bg-white hover:bg-gray-50'
                   }`}
                 >
-                  <div className="text-xs font-semibold text-gray-800 mb-0.5">{date.getDate()}</div>
+                  <div className={`text-xs font-semibold mb-0.5 ${isPast && !isToday(date) ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {date.getDate()}
+                  </div>
                   {dayEvts.slice(0, 2).map(ev => {
                     const filled = assignments.filter(a => a.event_id === ev.id).length;
                     const total = ev.positions?.reduce((s, p) => s + p.count, 0) || 0;
                     return (
                       <div key={ev.id} className={`text-xs p-0.5 rounded mb-0.5 truncate ${
-                        filled >= total && total > 0 ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
+                        isPast
+                          ? 'bg-gray-300 text-gray-500'
+                          : filled >= total && total > 0 ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
                       }`}>
                         {ev.name}
                       </div>
                     );
                   })}
-                  {dayEvts.length > 2 && <div className="text-xs text-gray-500">+{dayEvts.length - 2}</div>}
+                  {dayEvts.length > 2 && <div className="text-xs text-gray-400">+{dayEvts.length - 2}</div>}
                 </div>
               );
             })}
@@ -257,6 +263,10 @@ export default function DashboardView({
     return eventDate >= today;
   }).length;
   const needStaffing = scopedEvents.filter(e => {
+    if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
+    const eventDate = new Date(e.date);
+    eventDate.setHours(0, 0, 0, 0);
+    if (eventDate < today) return false;
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
     const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
     const filled = eventAssignments.length;
@@ -421,8 +431,11 @@ export default function DashboardView({
               <p className="text-gray-600">No recent activity</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {recentActivity.map((activity, index) => {
+            <div className="relative">
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1"
+                style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
+              >
+                {recentActivity.map((activity, index) => {
                 const Icon = activity.icon;
                 const colorClasses = {
                   blue: 'bg-blue-100 text-blue-600',
@@ -450,22 +463,30 @@ export default function DashboardView({
                   </div>
                 );
               })}
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none rounded-b" />
             </div>
           )}
         </div>
 
-        {/* Upcoming Events Today/This Week */}
+        {/* Upcoming Events Next 7 Days */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">This Week's Events</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Next 7 Days</h3>
+            <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline">View all →</button>
+          </div>
           {(() => {
-            const today = new Date();
-            const endOfWeek = new Date();
-            endOfWeek.setDate(today.getDate() + 7);
-            
-            const weekEvents = events
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            const sevenDaysOut = new Date(now);
+            sevenDaysOut.setDate(now.getDate() + 7);
+            sevenDaysOut.setHours(23, 59, 59, 999);
+
+            const weekEvents = scopedEvents
               .filter(event => {
+                if (event.status === 'cancelled' || event.status === 'archived') return false;
                 const eventDate = new Date(event.date);
-                return eventDate >= today && eventDate <= endOfWeek;
+                return eventDate >= now && eventDate <= sevenDaysOut;
               })
               .sort((a, b) => new Date(a.date) - new Date(b.date))
               .slice(0, 5);
@@ -474,7 +495,7 @@ export default function DashboardView({
               return (
                 <div className="text-center py-8">
                   <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-600">No events this week</p>
+                  <p className="text-gray-500 text-sm">No events in the next 7 days</p>
                 </div>
               );
             }
@@ -486,44 +507,46 @@ export default function DashboardView({
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
                   const filled = eventAssignments.length;
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
-                  
                   const eventDate = new Date(event.date);
-                  const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-                  
+                  const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
+
                   return (
-                    <div 
-                      key={event.id} 
+                    <div
+                      key={event.id}
                       className="p-3 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => onOpenAssignModal(event)}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-semibold text-gray-900">{event.name}</h4>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">{event.name}</h4>
                           {daysUntil === 0 && (
-                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded font-semibold">
-                              TODAY
-                            </span>
+                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0">TODAY</span>
+                          )}
+                          {daysUntil === 1 && (
+                            <span className="bg-orange-400 text-white text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0">TOMORROW</span>
                           )}
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ml-2 ${
                           isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {filled}/{totalNeeded}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-4 text-xs text-gray-600">
+                      <div className="flex items-center space-x-3 text-xs text-gray-500">
                         <span className="flex items-center space-x-1">
-                          <Calendar size={12} />
-                          <span>{eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          <Calendar size={11} />
+                          <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                         </span>
                         <span className="flex items-center space-x-1">
-                          <Clock size={12} />
+                          <Clock size={11} />
                           <span>{formatTime(event.time, timeFormat)}</span>
                         </span>
-                        <span className="flex items-center space-x-1">
-                          <MapPin size={12} />
-                          <span>{event.venue}</span>
-                        </span>
+                        {event.venue && (
+                          <span className="flex items-center space-x-1 truncate">
+                            <MapPin size={11} />
+                            <span className="truncate">{event.venue}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
