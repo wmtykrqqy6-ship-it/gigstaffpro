@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
@@ -25,9 +25,27 @@ export default function AddEventModal({
     parking: '',
     notes: '',
     status: STATUS.EVENT.CONFIRMED,
-    host_worker_id: null
+    host_worker_id: null,
+    location_id: null
   });
   const [saving, setSaving] = useState(false);
+  const [locations, setLocations] = useState([]);
+
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from('locations')
+      .select('id, name, city, state')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => {
+        setLocations(data || []);
+        // Auto-select if only one location
+        if (data && data.length === 1) {
+          setFormData(f => ({ ...f, location_id: data[0].id }));
+        }
+      });
+  }, [open]);
 
   if (!open) return null;
 
@@ -232,6 +250,26 @@ export default function AddEventModal({
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3">Location</h4>
                 <div className="grid grid-cols-1 gap-4">
+
+                  {/* Market / Region */}
+                  {locations.length > 1 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Market / Region</label>
+                      <select
+                        value={formData.location_id || ''}
+                        onChange={(e) => setFormData({...formData, location_id: e.target.value || null})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      >
+                        <option value="">-- Select a market --</option>
+                        {locations.map(loc => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name}{loc.city ? ` — ${loc.city}` : ''}{loc.state ? `, ${loc.state}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
