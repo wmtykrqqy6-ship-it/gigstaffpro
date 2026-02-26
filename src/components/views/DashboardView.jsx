@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  Calendar, Users, DollarSign, AlertCircle, Plus, Clock, 
-  MapPin, ChevronDown, CheckCircle, AlignJustify
+  Calendar, Users, AlertCircle, Plus, Clock, 
+  MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList
 } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
-import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
+import { formatTime } from '../../utils/dateHelpers';
 
 // --- Inline Schedule Section ---
 function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssignModal, onNavigate }) {
@@ -119,7 +119,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                 <div
                   key={date.toISOString()}
                   onClick={() => { setSelectedDate(date); if (dayEvts.length) setViewMode('list'); }}
-                  className={`min-h-12 md:min-h-16 p-1 border rounded cursor-pointer transition-colors ${
+                  className={`min-h-10 md:min-h-14 p-1 border rounded cursor-pointer transition-colors ${
                     isToday(date) ? 'bg-red-50 border-red-300 ring-1 ring-red-200'
                     : dayEvts.length ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
                     : 'bg-white hover:bg-gray-50'
@@ -235,6 +235,17 @@ export default function DashboardView({
   const scopedEvents = activeLocation === 'all'
     ? events
     : events.filter(e => e.location_id === activeLocation);
+
+  // Scope workers by location using worker_locations (passed via assignments proxy)
+  // We scope by events in this location to find active workers
+  const scopedWorkerIds = activeLocation === 'all'
+    ? null
+    : [...new Set(assignments
+        .filter(a => scopedEvents.some(e => e.id === a.event_id))
+        .map(a => a.worker_id))];
+  const scopedWorkers = scopedWorkerIds
+    ? workers.filter(w => scopedWorkerIds.includes(w.id))
+    : workers;
 
   const upcomingEvents = scopedEvents.filter(e => e.status !== 'completed' && e.status !== 'cancelled').length;
   const needStaffing = scopedEvents.filter(e => {
@@ -356,7 +367,7 @@ export default function DashboardView({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-xs md:text-sm">Active Workers</p>
-              <p className="text-2xl md:text-3xl font-bold text-gray-900">{workers.length}</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{scopedWorkers.length}</p>
               <p className="text-xs text-green-600 mt-1">Manage →</p>
             </div>
             <Users className="text-green-600" size={32} />
@@ -373,7 +384,7 @@ export default function DashboardView({
               <p className="text-2xl md:text-3xl font-bold text-gray-900">{scopedEvents.length}</p>
               <p className="text-xs text-blue-600 mt-1">Schedule →</p>
             </div>
-            <DollarSign className="text-blue-600" size={32} />
+            <ClipboardList className="text-blue-600" size={32} />
           </div>
         </button>
       </div>

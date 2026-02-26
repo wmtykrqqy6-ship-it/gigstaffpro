@@ -56,19 +56,19 @@ export default function Header({
                   onClick={() => setShowLocationMenu(!showLocationMenu)}
                   className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     activeLocation !== 'all'
-                      ? 'bg-white text-red-900'
-                      : 'bg-red-800 hover:bg-red-700 text-white'
+                      ? 'bg-white/20 text-white border border-white/40 hover:bg-white/30'
+                      : 'text-red-200 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <MapPin size={13} />
-                  <span className="hidden sm:inline max-w-24 truncate">{activeLocationName}</span>
-                  <ChevronDown size={12} />
+                  <span className="hidden sm:inline max-w-28 truncate">{activeLocationName}</span>
+                  <ChevronDown size={11} className="opacity-70" />
                 </button>
 
                 {showLocationMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-100">
+                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-100">
                     <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b">
-                      Market
+                      Switch Market
                     </div>
                     <button
                       onClick={() => { onSetActiveLocation('all'); setShowLocationMenu(false); }}
@@ -78,9 +78,9 @@ export default function Header({
                           : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      <MapPin size={14} className="text-gray-400" />
+                      <MapPin size={14} className="text-gray-400 flex-shrink-0" />
                       <span>All Markets</span>
-                      {activeLocation === 'all' && <span className="ml-auto text-red-600">✓</span>}
+                      {activeLocation === 'all' && <span className="ml-auto text-red-600 text-xs">✓</span>}
                     </button>
                     {locations.map(loc => (
                       <button
@@ -92,9 +92,9 @@ export default function Header({
                             : 'text-gray-700 hover:bg-gray-50'
                         }`}
                       >
-                        <MapPin size={14} className="text-gray-400" />
-                        <span>{loc.name}{loc.city ? ` — ${loc.city}` : ''}</span>
-                        {activeLocation === loc.id && <span className="ml-auto text-red-600">✓</span>}
+                        <MapPin size={14} className="text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{loc.name}{loc.city ? ` — ${loc.city}` : ''}</span>
+                        {activeLocation === loc.id && <span className="ml-auto text-red-600 text-xs flex-shrink-0">✓</span>}
                       </button>
                     ))}
                   </div>
