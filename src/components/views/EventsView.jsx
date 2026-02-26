@@ -12,7 +12,8 @@ export default function EventsView({
   onOpenAssignModal,
   onOpenEditEvent,
   onDeleteEvent,
-  onAutoArchive
+  onAutoArchive,
+  activeLocation = 'all'
 }) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [dateRangeFilter, setDateRangeFilter] = useState('next-30');
@@ -20,6 +21,11 @@ export default function EventsView({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [locations, setLocations] = useState([]);
+
+  // Scope events by global location context first
+  const scopedEvents = activeLocation === 'all'
+    ? events
+    : events.filter(e => e.location_id === activeLocation);
 
   useEffect(() => {
     supabase
@@ -86,7 +92,7 @@ export default function EventsView({
   };
 
   // Comprehensive filtering
-  const filteredEvents = events.filter(event => {
+  const filteredEvents = scopedEvents.filter(event => {
     // Status filter
     if (statusFilter === 'active') {
       // "Active" means not archived
@@ -305,7 +311,7 @@ export default function EventsView({
         )}
       </div>
 
-      {events.length === 0 ? (
+      {scopedEvents.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Events Yet</h3>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, LogOut, Menu, X, User, Calendar, History } from 'lucide-react';
+import { Bell, LogOut, Menu, X, User, Calendar, History, MapPin, ChevronDown } from 'lucide-react';
 
 export default function Header({
   userRole,
@@ -9,9 +9,17 @@ export default function Header({
   onLogout,
   onGoDashboard,
   currentTab,
-  onTabChange
+  onTabChange,
+  locations = [],
+  activeLocation = 'all',
+  onSetActiveLocation
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showLocationMenu, setShowLocationMenu] = useState(false);
+
+  const activeLocationName = activeLocation === 'all'
+    ? 'All Markets'
+    : locations.find(l => l.id === activeLocation)?.name || 'All Markets';
 
   return (
     <div className="bg-gradient-to-r from-red-900 to-black text-white shadow-lg">
@@ -28,7 +36,6 @@ export default function Header({
                 <div className="w-2.5 h-2.5 bg-black rounded-sm transform rotate-45"></div>
               </div>
             </div>
-
             <div>
               <h1 className="text-lg sm:text-xl font-bold">GigStaffPro</h1>
               <p className="text-xs text-red-200 hidden sm:block">
@@ -41,6 +48,60 @@ export default function Header({
 
           {/* Actions */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+
+            {/* Location Switcher - admin only, 2+ locations */}
+            {userRole === 'admin' && locations.length > 1 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowLocationMenu(!showLocationMenu)}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    activeLocation !== 'all'
+                      ? 'bg-white text-red-900'
+                      : 'bg-red-800 hover:bg-red-700 text-white'
+                  }`}
+                >
+                  <MapPin size={13} />
+                  <span className="hidden sm:inline max-w-24 truncate">{activeLocationName}</span>
+                  <ChevronDown size={12} />
+                </button>
+
+                {showLocationMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-100">
+                    <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b">
+                      Market
+                    </div>
+                    <button
+                      onClick={() => { onSetActiveLocation('all'); setShowLocationMenu(false); }}
+                      className={`w-full text-left px-3 py-2 text-sm flex items-center space-x-2 transition-colors ${
+                        activeLocation === 'all'
+                          ? 'bg-red-50 text-red-900 font-medium'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <MapPin size={14} className="text-gray-400" />
+                      <span>All Markets</span>
+                      {activeLocation === 'all' && <span className="ml-auto text-red-600">✓</span>}
+                    </button>
+                    {locations.map(loc => (
+                      <button
+                        key={loc.id}
+                        onClick={() => { onSetActiveLocation(loc.id); setShowLocationMenu(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center space-x-2 transition-colors ${
+                          activeLocation === loc.id
+                            ? 'bg-red-50 text-red-900 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <MapPin size={14} className="text-gray-400" />
+                        <span>{loc.name}{loc.city ? ` — ${loc.city}` : ''}</span>
+                        {activeLocation === loc.id && <span className="ml-auto text-red-600">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Worker Menu Button */}
             {userRole === 'worker' && onTabChange && (
               <div className="relative">
@@ -50,48 +111,25 @@ export default function Header({
                 >
                   {showMenu ? <X size={20} /> : <Menu size={20} />}
                 </button>
-                
-                {/* Dropdown Menu */}
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
                     <button
-                      onClick={() => {
-                        onTabChange('dashboard');
-                        setShowMenu(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
-                        currentTab === 'dashboard'
-                          ? 'bg-red-50 text-red-900 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      onClick={() => { onTabChange('dashboard'); setShowMenu(false); }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${currentTab === 'dashboard' ? 'bg-red-50 text-red-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
                       <Calendar size={18} />
                       <span>Dashboard</span>
                     </button>
                     <button
-                      onClick={() => {
-                        onTabChange('profile');
-                        setShowMenu(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
-                        currentTab === 'profile'
-                          ? 'bg-red-50 text-red-900 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      onClick={() => { onTabChange('profile'); setShowMenu(false); }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${currentTab === 'profile' ? 'bg-red-50 text-red-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
                       <User size={18} />
                       <span>Profile</span>
                     </button>
                     <button
-                      onClick={() => {
-                        onTabChange('history');
-                        setShowMenu(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${
-                        currentTab === 'history'
-                          ? 'bg-red-50 text-red-900 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      onClick={() => { onTabChange('history'); setShowMenu(false); }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${currentTab === 'history' ? 'bg-red-50 text-red-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
                       <History size={18} />
                       <span>History</span>
@@ -123,6 +161,22 @@ export default function Header({
           </div>
         </div>
       </div>
+
+      {/* Active location banner - shows below header when a market is selected */}
+      {userRole === 'admin' && activeLocation !== 'all' && (
+        <div className="bg-red-800 px-4 py-1.5 flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-xs text-red-100">
+            <MapPin size={12} />
+            <span>Viewing: <strong className="text-white">{activeLocationName}</strong> — events, staff, and dashboard are filtered to this market</span>
+          </div>
+          <button
+            onClick={() => { onSetActiveLocation('all'); }}
+            className="text-xs text-red-200 hover:text-white underline"
+          >
+            Clear
+          </button>
+        </div>
+      )}
     </div>
   );
 }

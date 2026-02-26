@@ -80,6 +80,10 @@ const GigStaffPro = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [selectedWorkerForPin, setSelectedWorkerForPin] = useState(null);
+  const [locations, setLocations] = useState([]);
+  const [activeLocation, setActiveLocation] = useState(() => {
+    return localStorage.getItem('gigstaffpro_active_location') || 'all';
+  });
 
   // Load workers from Supabase
   useEffect(() => {
@@ -92,7 +96,22 @@ const GigStaffPro = () => {
     loadRankAccessDays();
     loadTimeFormat();
     loadPendingReportsCount();
+    loadLocations();
   }, []);
+
+  const loadLocations = async () => {
+    const { data } = await supabase
+      .from('locations')
+      .select('id, name, city, state')
+      .eq('is_active', true)
+      .order('name');
+    setLocations(data || []);
+  };
+
+  const handleSetActiveLocation = (locationId) => {
+    setActiveLocation(locationId);
+    localStorage.setItem('gigstaffpro_active_location', locationId);
+  };
 
   // Generate notifications whenever assignments change
   useEffect(() => {
@@ -795,6 +814,7 @@ setAppPositions(storedPositions);
           onNavigate={setCurrentView}
           onShowAddEvent={() => setShowAddEvent(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
+          activeLocation={activeLocation}
           onOpenAssignModal={(event) => {
             setSelectedEvent(event);
             setShowAssignModal(true);
@@ -808,6 +828,7 @@ setAppPositions(storedPositions);
           loading={loading}
           error={error}
           workers={workers}
+          activeLocation={activeLocation}
           onShowBulkInvite={() => setShowBulkInvite(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
           onSetPin={(worker) => {
@@ -830,6 +851,7 @@ setAppPositions(storedPositions);
           assignments={assignments}
           timeFormat={timeFormat}
           onShowAddEvent={() => setShowAddEvent(true)}
+          activeLocation={activeLocation}
           onOpenAssignModal={(event) => {
             setSelectedEvent(event);
             setShowAssignModal(true);
@@ -970,6 +992,9 @@ setAppPositions(storedPositions);
   onGoDashboard={() => setCurrentView('dashboard')}
   currentTab={workerTab}
   onTabChange={setWorkerTab}
+  locations={locations}
+  activeLocation={activeLocation}
+  onSetActiveLocation={handleSetActiveLocation}
 />
   <Navigation
   userRole={userRole}

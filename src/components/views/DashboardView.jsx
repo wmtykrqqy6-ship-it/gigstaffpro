@@ -228,10 +228,16 @@ export default function DashboardView({
   onNavigate,
   onShowAddEvent,
   onShowAddWorker,
-  onOpenAssignModal
+  onOpenAssignModal,
+  activeLocation = 'all'
 }) {
-  const upcomingEvents = events.filter(e => e.status !== 'completed' && e.status !== 'cancelled').length;
-  const needStaffing = events.filter(e => {
+  // Filter events by active location context
+  const scopedEvents = activeLocation === 'all'
+    ? events
+    : events.filter(e => e.location_id === activeLocation);
+
+  const upcomingEvents = scopedEvents.filter(e => e.status !== 'completed' && e.status !== 'cancelled').length;
+  const needStaffing = scopedEvents.filter(e => {
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
     const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
     const filled = eventAssignments.length;
@@ -364,7 +370,7 @@ export default function DashboardView({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-xs md:text-sm">Total Events</p>
-              <p className="text-2xl md:text-3xl font-bold text-gray-900">{events.length}</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900">{scopedEvents.length}</p>
               <p className="text-xs text-blue-600 mt-1">Schedule →</p>
             </div>
             <DollarSign className="text-blue-600" size={32} />
@@ -374,7 +380,7 @@ export default function DashboardView({
 
       {/* Schedule */}
       <ScheduleSection
-        events={events}
+        events={scopedEvents}
         assignments={assignments}
         workers={workers}
         timeFormat={timeFormat}
