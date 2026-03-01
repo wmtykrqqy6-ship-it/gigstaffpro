@@ -16,7 +16,7 @@ export default function InviteWorkersModal({
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(null);
   const [selectedPosition, setSelectedPosition] = useState(null);
-  const [selectedRank, setSelectedRank] = useState(5);
+  const [selectedRank, setSelectedRank] = useState(1);
   const [windowHours, setWindowHours] = useState(2);
   const [selectedWorkers, setSelectedWorkers] = useState(new Set());
   const [expandedRanks, setExpandedRanks] = useState({ 5: true });
@@ -193,8 +193,8 @@ export default function InviteWorkersModal({
         .in('id', toExpire.map(i => i.id));
     }
     await loadInvitations();
-    // Switch to invite tab with next rank pre-selected
-    setSelectedRank(Math.max(1, rank - 1));
+    // Switch to invite tab with next rank (lower tier = higher number in this system)
+    setSelectedRank(Math.min(5, rank + 1));
     setActiveTab('invite');
   };
 
@@ -354,7 +354,7 @@ export default function InviteWorkersModal({
                   {/* Rank selector */}
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-700">Invite Rank:</span>
-                    {[5,4,3,2,1].map(r => (
+                    {[1,2,3,4,5].map(r => (
                       <button
                         key={r}
                         onClick={() => {
@@ -511,7 +511,7 @@ export default function InviteWorkersModal({
                             className="text-xs text-red-600 hover:underline font-medium flex items-center space-x-1"
                           >
                             <ChevronDown size={12} />
-                            <span>Expire & notify Rank {pendingInvites[0].rank_tier - 1}</span>
+                            <span>Expire & notify Rank {pendingInvites[0].rank_tier + 1}</span>
                           </button>
                         )}
                       </div>
