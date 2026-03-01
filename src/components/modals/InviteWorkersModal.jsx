@@ -19,13 +19,14 @@ export default function InviteWorkersModal({
   const [selectedRank, setSelectedRank] = useState(1);
   const [windowHours, setWindowHours] = useState(2);
   const [selectedWorkers, setSelectedWorkers] = useState(new Set());
-  const [expandedRanks, setExpandedRanks] = useState({ 5: true });
-  const [activeTab, setActiveTab] = useState('invite'); // 'invite' | 'responses'
+  const [expandedRanks, setExpandedRanks] = useState({ 1: true });
+  const [activeTab, setActiveTab] = useState('invite');
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [secondsSinceRefresh, setSecondsSinceRefresh] = useState(0);
 
   useEffect(() => {
     if (open && event) {
       loadInvitations();
-      // Default to first unfilled position
       const positions = event.positions || [];
       for (const pos of positions) {
         const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
@@ -37,6 +38,24 @@ export default function InviteWorkersModal({
     }
   }, [open, event?.id]);
 
+  // Auto-refresh responses every 60 seconds when on responses tab
+  useEffect(() => {
+    if (!open || activeTab !== 'responses') return;
+    const interval = setInterval(() => {
+      loadInvitations();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [open, activeTab]);
+
+  // Tick seconds since last refresh
+  useEffect(() => {
+    if (!lastRefreshed) return;
+    const tick = setInterval(() => {
+      setSecondsSinceRefresh(Math.floor((Date.now() - lastRefreshed) / 1000));
+    }, 10000);
+    return () => clearInterval(tick);
+  }, [lastRefreshed]);
+
   const loadInvitations = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -45,6 +64,8 @@ export default function InviteWorkersModal({
       .eq('event_id', event.id)
       .order('invited_at', { ascending: false });
     setInvitations(data || []);
+    setLastRefreshed(Date.now());
+    setSecondsSinceRefresh(0);
     setLoading(false);
   };
 
@@ -267,8 +288,17 @@ export default function InviteWorkersModal({
           </div>
         </div>
 
-        {selectedPosition && (
-          <>
+        {!selectedPosition ? (
+          <div className="flex-1 flex items-center justify-center p-10">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <Send size={22} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 font-medium">Select a position above to get started</p>
+              <p className="text-xs text-gray-400 mt-1">Choose which role you want to invite workers for</p>
+            </div>
+          </div>
+        ) : (
             {/* Slots summary */}
             <div className="px-6 py-2 border-b flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-4 text-sm">
@@ -388,12 +418,51 @@ export default function InviteWorkersModal({
                             <span className="text-xs text-gray-500">({rankWorkers.length} eligible)</span>
                           </div>
                           {rankWorkers.length > 0 && (
-                            <button
-                              onClick={() => selectAllRank(rank)}
-                              className="text-xs text-red-700 hover:underline font-medium"
-                            >
-                              {allSelected ? 'Deselect all' : 'Select all'}
-                            </button>
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() => selectAllRank(rank)}
+                                className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                              >
+                                {allSelected ? 'Deselect all' : 'Select all'}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  // Select all + send in one click
+                                  const ids = rankWorkers.map(w => w.id);
+                                  setSelectedWorkers(new Set(ids));
+                                  setSending(true);
+                                  try {
+                                    const expiresAt = new Date();
+                                    expiresAt.setHours(expiresAt.getHours() + windowHours);
+                                    const records = ids.map(workerId => {
+                                      const worker = workers.find(w => w.id === workerId);
+                                      return {
+                                        event_id: event.id,
+                                        worker_id: workerId,
+                                        position: selectedPosition,
+                                        status: 'pending',
+                                        rank_tier: worker?.rank || rank,
+                                        window_hours: windowHours,
+                                        expires_at: expiresAt.toISOString(),
+                                        invited_at: new Date().toISOString()
+                                      };
+                                    });
+                                    await supabase.from('invitations').insert(records);
+                                    setSelectedWorkers(new Set());
+                                    await loadInvitations();
+                                    setActiveTab('responses');
+                                  } catch (err) {
+                                    alert('Error sending invites: ' + err.message);
+                                  } finally {
+                                    setSending(false);
+                                  }
+                                }}
+                                disabled={sending}
+                                className="text-xs bg-red-900 hover:bg-red-800 text-white px-2.5 py-1 rounded-lg font-medium disabled:opacity-50 transition-colors"
+                              >
+                                Invite All R{rank}
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -461,6 +530,38 @@ export default function InviteWorkersModal({
               {activeTab === 'responses' && (
                 <div className="p-6 space-y-5">
 
+                  {/* Auto-refresh indicator */}
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span className="flex items-center space-x-1">
+                      <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+                      <span>
+                        {loading ? 'Refreshing...' : lastRefreshed
+                          ? `Updated ${secondsSinceRefresh < 10 ? 'just now' : `${Math.floor(secondsSinceRefresh / 60) > 0 ? `${Math.floor(secondsSinceRefresh / 60)}m ` : ''}${secondsSinceRefresh % 60}s ago`} · auto-refreshes every 60s`
+                          : 'Loading...'}
+                      </span>
+                    </span>
+                    <button onClick={loadInvitations} className="hover:text-gray-600 underline">Refresh now</button>
+                  </div>
+
+                  {/* Expired window banner - high urgency */}
+                  {pendingInvites.some(i => isExpired(i)) && pendingInvites[0]?.rank_tier < 5 && (
+                    <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-300 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle size={16} className="text-orange-500 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold text-orange-800">Rank {pendingInvites[0].rank_tier} window has closed</p>
+                          <p className="text-xs text-orange-600">{pendingInvites.filter(i => isExpired(i)).length} worker{pendingInvites.filter(i => isExpired(i)).length !== 1 ? 's' : ''} didn't respond — ready to notify Rank {pendingInvites[0].rank_tier + 1}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleExpireAndCascade(pendingInvites[0].rank_tier)}
+                        className="flex-shrink-0 ml-3 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg transition-colors"
+                      >
+                        Notify Rank {pendingInvites[0].rank_tier + 1} →
+                      </button>
+                    </div>
+                  )}
+
                   {/* Accepted - needs confirmation */}
                   {acceptedInvites.length > 0 && (
                     <div>
@@ -505,15 +606,6 @@ export default function InviteWorkersModal({
                           <Clock size={15} className="text-yellow-600" />
                           <span>Pending Response ({pendingInvites.length})</span>
                         </h4>
-                        {pendingInvites.some(i => isExpired(i)) && (
-                          <button
-                            onClick={() => handleExpireAndCascade(pendingInvites[0].rank_tier)}
-                            className="text-xs text-red-600 hover:underline font-medium flex items-center space-x-1"
-                          >
-                            <ChevronDown size={12} />
-                            <span>Expire & notify Rank {pendingInvites[0].rank_tier + 1}</span>
-                          </button>
-                        )}
                       </div>
                       <div className="space-y-2">
                         {pendingInvites.map(inv => (
@@ -611,8 +703,7 @@ export default function InviteWorkersModal({
                 </div>
               )}
             </div>
-          </>
-        )}
+          )}
 
         {/* Footer */}
         <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between flex-shrink-0">
