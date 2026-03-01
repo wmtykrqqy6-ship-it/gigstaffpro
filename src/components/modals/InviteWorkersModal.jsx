@@ -28,9 +28,9 @@ export default function InviteWorkersModal({
       // Default to first unfilled position
       const positions = event.positions || [];
       for (const pos of positions) {
-        const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.position).length;
+        const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
         if (filled < pos.count) {
-          setSelectedPosition(pos.position);
+          setSelectedPosition(pos.key);
           break;
         }
       }
@@ -58,7 +58,7 @@ export default function InviteWorkersModal({
     .map(a => a.worker_id));
 
   // For selected position - how many slots exist and are filled
-  const positionConfig = positions.find(p => p.position === selectedPosition);
+  const positionConfig = positions.find(p => p.key === selectedPosition);
   const totalSlots = positionConfig?.count || 0;
   const filledSlots = (assignments || []).filter(a =>
     a.event_id === event.id && a.position === selectedPosition
@@ -237,23 +237,23 @@ export default function InviteWorkersModal({
         <div className="px-6 py-3 border-b bg-gray-50 flex-shrink-0">
           <div className="flex items-center space-x-2 overflow-x-auto pb-1">
             {positions.map(pos => {
-              const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.position).length;
+              const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
               const open = pos.count - filled;
               const isFull = open <= 0;
-              const hasAccepted = invitations.filter(i => i.position === pos.position && i.status === 'accepted').length > 0;
+              const hasAccepted = invitations.filter(i => i.position === pos.key && i.status === 'accepted').length > 0;
               return (
                 <button
-                  key={pos.position}
-                  onClick={() => setSelectedPosition(pos.position)}
+                  key={pos.key}
+                  onClick={() => setSelectedPosition(pos.key)}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${
-                    selectedPosition === pos.position
+                    selectedPosition === pos.key
                       ? 'bg-red-900 text-white'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <span>{getPositionLabel(pos.position)}</span>
+                  <span>{getPositionLabel(pos.key)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                    selectedPosition === pos.position ? 'bg-red-700 text-white' :
+                    selectedPosition === pos.key ? 'bg-red-700 text-white' :
                     isFull ? 'bg-green-100 text-green-700' :
                     hasAccepted ? 'bg-yellow-100 text-yellow-700' :
                     'bg-gray-100 text-gray-600'
