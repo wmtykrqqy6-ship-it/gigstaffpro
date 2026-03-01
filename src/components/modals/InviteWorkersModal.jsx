@@ -299,6 +299,7 @@ export default function InviteWorkersModal({
             </div>
           </div>
         ) : (
+          <>
             {/* Slots summary */}
             <div className="px-6 py-2 border-b flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-4 text-sm">
@@ -703,7 +704,8 @@ export default function InviteWorkersModal({
                 </div>
               )}
             </div>
-          )}
+          </>
+        )}
 
         {/* Footer */}
         <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between flex-shrink-0">
