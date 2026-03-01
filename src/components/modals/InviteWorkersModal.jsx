@@ -85,7 +85,8 @@ export default function InviteWorkersModal({
     .filter(w => {
       if (assignedWorkerIds.has(w.id)) return false;
       if (invitedWorkerIds.has(w.id)) return false;
-      if (!w.skills || !positionMatches(w.skills, selectedPosition)) return false;
+      if (!w.skills || !Array.isArray(w.skills)) return false;
+      if (!w.skills.some(skill => positionMatches(skill, selectedPosition))) return false;
       return true;
     })
     .sort((a, b) => (b.reliability ?? 5) - (a.reliability ?? 5));
