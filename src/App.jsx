@@ -1045,6 +1045,7 @@ setAppPositions(storedPositions);
         event={selectedEventForInvite}
         workers={workers}
         assignments={assignments}
+        events={events}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={loadAssignments}
       />

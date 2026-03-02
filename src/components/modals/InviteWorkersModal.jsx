@@ -3,7 +3,7 @@ import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle,
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 
-export default function InviteWorkersModal({ open, event, workers, assignments, onClose, onReloadAssignments }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, onClose, onReloadAssignments }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -76,6 +76,15 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       return true;
     })
     .sort((a, b) => (b.reliability ?? 5) - (a.reliability ?? 5));
+
+  // Check if worker has a same-day booking conflict with this event
+  const getWorkerConflicts = (workerId) => {
+    if (!event?.date) return [];
+    return (assignments || [])
+      .filter(a => a.worker_id === workerId && a.event_id !== event.id)
+      .map(a => (events || []).find(e => e.id === a.event_id))
+      .filter(e => e && e.date === event.date);
+  };
 
   const workersByRank = {};
   for (let r = 1; r <= 5; r++) {
@@ -197,7 +206,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         </div>
 
         <div className="px-6 py-3 border-b bg-gray-50 flex-shrink-0">
-          <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+          <div className="flex flex-wrap gap-2">
             {positions.map(pos => {
               const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
               const open = pos.count - filled;
@@ -205,7 +214,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               const hasAccepted = invitations.filter(i => i.position === pos.key && i.status === 'accepted').length > 0;
               return (
                 <button key={pos.key} onClick={() => setSelectedPosition(pos.key)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${selectedPosition === pos.key ? 'bg-red-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${selectedPosition === pos.key ? 'bg-red-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
                   <span>{getPositionLabel(pos.key)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${selectedPosition === pos.key ? 'bg-red-700 text-white' : isFull ? 'bg-green-100 text-green-700' : hasAccepted ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
                     {isFull ? '✓ Full' : `${open} open`}
@@ -334,13 +343,23 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                                     {isSelected && <CheckCircle size={12} className="text-white" />}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-2 flex-wrap gap-y-0.5">
                                       <span className="font-medium text-gray-900 text-sm">{worker.name}</span>
                                       {worker.is_host && (
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700">
                                           <Shield size={9} className="mr-0.5" />Host
                                         </span>
                                       )}
+                                      {(() => {
+                                        const conflicts = getWorkerConflicts(worker.id);
+                                        if (conflicts.length === 0) return null;
+                                        return (
+                                          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700 font-medium" title={`Also booked: ${conflicts.map(e => e.name).join(', ')}`}>
+                                            <AlertCircle size={9} />
+                                            <span>Conflict: {conflicts[0].name}{conflicts.length > 1 ? ` +${conflicts.length - 1}` : ''}</span>
+                                          </span>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                   <span className={`flex items-center space-x-0.5 text-xs font-medium flex-shrink-0 ${reliabilityColor}`}>
