@@ -15,6 +15,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const [activeTab, setActiveTab] = useState('invite');
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [secondsSinceRefresh, setSecondsSinceRefresh] = useState(0);
+  const [confirmSend, setConfirmSend] = useState(null); // holds {workerIds, rank} when awaiting confirmation
+  const [reInviting, setReInviting] = useState(null);
 
   useEffect(() => {
     if (open && event) {
@@ -121,27 +123,45 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
   const handleSendInvites = async () => {
     if (selectedWorkers.size === 0 || !selectedPosition) return;
+    // Show confirmation first
+    setConfirmSend({ workerIds: Array.from(selectedWorkers), rank: selectedRank, source: 'selected' });
+  };
+
+  const handleInviteAllRank = async (rank) => {
+    const rankWorkers = workersByRank[rank] || [];
+    if (rankWorkers.length === 0) return;
+    setConfirmSend({ workerIds: rankWorkers.map(w => w.id), rank, source: 'all' });
+  };
+
+  const handleConfirmSend = async () => {
+    if (!confirmSend) return;
     setSending(true);
     try {
-      await supabase.from('invitations').insert(buildInviteRecords(Array.from(selectedWorkers)));
+      await supabase.from('invitations').insert(buildInviteRecords(confirmSend.workerIds));
       setSelectedWorkers(new Set());
+      setConfirmSend(null);
       await loadInvitations();
       setActiveTab('responses');
     } catch (err) { alert('Error sending invites: ' + err.message); }
     finally { setSending(false); }
   };
 
-  const handleInviteAllRank = async (rank) => {
-    const rankWorkers = workersByRank[rank] || [];
-    if (rankWorkers.length === 0) return;
-    setSending(true);
+  const handleReInvite = async (inv) => {
+    setReInviting(inv.id);
     try {
-      await supabase.from('invitations').insert(buildInviteRecords(rankWorkers.map(w => w.id)));
-      setSelectedWorkers(new Set());
+      // Reset the declined invite back to pending with a fresh window
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + windowHours);
+      await supabase.from('invitations').update({
+        status: 'pending',
+        responded_at: null,
+        invited_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+        window_hours: windowHours
+      }).eq('id', inv.id);
       await loadInvitations();
-      setActiveTab('responses');
-    } catch (err) { alert('Error sending invites: ' + err.message); }
-    finally { setSending(false); }
+    } catch (err) { alert('Error re-inviting worker: ' + err.message); }
+    finally { setReInviting(null); }
   };
 
   const handleConfirmWorker = async (invitation) => {
@@ -195,7 +215,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col relative">
 
         <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
           <div>
@@ -504,8 +524,18 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                       <div className="space-y-1">
                         {declinedInvites.map(inv => (
                           <div key={inv.id} className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
-                            <p className="text-sm text-gray-600">{getWorkerName(inv.worker_id)}</p>
-                            <span className="text-xs text-red-500">Rank {inv.rank_tier}</span>
+                            <div>
+                              <p className="text-sm text-gray-700 font-medium">{getWorkerName(inv.worker_id)}</p>
+                              <p className="text-xs text-gray-400">Rank {inv.rank_tier} · Declined {inv.responded_at ? new Date(inv.responded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</p>
+                            </div>
+                            <button
+                              onClick={() => handleReInvite(inv)}
+                              disabled={reInviting === inv.id}
+                              className="text-xs text-red-700 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg font-medium disabled:opacity-50 transition-colors flex items-center space-x-1"
+                            >
+                              <Send size={10} />
+                              <span>{reInviting === inv.id ? 'Sending...' : 'Re-invite'}</span>
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -541,6 +571,37 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             )
           )}
         </div>
+
+        {/* Confirmation dialog */}
+        {confirmSend && (
+          <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center rounded-xl z-10">
+            <div className="bg-white rounded-xl shadow-2xl p-6 mx-6 w-full max-w-sm">
+              <h3 className="text-base font-bold text-gray-900 mb-1">Confirm Invites</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                You're about to send invites to <span className="font-semibold text-gray-800">{confirmSend.workerIds.length} Rank {confirmSend.rank} worker{confirmSend.workerIds.length !== 1 ? 's' : ''}</span> for <span className="font-semibold text-gray-800">{getPositionLabel(selectedPosition)}</span> with a <span className="font-semibold text-gray-800">{windowHours < 1 ? '30 minute' : windowHours === 1 ? '1 hour' : `${windowHours} hour`}</span> response window.
+              </p>
+              <div className="bg-gray-50 rounded-lg px-4 py-3 mb-4 space-y-1">
+                {confirmSend.workerIds.slice(0, 5).map(id => (
+                  <p key={id} className="text-sm text-gray-700">• {getWorkerName(id)}</p>
+                ))}
+                {confirmSend.workerIds.length > 5 && (
+                  <p className="text-sm text-gray-400">...and {confirmSend.workerIds.length - 5} more</p>
+                )}
+              </div>
+              <div className="flex space-x-3">
+                <button onClick={() => setConfirmSend(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button onClick={handleConfirmSend} disabled={sending}
+                  className="flex-1 px-4 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-1.5">
+                  <Send size={14} />
+                  <span>{sending ? 'Sending...' : 'Send Invites'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
