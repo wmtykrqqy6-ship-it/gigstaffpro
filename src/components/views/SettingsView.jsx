@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 
 export default function SettingsView({
   positions,
   onUpdatePositions
 }) {
   const [activeTab, setActiveTab] = useState('general');
+  const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
+  const [hostLabelSaved, setHostLabelSaved] = useState(false);
+
+  const handleSaveHostLabel = () => {
+    setHostLabel(hostLabelValue);
+    setHostLabelSaved(true);
+    setTimeout(() => setHostLabelSaved(false), 2000);
+  };
 
   // --- Locations state ---
   const [locations, setLocations] = useState([]);
@@ -764,6 +773,30 @@ export default function SettingsView({
       {/* ── GENERAL TAB ── */}
       {activeTab === 'general' && (
         <div className="space-y-6">
+
+          {/* Team Leader Label */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-1">Team Leader Label</h3>
+            <p className="text-sm text-gray-500 mb-4">What do you call your event hosts / team leaders? This label appears throughout the app on worker badges, filters, and reports.</p>
+            <div className="flex items-center space-x-3">
+              <input
+                type="text"
+                value={hostLabelValue}
+                onChange={e => setHostLabelValue(e.target.value)}
+                placeholder="e.g. Host, Manager, Team Lead, Pit Boss"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                maxLength={30}
+              />
+              <button
+                onClick={handleSaveHostLabel}
+                disabled={!hostLabelValue.trim()}
+                className="px-4 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {hostLabelSaved ? '\u2713 Saved' : 'Save'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Examples: Host, Manager, Team Lead, Pit Boss</p>
+          </div>
 
           {/* Warehouse Address */}
           <div className="bg-white rounded-lg shadow p-6">

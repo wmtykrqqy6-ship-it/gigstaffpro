@@ -1,99 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../../supabaseClient';
-import { getPositionKey } from '../../utils/positionHelpers';
-import { WORKER_DEFAULTS, RELIABILITY, SUCCESS_MESSAGES, ERROR_MESSAGES } from '../../constants';
 
-export default function EditWorkerModal({
+export default function AddWorkerModal({
   open,
-  worker,
+  savingWorker,
   positions,
   onClose,
-  onSuccess
+  onSaveWorker
 }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     skills: [],
-    rank: WORKER_DEFAULTS.RANK,
-    reliability: WORKER_DEFAULTS.RELIABILITY,
-    is_host: false
+    rank: 1,
+    reliability: 5.0,
+    total_gigs: 0
   });
-  const [saving, setSaving] = useState(false);
-
-  // Populate form when worker changes
-  useEffect(() => {
-    if (worker) {
-      // Migrate old skill format (labels) to new format (keys)
-      const migratedSkills = (worker.skills || []).map(skill => {
-        if (typeof skill === 'string') {
-          // Try to find matching position by label first, fallback to key
-          const position = positions.find(p => p.label === skill || p.key === skill);
-          if (position) return position.key;
-          // If not found, convert to key format
-          return getPositionKey(skill);
-        }
-        return skill;
-      });
-      
-      setFormData({
-        name: worker.name || '',
-        email: worker.email || '',
-        phone: worker.phone || '',
-        skills: migratedSkills,
-        rank: worker.rank || WORKER_DEFAULTS.RANK,
-        reliability: worker.reliability || WORKER_DEFAULTS.RELIABILITY,
-        is_host: worker.is_host || false
-      });
-    }
-  }, [worker, positions]);
-
-  if (!open || !worker) return null;
 
   // Use positions from settings as available skills
-  const skillOptions = positions;
+  const skillOptions = positions || [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.skills.length === 0) {
-      alert(ERROR_MESSAGES.VALIDATION.SKILLS_REQUIRED);
+      alert('Please select at least one skill');
       return;
     }
-    
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('workers')
-        .update(formData)
-        .eq('id', worker.id);
-      
-      if (error) throw error;
-      
-      alert(SUCCESS_MESSAGES.WORKER_SAVED);
-      
-      // Reset form
+
+    const ok = await onSaveWorker(formData);
+    if (ok) {
       setFormData({
         name: '',
         email: '',
         phone: '',
         skills: [],
-        rank: WORKER_DEFAULTS.RANK,
-        reliability: WORKER_DEFAULTS.RELIABILITY
+        rank: 1,
+        reliability: 5.0,
+        total_gigs: 0
       });
-      
-      // Call success callback (to refresh worker list)
-      if (onSuccess) {
-        await onSuccess();
-      }
-      
-      // Close modal
-      onClose();
-    } catch (error) {
-      alert(ERROR_MESSAGES.DATA.UPDATE_FAILED + ': ' + error.message);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -106,28 +52,15 @@ export default function EditWorkerModal({
     }));
   };
 
-  const handleClose = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      skills: [],
-      rank: WORKER_DEFAULTS.RANK,
-      reliability: WORKER_DEFAULTS.RELIABILITY
-    });
-    onClose();
-  };
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">Edit Worker</h3>
-            <button 
-              onClick={handleClose} 
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <h3 className="text-2xl font-bold text-gray-900">Add New Worker</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X size={24} />
             </button>
           </div>
@@ -139,7 +72,7 @@ export default function EditWorkerModal({
                 type="text"
                 required
                 value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="John Doe"
               />
@@ -151,7 +84,7 @@ export default function EditWorkerModal({
                 type="email"
                 required
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="john@email.com"
               />
@@ -163,7 +96,7 @@ export default function EditWorkerModal({
                 type="tel"
                 required
                 value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="(555) 123-4567"
               />
@@ -176,7 +109,7 @@ export default function EditWorkerModal({
                   const skillKey = skill.key || skill;
                   const skillLabel = skill.label || skill;
                   const isSelected = formData.skills.includes(skillKey);
-                  
+
                   return (
                     <button
                       key={skillKey}
@@ -199,7 +132,7 @@ export default function EditWorkerModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">Rank Level</label>
               <select
                 value={formData.rank}
-                onChange={(e) => setFormData({...formData, rank: parseInt(e.target.value, 10)})}
+                onChange={(e) => setFormData({ ...formData, rank: parseInt(e.target.value, 10) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               >
                 {[1, 2, 3, 4, 5].map(level => (
@@ -208,58 +141,27 @@ export default function EditWorkerModal({
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reliability Rating ({RELIABILITY.MIN} - {RELIABILITY.MAX})
-              </label>
-              <input
-                type="number"
-                min={RELIABILITY.MIN}
-                max={RELIABILITY.MAX}
-                step="0.1"
-                value={formData.reliability}
-                onChange={(e) => setFormData({...formData, reliability: parseFloat(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Host Designation */}
-            <div className="border border-orange-200 bg-orange-50 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Event Host / Team Leader</p>
-                  <p className="text-xs text-gray-500 mt-1">Hosts can submit post-event attendance reports</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, is_host: !formData.is_host})}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    formData.is_host ? 'bg-orange-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    formData.is_host ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-              {formData.is_host && (
-                <p className="text-xs text-orange-700 mt-2 font-medium">✓ This worker is designated as a host</p>
-              )}
-            </div>
-
             <div className="flex space-x-3 pt-4">
               <button
                 type="submit"
-                disabled={saving}
-                className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={savingWorker}
+                className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
-                {saving ? 'Updating...' : 'Update Worker'}
+                {savingWorker ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Add Worker</span>
+                )}
               </button>
+
               <button
                 type="button"
-                onClick={handleClose}
-                disabled={saving}
-                className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium disabled:opacity-50"
+                onClick={onClose}
+                disabled={savingWorker}
+                className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>

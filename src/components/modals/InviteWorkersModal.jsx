@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import { getHostLabel } from '../../utils/hostLabelHelper';
 
 export default function InviteWorkersModal({ open, event, workers, assignments, events, onClose, onReloadAssignments }) {
   const [invitations, setInvitations] = useState([]);
@@ -309,9 +310,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
               {activeTab === 'invite' && (
                 <div className="p-6 space-y-4">
-                  <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                     <Clock size={16} className="text-gray-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-600">Response window:</span>
+                    <span className="text-sm text-gray-600 flex-shrink-0">Response window:</span>
                     <select value={windowHours} onChange={e => setWindowHours(Number(e.target.value))}
                       className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-red-500">
                       <option value={0.5}>30 minutes</option>
@@ -321,17 +322,19 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                       <option value={8}>8 hours</option>
                       <option value={24}>24 hours</option>
                     </select>
-                    <span className="text-xs text-gray-400">Workers have this long to respond</span>
+                    <span className="text-xs text-gray-400 hidden sm:inline">Workers have this long to respond</span>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-700">Invite Rank:</span>
-                    {[1,2,3,4,5].map(r => (
-                      <button key={r} onClick={() => setSelectedRank(r)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${selectedRank === r ? 'bg-red-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                        R{r}{workersByRank[r]?.length > 0 && <span className="ml-1 text-xs opacity-75">({workersByRank[r].length})</span>}
-                      </button>
-                    ))}
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                    <span className="text-sm font-medium text-gray-700 flex-shrink-0">Invite Rank:</span>
+                    <div className="flex items-center space-x-2">
+                      {[1,2,3,4,5].map(r => (
+                        <button key={r} onClick={() => setSelectedRank(r)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors flex-shrink-0 ${selectedRank === r ? 'bg-red-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                          R{r}{workersByRank[r]?.length > 0 && <span className="ml-1 text-xs opacity-75">({workersByRank[r].length})</span>}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {[1,2,3,4,5].filter(r => r === selectedRank).map(rank => {
@@ -339,18 +342,18 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                     const allSelected = rankWorkers.length > 0 && rankWorkers.every(w => selectedWorkers.has(w.id));
                     return (
                       <div key={rank} className="border rounded-lg overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-semibold text-gray-800">Rank {rank} Workers</span>
-                            <span className="text-xs text-gray-500">({rankWorkers.length} eligible)</span>
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b gap-2">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <span className="font-semibold text-gray-800 text-sm">Rank {rank} Workers</span>
+                            <span className="text-xs text-gray-500 flex-shrink-0">({rankWorkers.length} eligible)</span>
                           </div>
                           {rankWorkers.length > 0 && (
-                            <div className="flex items-center space-x-3">
-                              <button onClick={() => selectAllRank(rank)} className="text-xs text-gray-500 hover:text-gray-700 font-medium">
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <button onClick={() => selectAllRank(rank)} className="text-xs text-gray-500 hover:text-gray-700 font-medium hidden sm:inline">
                                 {allSelected ? 'Deselect all' : 'Select all'}
                               </button>
                               <button onClick={() => handleInviteAllRank(rank)} disabled={sending}
-                                className="text-xs bg-red-900 hover:bg-red-800 text-white px-2.5 py-1 rounded-lg font-medium disabled:opacity-50 transition-colors">
+                                className="text-xs bg-red-900 hover:bg-red-800 text-white px-2.5 py-1 rounded-lg font-medium disabled:opacity-50 transition-colors whitespace-nowrap">
                                 {sending ? 'Sending...' : `Invite All R${rank}`}
                               </button>
                             </div>
@@ -375,7 +378,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                                       <span className="font-medium text-gray-900 text-sm">{worker.name}</span>
                                       {worker.is_host === true && (
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700">
-                                          <Shield size={9} className="mr-0.5" />Host
+                                          <Shield size={9} className="mr-0.5" />{getHostLabel()}
                                         </span>
                                       )}
                                       {(() => {

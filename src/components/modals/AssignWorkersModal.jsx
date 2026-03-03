@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, CheckCircle, Trash2 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 
 export default function AssignWorkersModal({
   open,
@@ -243,7 +244,7 @@ export default function AssignWorkersModal({
 
             {/* Event Host */}
             <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <p className="text-sm font-semibold text-gray-700 mb-2">Event Host / Team Leader</p>
+              <p className="text-sm font-semibold text-gray-700 mb-2">{getHostLabel()} / Team Leader</p>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <select
                   value={selectedHostId}
@@ -263,7 +264,7 @@ export default function AssignWorkersModal({
                 )}
               </div>
               {hostWorkers.length === 0 && (
-                <p className="text-xs text-orange-600 mt-2">No hosts designated yet. Edit a worker and toggle "Event Host" to enable them.</p>
+                <p className="text-xs text-orange-600 mt-2">No {getHostLabelPlural()} designated yet. Edit a worker and toggle "{getHostLabel()}" to enable them.</p>
               )}
             </div>
 

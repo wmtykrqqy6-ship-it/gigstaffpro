@@ -3,6 +3,7 @@ import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, Refres
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
+import { getHostLabel } from '../../utils/hostLabelHelper';
 import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
 import HistoryView from './HistoryView';
@@ -388,7 +389,7 @@ export default function WorkerPortalView({
                   <h3 className="text-xl font-bold text-gray-900">
                     {reportsDue.length} Event Report{reportsDue.length !== 1 ? 's' : ''} Due
                   </h3>
-                  <p className="text-sm text-gray-500">As the designated host, please submit attendance reports</p>
+                  <p className="text-sm text-gray-500">As the designated {getHostLabel()}, please submit attendance reports</p>
                 </div>
               </div>
               <div className="space-y-3">

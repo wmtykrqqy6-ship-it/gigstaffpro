@@ -1,554 +1,1059 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 
-export default function StaffView({
-  loading,
-  error,
-  workers,
-  onShowBulkInvite,
-  onShowAddWorker,
-  onSetPin,
-  onEditWorker,
-  onDeleteWorker,
-  onRetryLoad
+export default function SettingsView({
+  positions,
+  onUpdatePositions
 }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [skillFilter, setSkillFilter] = useState('all');
-  const [rankFilter, setRankFilter] = useState('all');
-  const [reliabilityFilter, setReliabilityFilter] = useState('all');
-  const [hostFilter, setHostFilter] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
-  const [expandedCards, setExpandedCards] = useState({});
-  const [showFilters, setShowFilters] = useState(false);
-  const [locations, setLocations] = useState([]);
-  const [workerLocationMap, setWorkerLocationMap] = useState({}); // { worker_id: [location_id, ...] }
+  const [activeTab, setActiveTab] = useState('general');
+  const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
+  const [hostLabelSaved, setHostLabelSaved] = useState(false);
 
-  useEffect(() => {
-    supabase
-      .from('locations')
-      .select('id, name, city, state')
-      .eq('is_active', true)
-      .order('name')
-      .then(({ data }) => setLocations(data || []));
-
-    supabase
-      .from('worker_locations')
-      .select('worker_id, location_id')
-      .eq('approved', true)
-      .then(({ data }) => {
-        const map = {};
-        (data || []).forEach(({ worker_id, location_id }) => {
-          if (!map[worker_id]) map[worker_id] = [];
-          map[worker_id].push(location_id);
-        });
-        setWorkerLocationMap(map);
-      });
-  }, []);
-
-  const toggleCard = (workerId) => {
-    setExpandedCards(prev => ({
-      ...prev,
-      [workerId]: !prev[workerId]
-    }));
+  const handleSaveHostLabel = () => {
+    setHostLabel(hostLabelValue);
+    setHostLabelSaved(true);
+    setTimeout(() => setHostLabelSaved(false), 2000);
   };
 
-  // Count active filters
-  const activeFilterCount = 
-    (skillFilter !== 'all' ? 1 : 0) + 
-    (rankFilter !== 'all' ? 1 : 0) + 
-    (reliabilityFilter !== 'all' ? 1 : 0) +
-    (hostFilter !== 'all' ? 1 : 0) +
-    (locationFilter !== 'all' ? 1 : 0) +
-    (sortBy !== 'name' ? 1 : 0);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-900 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading workers from Supabase...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <h3 className="text-red-800 font-semibold mb-2">Database Connection Error</h3>
-        <p className="text-red-700 text-sm">{error}</p>
-        <button 
-          onClick={onRetryLoad}
-          className="mt-4 bg-red-900 text-white px-4 py-2 rounded hover:bg-red-800"
-        >
-          Retry Connection
-        </button>
-      </div>
-    );
-  }
-
-  // Get all unique skills for filter dropdown
-  const allSkills = [...new Set(workers.flatMap(w => w.skills || []))].sort();
-
-  // Filter workers
-  const filteredWorkers = workers.filter(worker => {
-    // Search filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesName = worker.name?.toLowerCase().includes(searchLower);
-      const matchesEmail = worker.email?.toLowerCase().includes(searchLower);
-      const matchesPhone = worker.phone?.toLowerCase().includes(searchLower);
-      if (!matchesName && !matchesEmail && !matchesPhone) return false;
-    }
-
-    // Skill filter
-    if (skillFilter !== 'all') {
-      if (!worker.skills || !worker.skills.includes(skillFilter)) return false;
-    }
-
-    // Rank filter
-    if (rankFilter !== 'all') {
-      if (rankFilter === '5-star' && worker.reliability !== 5) return false;
-      if (rankFilter !== '5-star' && worker.rank !== parseInt(rankFilter)) return false;
-    }
-
-    // Reliability filter
-    if (reliabilityFilter !== 'all') {
-      const rating = worker.reliability ?? 5.0;
-      if (reliabilityFilter === 'excellent' && rating < 4.5) return false;
-      if (reliabilityFilter === 'good' && (rating < 3.5 || rating >= 4.5)) return false;
-      if (reliabilityFilter === 'fair' && (rating < 2.0 || rating >= 3.5)) return false;
-      if (reliabilityFilter === 'poor' && rating >= 2.0) return false;
-      if (reliabilityFilter === 'below4' && rating >= 4.0) return false;
-    }
-
-    // Host filter
-    if (hostFilter === 'hosts' && !worker.is_host) return false;
-    if (hostFilter === 'non-hosts' && worker.is_host) return false;
-
-    // Location filter
-    if (locationFilter !== 'all') {
-      const workerLocs = workerLocationMap[worker.id] || [];
-      if (!workerLocs.includes(locationFilter)) return false;
-    }
-
-    return true;
+  // --- Locations state ---
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [locationForm, setLocationForm] = useState({
+    name: '', city: '', state: '', timezone: 'America/Chicago',
+    rules: { default_dress_code: '', notes: '' },
+    is_active: true
   });
-
-  // Sort workers
-  const sortedWorkers = [...filteredWorkers].sort((a, b) => {
-    if (sortBy === 'name') {
-      return (a.name || '').localeCompare(b.name || '');
-    } else if (sortBy === 'rating') {
-      return (b.reliability || 0) - (a.reliability || 0);
-    } else if (sortBy === 'gigs') {
-      return (b.total_gigs || 0) - (a.total_gigs || 0);
-    } else if (sortBy === 'rank') {
-      return (a.rank || 999) - (b.rank || 999);
-    }
-    return 0;
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [newPosition, setNewPosition] = useState('');
+  const [editingPosition, setEditingPosition] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [warehouseAddress, setWarehouseAddress] = useState('');
+  const [loadingWarehouse, setLoadingWarehouse] = useState(true);
+  const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
+  const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
+  const [rankAccessDays, setRankAccessDays] = useState({
+    1: 0,   // Rank 1 sees immediately
+    2: 7,   // Rank 2 sees 7 days before
+    3: 10,  // Rank 3 sees 10 days before
+    4: 12,  // Rank 4 sees 12 days before
+    5: 14   // Rank 5 sees 14 days before
   });
+  const [loadingRankAccess, setLoadingRankAccess] = useState(true);
+  const [timezone, setTimezone] = useState('America/Chicago');
+  const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24'
+  const [loadingTimeSettings, setLoadingTimeSettings] = useState(true);
+
+  useEffect(() => {
+    loadWarehouseAddress();
+    loadPaymentTrackingSetting();
+    loadRankAccessSettings();
+    loadTimeSettings();
+    loadLocations();
+  }, []);
+
+  const loadLocations = async () => {
+    setLoadingLocations(true);
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setLocations(data || []);
+    } catch (err) {
+      console.error('Error loading locations:', err.message);
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
+  const resetLocationForm = () => {
+    setLocationForm({
+      name: '', city: '', state: '', timezone: 'America/Chicago',
+      rules: { default_dress_code: '', notes: '' },
+      is_active: true
+    });
+  };
+
+  const openAddLocation = () => {
+    resetLocationForm();
+    setEditingLocation(null);
+    setShowAddLocation(true);
+  };
+
+  const openEditLocation = (loc) => {
+    setLocationForm({
+      name: loc.name || '',
+      city: loc.city || '',
+      state: loc.state || '',
+      timezone: loc.timezone || 'America/Chicago',
+      rules: {
+        default_dress_code: loc.rules?.default_dress_code || '',
+        notes: loc.rules?.notes || ''
+      },
+      is_active: loc.is_active !== false
+    });
+    setEditingLocation(loc);
+    setShowAddLocation(true);
+  };
+
+  const saveLocation = async () => {
+    if (!locationForm.name.trim()) {
+      alert('Location name is required.');
+      return;
+    }
+    setSavingLocation(true);
+    try {
+      const payload = {
+        name: locationForm.name.trim(),
+        city: locationForm.city.trim() || null,
+        state: locationForm.state.trim() || null,
+        timezone: locationForm.timezone,
+        rules: locationForm.rules,
+        is_active: locationForm.is_active
+      };
+
+      if (editingLocation) {
+        const { error } = await supabase
+          .from('locations')
+          .update(payload)
+          .eq('id', editingLocation.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('locations')
+          .insert([payload]);
+        if (error) throw error;
+      }
+
+      await loadLocations();
+      setShowAddLocation(false);
+      setEditingLocation(null);
+      resetLocationForm();
+    } catch (err) {
+      alert('Error saving location: ' + err.message);
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const toggleLocationActive = async (loc) => {
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .update({ is_active: !loc.is_active })
+        .eq('id', loc.id);
+      if (error) throw error;
+      await loadLocations();
+    } catch (err) {
+      alert('Error updating location: ' + err.message);
+    }
+  };
+
+  const deleteLocation = async (loc) => {
+    if (loc.name === 'Main') {
+      alert('The default "Main" location cannot be deleted.');
+      return;
+    }
+    if (!confirm(`Delete "${loc.name}"? This cannot be undone. Events linked to this location will lose their location.`)) return;
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', loc.id);
+      if (error) throw error;
+      await loadLocations();
+    } catch (err) {
+      alert('Error deleting location: ' + err.message);
+    }
+  };
+
+  const loadWarehouseAddress = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'warehouse_address')
+        .single();
+      
+      if (!error && data) {
+        setWarehouseAddress(data.setting_value || '');
+      } else {
+        // Set default for Vegas on Wheels
+        setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
+      }
+    } catch (error) {
+      setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
+    } finally {
+      setLoadingWarehouse(false);
+    }
+  };
+
+
+  const loadPaymentTrackingSetting = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'payment_tracking_enabled')
+        .single();
+      
+      if (!error && data) {
+        setPaymentTrackingEnabled(data.setting_value === 'true' || data.setting_value === true);
+      } else {
+        // Default to enabled
+        setPaymentTrackingEnabled(true);
+      }
+    } catch (error) {
+      setPaymentTrackingEnabled(true);
+    } finally {
+      setLoadingPaymentSetting(false);
+    }
+  };
+
+  const togglePaymentTracking = async (enabled) => {
+    setSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'payment_tracking_enabled')
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('settings')
+          .update({ 
+            setting_value: enabled.toString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'payment_tracking_enabled');
+        
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'payment_tracking_enabled',
+            setting_value: enabled.toString()
+          }]);
+        
+        if (error) throw error;
+      }
+
+      setPaymentTrackingEnabled(enabled);
+      alert(enabled ? 'Payment tracking enabled!' : 'Payment tracking disabled!');
+    } catch (error) {
+      alert('Error saving setting: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadRankAccessSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'rank_access_days')
+        .single();
+      
+      if (!error && data && data.setting_value) {
+        setRankAccessDays(JSON.parse(data.setting_value));
+      }
+    } catch (error) {
+    } finally {
+      setLoadingRankAccess(false);
+    }
+  };
+
+  const saveRankAccessSettings = async () => {
+    setSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'rank_access_days')
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('settings')
+          .update({ 
+            setting_value: JSON.stringify(rankAccessDays),
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'rank_access_days');
+        
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'rank_access_days',
+            setting_value: JSON.stringify(rankAccessDays)
+          }]);
+        
+        if (error) throw error;
+      }
+
+      alert('Rank access settings saved successfully!');
+    } catch (error) {
+      alert('Error saving settings: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveWarehouseAddress = async () => {
+    setSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'warehouse_address')
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('settings')
+          .update({ 
+            setting_value: warehouseAddress,
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'warehouse_address');
+        
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'warehouse_address',
+            setting_value: warehouseAddress
+          }]);
+        
+        if (error) throw error;
+      }
+
+      alert('Warehouse address saved successfully!');
+    } catch (error) {
+      alert('Error saving warehouse address: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadTimeSettings = async () => {
+    try {
+      // Load timezone
+      const { data: tzData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'timezone')
+        .single();
+      
+      if (tzData) {
+        setTimezone(tzData.setting_value || 'America/Chicago');
+      }
+
+      // Load time format
+      const { data: formatData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'time_format')
+        .single();
+      
+      if (formatData) {
+        setTimeFormat(formatData.setting_value || '12');
+      }
+    } catch (error) {
+    } finally {
+      setLoadingTimeSettings(false);
+    }
+  };
+
+  const saveTimeSettings = async () => {
+    setSaving(true);
+    try {
+      // Save timezone
+      const { data: existingTz } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'timezone')
+        .single();
+
+      if (existingTz) {
+        await supabase
+          .from('settings')
+          .update({ 
+            setting_value: timezone,
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'timezone');
+      } else {
+        await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'timezone',
+            setting_value: timezone
+          }]);
+      }
+
+      // Save time format
+      const { data: existingFormat } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'time_format')
+        .single();
+
+      if (existingFormat) {
+        await supabase
+          .from('settings')
+          .update({ 
+            setting_value: timeFormat,
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'time_format');
+      } else {
+        await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'time_format',
+            setting_value: timeFormat
+          }]);
+      }
+
+      alert('Time settings saved successfully!');
+    } catch (error) {
+      alert('Error saving time settings: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePositions = async (updatedPositions) => {
+    setSaving(true);
+    try {
+      // Sort alphabetically by label
+      const sortedPositions = [...updatedPositions].sort((a, b) => {
+        const labelA = a.label || a;
+        const labelB = b.label || b;
+        return labelA.localeCompare(labelB);
+      });
+      
+      // Check if settings exist
+      const { data: existingSettings } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('setting_key', 'positions')
+        .single();
+
+      if (existingSettings) {
+        // Update existing
+        const { error } = await supabase
+          .from('settings')
+          .update({ 
+            setting_value: sortedPositions,
+            updated_at: new Date().toISOString()
+          })
+          .eq('setting_key', 'positions');
+        
+        if (error) throw error;
+      } else {
+        // Insert new
+        const { error } = await supabase
+          .from('settings')
+          .insert([{
+            setting_key: 'positions',
+            setting_value: sortedPositions
+          }]);
+        
+        if (error) throw error;
+      }
+
+      onUpdatePositions(sortedPositions);
+      alert('Positions updated successfully!');
+    } catch (error) {
+      alert('Error saving positions: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddPosition = async () => {
+    if (!newPosition.trim()) {
+      alert('Please enter a position name');
+      return;
+    }
+    
+    const newKey = newPosition.trim().toLowerCase().replace(/\s+/g, '_');
+    const newLabel = newPosition.trim();
+    
+    if (positions.some(p => p.key === newKey)) {
+      alert('This position already exists');
+      return;
+    }
+    
+    const updatedPositions = [...positions, { key: newKey, label: newLabel }];
+    await savePositions(updatedPositions);
+    setNewPosition('');
+  };
+
+  const handleDeletePosition = async (position) => {
+    const label = position.label || position;
+    if (!confirm(`Are you sure you want to delete "${label}"?`)) return;
+    
+    const posKey = position.key || position;
+    const updatedPositions = positions.filter(p => p.key !== posKey);
+    await savePositions(updatedPositions);
+  };
+
+  const handleEditPosition = (position) => {
+    setEditingPosition(position.key || position);
+    setEditValue(position.label || position);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editValue.trim()) {
+      alert('Position name cannot be empty');
+      return;
+    }
+    
+    const newLabel = editValue.trim();
+    
+    const updatedPositions = positions.map(p => {
+      if (p.key === editingPosition) {
+        return { ...p, label: newLabel };
+      }
+      return p;
+    });
+    
+    await savePositions(updatedPositions);
+    setEditingPosition(null);
+    setEditValue('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPosition(null);
+    setEditValue('');
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-4">
-        {/* Title - Centered on Mobile */}
-        <div className="text-center md:text-left">
-          <h2 className="text-3xl font-bold text-gray-900">Staff Management</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {sortedWorkers.length} {sortedWorkers.length === 1 ? 'worker' : 'workers'}
-            {sortedWorkers.length !== workers.length && ` of ${workers.length} total`}
-          </p>
-        </div>
-        
-        {/* Buttons - Stacked on Mobile, Side-by-side on Desktop */}
-        <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
-          <button 
-            onClick={onShowBulkInvite}
-            className="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors"
-          >
-            <Mail size={20} />
-            <span>Bulk Invite</span>
-          </button>
-          <button 
-            onClick={onShowAddWorker}
-            className="w-full md:w-auto bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center justify-center space-x-2 transition-colors"
-          >
-            <Plus size={20} />
-            <span>Add Worker</span>
-          </button>
-        </div>
+      <div>
+        <h2 className="text-3xl font-bold text-gray-900">Settings</h2>
+        <p className="text-sm text-gray-600 mt-1">Manage locations, positions, and system settings</p>
       </div>
 
-      {/* Compact Search Bar + Filter Button */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex items-center space-x-3">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search workers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Filter Button */}
+      {/* Tab Bar */}
+      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
+        {[
+          { id: 'locations', label: '📍 Locations' },
+          { id: 'general', label: '⚙️ General' },
+          { id: 'positions', label: '🎰 Positions' },
+        ].map(tab => (
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center space-x-2 transition-colors relative"
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-white shadow text-gray-900'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            <span className="hidden sm:inline">Filter</span>
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
+            {tab.label}
           </button>
-        </div>
-
-        {/* Market filter - always visible when multiple locations exist */}
-        {locations.length > 1 && (
-          <div className="mt-3">
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm ${
-                locationFilter !== 'all' ? 'border-purple-400 bg-purple-50 text-purple-900 font-medium' : 'border-gray-300'
-              }`}
-            >
-              <option value="all">📍 All Markets</option>
-              {locations.map(loc => (
-                <option key={loc.id} value={loc.id}>
-                  📍 {loc.name}{loc.city ? ` — ${loc.city}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Collapsible Filter Panel */}
-        {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-            {/* Skill Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Skill</label>
-              <select
-                value={skillFilter}
-                onChange={(e) => setSkillFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="all">All Skills</option>
-                {allSkills.map(skill => (
-                  <option key={skill} value={skill}>{getPositionLabel(skill)}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Rank Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Rank</label>
-              <select
-                value={rankFilter}
-                onChange={(e) => setRankFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="all">All Ranks</option>
-                <option value="1">Rank 1</option>
-                <option value="2">Rank 2</option>
-                <option value="3">Rank 3</option>
-                <option value="4">Rank 4</option>
-                <option value="5">Rank 5</option>
-                <option value="5-star">⭐ 5.0 Rating Only</option>
-              </select>
-            </div>
-
-            {/* Reliability Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Reliability Rating</label>
-              <select
-                value={reliabilityFilter}
-                onChange={(e) => setReliabilityFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="all">All Ratings</option>
-                <option value="excellent">⭐ Excellent (4.5 - 5.0)</option>
-                <option value="good">✅ Good (3.5 - 4.4)</option>
-                <option value="fair">⚠️ Fair (2.0 - 3.4)</option>
-                <option value="poor">🔴 Poor (below 2.0)</option>
-                <option value="below4">Below 4.0</option>
-              </select>
-            </div>
-
-            {/* Host Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Host Status</label>
-              <select
-                value={hostFilter}
-                onChange={(e) => setHostFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="all">All Workers</option>
-                <option value="hosts">🎯 Hosts Only</option>
-                <option value="non-hosts">Non-Hosts Only</option>
-              </select>
-            </div>
-
-            {/* Sort By */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="name">Name (A-Z)</option>
-                <option value="rank">Rank (Low to High)</option>
-                <option value="rating">Rating (High to Low)</option>
-                <option value="gigs">Total Gigs (High to Low)</option>
-              </select>
-            </div>
-
-            {/* Clear Filters Button */}
-            {activeFilterCount > 0 && (
-              <button
-                onClick={() => {
-                  setSkillFilter('all');
-                  setRankFilter('all');
-                  setReliabilityFilter('all');
-                  setHostFilter('all');
-                  setLocationFilter('all');
-                  setSortBy('name');
-                }}
-                className="w-full px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors"
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Active Search Badge (only if searching) */}
-        {searchTerm && (
-          <div className="flex items-center space-x-2 text-sm mt-3">
-            <span className="text-gray-600">Searching:</span>
-            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-              "{searchTerm}"
-            </span>
-            <button
-              onClick={() => setSearchTerm('')}
-              className="text-red-600 hover:text-red-800 font-medium"
-            >
-              Clear
-            </button>
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Worker Cards Grid */}
-      {sortedWorkers.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <Users size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {workers.length === 0 ? 'No Workers Yet' : 'No Workers Found'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {workers.length === 0 
-              ? 'Add your first casino party staff member to get started!'
-              : 'Try adjusting your filters or search term.'}
-          </p>
-          {workers.length === 0 && (
-            <button 
-              onClick={onShowAddWorker}
-              className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800"
+      {/* ── LOCATIONS TAB ── */}
+      {activeTab === 'locations' && (
+        <div className="space-y-4">
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Locations</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Manage the markets your business operates in</p>
+            </div>
+            <button
+              onClick={openAddLocation}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
             >
-              Add Worker
+              <Plus size={16} />
+              <span>Add Location</span>
             </button>
+          </div>
+
+          {/* Add / Edit Form */}
+          {showAddLocation && (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-900">
+              <h4 className="text-lg font-bold text-gray-900 mb-4">
+                {editingLocation ? `Edit: ${editingLocation.name}` : 'New Location'}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Location Name *</label>
+                  <input
+                    type="text"
+                    value={locationForm.name}
+                    onChange={e => setLocationForm({ ...locationForm, name: e.target.value })}
+                    placeholder="e.g. Milwaukee, Chicago North"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Timezone</label>
+                  <select
+                    value={locationForm.timezone}
+                    onChange={e => setLocationForm({ ...locationForm, timezone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Phoenix">Arizona (MST)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={locationForm.city}
+                    onChange={e => setLocationForm({ ...locationForm, city: e.target.value })}
+                    placeholder="e.g. Milwaukee"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={locationForm.state}
+                    onChange={e => setLocationForm({ ...locationForm, state: e.target.value })}
+                    placeholder="e.g. WI"
+                    maxLength={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Default Dress Code</label>
+                  <input
+                    type="text"
+                    value={locationForm.rules.default_dress_code}
+                    onChange={e => setLocationForm({ ...locationForm, rules: { ...locationForm.rules, default_dress_code: e.target.value } })}
+                    placeholder="e.g. Vegas on Wheels attire"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Active</label>
+                  <div className="flex items-center space-x-3 mt-2">
+                    <button
+                      onClick={() => setLocationForm({ ...locationForm, is_active: !locationForm.is_active })}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${locationForm.is_active ? 'bg-green-500' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${locationForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-sm text-gray-600">{locationForm.is_active ? 'Active' : 'Inactive'}</span>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={locationForm.rules.notes}
+                    onChange={e => setLocationForm({ ...locationForm, rules: { ...locationForm.rules, notes: e.target.value } })}
+                    placeholder="Any location-specific notes for admin reference..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={saveLocation}
+                  disabled={savingLocation}
+                  className="bg-red-900 text-white px-5 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2 text-sm"
+                >
+                  <Save size={15} />
+                  <span>{savingLocation ? 'Saving...' : editingLocation ? 'Save Changes' : 'Create Location'}</span>
+                </button>
+                <button
+                  onClick={() => { setShowAddLocation(false); setEditingLocation(null); resetLocationForm(); }}
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {sortedWorkers.map(worker => {
-            const isExpanded = expandedCards[worker.id];
-            return (
-              <div 
-                key={worker.id} 
-                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
-              >
-                {/* Compact Header - Always Visible */}
-                <div 
-                  className="p-4 cursor-pointer hover:bg-gray-50"
-                  onClick={() => toggleCard(worker.id)}
+
+          {/* Location Cards */}
+          {loadingLocations ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-900"></div>
+            </div>
+          ) : locations.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <MapPin size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500">No locations yet. Add your first location above.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {locations.map(loc => (
+                <div
+                  key={loc.id}
+                  className={`bg-white rounded-lg shadow p-5 border-l-4 ${loc.is_active ? 'border-green-500' : 'border-gray-300'}`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
-                        {worker.is_host && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 flex-shrink-0">
-                            <Shield size={10} className="mr-0.5" />
-                            Host
-                          </span>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <MapPin size={16} className={loc.is_active ? 'text-green-600' : 'text-gray-400'} />
+                        <h4 className="font-bold text-gray-900 text-lg">{loc.name}</h4>
+                        {!loc.is_active && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
                         )}
                       </div>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          Rank {worker.rank || 1}
-                        </span>
-                        {/* Color-coded reliability badge */}
-                        {(() => {
-                          const rating = worker.reliability ?? 5.0;
-                          const color = rating >= 4.5 ? 'bg-green-100 text-green-800 border-green-200' :
-                                        rating >= 3.5 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                        rating >= 2.0 ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                                        'bg-red-100 text-red-800 border-red-200';
-                          return (
-                            <span className={`inline-flex items-center space-x-0.5 px-2 py-0.5 rounded text-xs font-medium border ${color}`}>
-                              <Star size={10} className="fill-current flex-shrink-0" />
-                              <span>{rating.toFixed(1)}</span>
-                            </span>
-                          );
-                        })()}
-                      </div>
+                      {(loc.city || loc.state) && (
+                        <p className="text-sm text-gray-500 mt-0.5 ml-6">
+                          {[loc.city, loc.state].filter(Boolean).join(', ')}
+                        </p>
+                      )}
                     </div>
-                    <div className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                      {worker.total_gigs || 0} gigs
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => openEditLocation(loc)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit size={15} />
+                      </button>
+                      <button
+                        onClick={() => toggleLocationActive(loc)}
+                        className={`p-2 rounded transition-colors ${loc.is_active ? 'text-yellow-600 hover:bg-yellow-50' : 'text-green-600 hover:bg-green-50'}`}
+                        title={loc.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        {loc.is_active ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                      </button>
+                      {loc.name !== 'Main' && (
+                        <button
+                          onClick={() => deleteLocation(loc)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  
-                  {/* Phone Number - Always Visible */}
-                  {worker.phone && (
-                    <div className="flex items-center space-x-1.5 text-sm text-gray-600">
-                      <Phone size={13} className="text-gray-400 flex-shrink-0" />
-                      <span>{worker.phone}</span>
-                    </div>
-                  )}
+                  <div className="ml-6 space-y-1 text-xs text-gray-500">
+                    <p>🕐 {loc.timezone}</p>
+                    {loc.rules?.default_dress_code && (
+                      <p>👔 {loc.rules.default_dress_code}</p>
+                    )}
+                    {loc.rules?.notes && (
+                      <p className="text-gray-400 italic">"{loc.rules.notes}"</p>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-gray-100 space-y-3">
-                    {/* Email */}
-                    {worker.email && (
-                      <div className="pt-3">
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Mail size={13} className="text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{worker.email}</span>
-                        </div>
-                      </div>
-                    )}
+      {/* ── GENERAL TAB ── */}
+      {activeTab === 'general' && (
+        <div className="space-y-6">
 
-                    {/* Skills */}
-                    {worker.skills && worker.skills.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-gray-700 mb-1.5">Skills:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {worker.skills.map((skill, idx) => (
-                            <span 
-                              key={idx}
-                              className="px-1.5 py-0.5 bg-red-50 text-red-700 text-xs rounded border border-red-200"
-                            >
-                              {getPositionLabel(skill)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+          {/* Team Leader Label */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-1">Team Leader Label</h3>
+            <p className="text-sm text-gray-500 mb-4">What do you call your event hosts / team leaders? This label appears throughout the app on worker badges, filters, and reports.</p>
+            <div className="flex items-center space-x-3">
+              <input
+                type="text"
+                value={hostLabelValue}
+                onChange={e => setHostLabelValue(e.target.value)}
+                placeholder="e.g. Host, Manager, Team Lead, Pit Boss"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                maxLength={30}
+              />
+              <button
+                onClick={handleSaveHostLabel}
+                disabled={!hostLabelValue.trim()}
+                className="px-4 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {hostLabelSaved ? '\u2713 Saved' : 'Save'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Examples: Host, Manager, Team Lead, Pit Boss</p>
+          </div>
 
-                    {/* Markets / Location Approvals - only shows if multiple locations */}
-                    {locations.length > 1 && (
-                      <div>
-                        <p className="text-xs font-medium text-gray-700 mb-1.5">Approved Markets:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {locations.map(loc => {
-                            const approved = (workerLocationMap[worker.id] || []).includes(loc.id);
-                            return (
-                              <button
-                                key={loc.id}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (approved) {
-                                    // Remove approval
-                                    await supabase
-                                      .from('worker_locations')
-                                      .delete()
-                                      .eq('worker_id', worker.id)
-                                      .eq('location_id', loc.id);
-                                    setWorkerLocationMap(prev => ({
-                                      ...prev,
-                                      [worker.id]: (prev[worker.id] || []).filter(id => id !== loc.id)
-                                    }));
-                                  } else {
-                                    // Add approval
-                                    await supabase
-                                      .from('worker_locations')
-                                      .insert({ worker_id: worker.id, location_id: loc.id, approved: true });
-                                    setWorkerLocationMap(prev => ({
-                                      ...prev,
-                                      [worker.id]: [...(prev[worker.id] || []), loc.id]
-                                    }));
-                                  }
-                                }}
-                                className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
-                                  approved
-                                    ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
-                                    : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100 hover:text-gray-600'
-                                }`}
-                              >
-                                <MapPin size={10} />
-                                <span>{loc.name}</span>
-                                {approved && <span className="text-green-600">✓</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">Tap a market to approve or remove</p>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center space-x-1.5 pt-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onSetPin(worker); }}
-                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors text-xs font-medium"
-                        title="Set PIN"
-                      >
-                        <Lock size={12} />
-                        <span>PIN</span>
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEditWorker(worker); }}
-                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-xs font-medium"
-                        title="Edit Worker"
-                      >
-                        <Edit size={12} />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteWorker(worker.id); }}
-                        className="flex-1 flex items-center justify-center space-x-1 px-2 py-1.5 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors text-xs font-medium"
-                        title="Delete Worker"
-                      >
-                        <Trash2 size={12} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+          {/* Warehouse Address */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
+              <MapPin size={20} />
+              <span>Warehouse Address</span>
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This address is used for calculating miles traveled to events.
+            </p>
+            {loadingWarehouse ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
               </div>
-            );
-          })}
+            ) : (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={warehouseAddress}
+                  onChange={(e) => setWarehouseAddress(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Enter warehouse address"
+                  disabled={saving}
+                />
+                <button
+                  onClick={saveWarehouseAddress}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Address'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Payment Tracking Toggle */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Control whether workers see payment information for their assignments.
+            </p>
+            {loadingPaymentSetting ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 mb-1">
+                    {paymentTrackingEnabled ? 'Payment Tracking Enabled' : 'Payment Tracking Disabled'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {paymentTrackingEnabled
+                      ? 'Workers will see pay info on assignments.'
+                      : 'Payment features are hidden from workers.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => togglePaymentTracking(!paymentTrackingEnabled)}
+                  disabled={saving}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${paymentTrackingEnabled ? 'bg-green-600' : 'bg-gray-300'} ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Rank-Based Event Access */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Event Access (Rank-Based)</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Control when workers can see and sign up for events based on their rank.
+            </p>
+            {loadingRankAccess ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4, 5].map(rank => (
+                    <div key={rank} className="border border-gray-200 rounded-lg p-4">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
+                        Rank {rank} {rank === 1 && '(Best)'} {rank === 5 && '(New)'}
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={rankAccessDays[rank]}
+                          onChange={(e) => setRankAccessDays({ ...rankAccessDays, [rank]: parseInt(e.target.value, 10) || 0 })}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          disabled={saving}
+                        />
+                        <span className="text-sm text-gray-600">days before event</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {rankAccessDays[rank] === 0 ? 'Can see events immediately' : `Can see events ${rankAccessDays[rank]} days before`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="text-blue-900 font-semibold mb-2">Example Timeline:</p>
+                  <ul className="text-blue-800 space-y-1">
+                    <li>• Event created: Rank 1 workers see it immediately</li>
+                    <li>• {rankAccessDays[2]} days before: Rank 2 workers can sign up</li>
+                    <li>• {rankAccessDays[3]} days before: Rank 3 workers can sign up</li>
+                    <li>• {rankAccessDays[4]} days before: Rank 4 workers can sign up</li>
+                    <li>• {rankAccessDays[5]} days before: Rank 5 workers can sign up</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={saveRankAccessSettings}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Access Settings'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Time & Date Settings */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Time & Date Settings</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Configure timezone and time display format for your organization.
+            </p>
+            {loadingTimeSettings ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Timezone</label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    disabled={saving}
+                  >
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                    <option value="America/Chicago">Central Time (CT)</option>
+                    <option value="America/Denver">Mountain Time (MT)</option>
+                    <option value="America/Phoenix">Arizona (MST - No DST)</option>
+                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Time Format</label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="radio" value="12" checked={timeFormat === '12'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
+                      <span className="text-sm">12-hour (2:30 PM)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="radio" value="24" checked={timeFormat === '24'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
+                      <span className="text-sm">24-hour (14:30)</span>
+                    </label>
+                  </div>
+                </div>
+                <button
+                  onClick={saveTimeSettings}
+                  disabled={saving}
+                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Time Settings'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── POSITIONS TAB ── */}
+      {activeTab === 'positions' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Position Types</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Customize the positions available in your system. These are used for event staffing, worker skills, and assignment matching.
+          </p>
+          <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded mb-6">
+            💡 Adding a new position like "Baccarat Dealer" immediately makes it available as both an event position and a worker skill.
+          </p>
+
+          {/* Add New Position */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Add New Position</label>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newPosition}
+                onChange={(e) => setNewPosition(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddPosition()}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="e.g., Baccarat Dealer"
+                disabled={saving}
+              />
+              <button
+                onClick={handleAddPosition}
+                disabled={saving}
+                className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2"
+              >
+                <Plus size={18} />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Existing Positions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Current Positions ({positions.length})</label>
+            <div className="space-y-2">
+              {positions.length === 0 ? (
+                <p className="text-gray-500 text-sm py-4">No positions configured yet.</p>
+              ) : (
+                positions.map((position, idx) => {
+                  const posLabel = position.label || position;
+                  const posKey = position.key || position.toLowerCase().replace(/\s+/g, '_');
+                  const isEditing = editingPosition === posKey;
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      {isEditing ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                            className="flex-1 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-red-500"
+                            autoFocus
+                          />
+                          <div className="flex space-x-2 ml-3">
+                            <button onClick={handleSaveEdit} className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"><CheckCircle size={20} /></button>
+                            <button onClick={handleCancelEdit} className="text-gray-600 hover:text-gray-800 p-1 hover:bg-gray-200 rounded"><XCircle size={20} /></button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-900">{posLabel}</span>
+                          <div className="flex space-x-2">
+                            <button onClick={() => handleEditPosition(position)} className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"><Edit size={18} /></button>
+                            <button onClick={() => handleDeletePosition(position)} className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"><Trash2 size={18} /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
