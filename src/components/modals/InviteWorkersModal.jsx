@@ -365,7 +365,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center space-x-2 flex-wrap gap-y-0.5">
                                       <span className="font-medium text-gray-900 text-sm">{worker.name}</span>
-                                      {worker.is_host && (
+                                      {worker.is_host === true && (
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700">
                                           <Shield size={9} className="mr-0.5" />Host
                                         </span>
@@ -381,6 +381,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                                         );
                                       })()}
                                     </div>
+                                    {worker.total_gigs > 0 && (
+                                      <p className="text-xs text-gray-400 mt-0.5">{worker.total_gigs} gig{worker.total_gigs !== 1 ? 's' : ''}</p>
+                                    )}
                                   </div>
                                   <span className={`flex items-center space-x-0.5 text-xs font-medium flex-shrink-0 ${reliabilityColor}`}>
                                     <Star size={11} className="fill-current" />
@@ -564,9 +567,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               </span>
             ) : (
               <button onClick={handleSendInvites} disabled={selectedWorkers.size === 0 || sending}
-                className="flex items-center space-x-2 px-5 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors">
+                className="flex items-center space-x-2 px-5 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors">
                 <Send size={15} />
-                <span>{sending ? 'Sending...' : `Send ${selectedWorkers.size > 0 ? '(' + selectedWorkers.size + ')' : ''} Invite${selectedWorkers.size !== 1 ? 's' : ''}`}</span>
+                <span>{sending ? 'Sending...' : selectedWorkers.size === 0 ? 'Select workers above' : `Send (${selectedWorkers.size}) Invite${selectedWorkers.size !== 1 ? 's' : ''}`}</span>
               </button>
             )
           )}
