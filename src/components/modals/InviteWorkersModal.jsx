@@ -227,17 +227,25 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         <div className="px-6 py-3 border-b bg-gray-50 flex-shrink-0">
           <div className="flex flex-wrap gap-2">
-            {positions.map(pos => {
-              const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
-              const open = pos.count - filled;
-              const isFull = open <= 0;
+            {[...positions]
+              .map(pos => {
+                const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
+                const open = pos.count - filled;
+                return { ...pos, filled, open };
+              })
+              .sort((a, b) => {
+                if (b.open !== a.open) return b.open - a.open; // most open first
+                return getPositionLabel(a.key).localeCompare(getPositionLabel(b.key)); // alpha tiebreaker
+              })
+              .map(pos => {
+              const isFull = pos.open <= 0;
               const hasAccepted = invitations.filter(i => i.position === pos.key && i.status === 'accepted').length > 0;
               return (
                 <button key={pos.key} onClick={() => setSelectedPosition(pos.key)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${selectedPosition === pos.key ? 'bg-red-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
                   <span>{getPositionLabel(pos.key)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${selectedPosition === pos.key ? 'bg-red-700 text-white' : isFull ? 'bg-green-100 text-green-700' : hasAccepted ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {isFull ? '✓ Full' : `${open} open`}
+                    {isFull ? '✓ Full' : `${pos.open} open`}
                   </span>
                 </button>
               );
