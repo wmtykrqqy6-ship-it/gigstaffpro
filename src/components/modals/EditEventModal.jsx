@@ -32,6 +32,7 @@ export default function EditEventModal({
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
+  const [venues, setVenues] = useState([]);
 
   // Load active locations
   useEffect(() => {
@@ -41,6 +42,12 @@ export default function EditEventModal({
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setLocations(data || []));
+    supabase
+      .from('venues')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setVenues(data || []));
   }, []);
 
   // Populate form when event changes
@@ -312,16 +319,35 @@ export default function EditEventModal({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Saved Venue Picker */}
+                  {venues.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.venue}
-                        onChange={(e) => setFormData({...formData, venue: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Saved Venue</label>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selected = venues.find(v => v.id === e.target.value);
+                          if (selected) {
+                            setFormData(f => ({
+                              ...f,
+                              venue: selected.name,
+                              address: selected.address || f.address,
+                              parking: selected.parking || f.parking,
+                            }));
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-blue-50 border-blue-300"
+                      >
+                        <option value="">⚡ Auto-fill from saved venue...</option>
+                        {venues.map(v => (
+                          <option key={v.id} value={v.id}>{v.name}{v.address ? ` — ${v.address}` : ''}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-blue-600 mt-1">Selecting a venue fills in the fields below. You can still edit them.</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     </div>
 
                     <div>

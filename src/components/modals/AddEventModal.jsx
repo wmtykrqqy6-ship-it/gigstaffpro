@@ -30,6 +30,7 @@ export default function AddEventModal({
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
+  const [venues, setVenues] = useState([]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,11 +41,16 @@ export default function AddEventModal({
       .order('name')
       .then(({ data }) => {
         setLocations(data || []);
-        // Auto-select if only one location
         if (data && data.length === 1) {
           setFormData(f => ({ ...f, location_id: data[0].id }));
         }
       });
+    supabase
+      .from('venues')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setVenues(data || []));
   }, [open]);
 
   if (!open) return null;
@@ -267,6 +273,34 @@ export default function AddEventModal({
                           </option>
                         ))}
                       </select>
+                    </div>
+                  )}
+
+                  {/* Saved Venue Picker */}
+                  {venues.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Saved Venue</label>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selected = venues.find(v => v.id === e.target.value);
+                          if (selected) {
+                            setFormData(f => ({
+                              ...f,
+                              venue: selected.name,
+                              address: selected.address || f.address,
+                              parking: selected.parking || f.parking,
+                            }));
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-blue-50 border-blue-300"
+                      >
+                        <option value="">⚡ Auto-fill from saved venue...</option>
+                        {venues.map(v => (
+                          <option key={v.id} value={v.id}>{v.name}{v.address ? ` — ${v.address}` : ''}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-blue-600 mt-1">Selecting a venue fills in the fields below. You can still edit them.</p>
                     </div>
                   )}
 

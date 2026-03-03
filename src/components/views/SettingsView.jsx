@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 
@@ -28,6 +28,17 @@ export default function SettingsView({
     is_active: true
   });
   const [savingLocation, setSavingLocation] = useState(false);
+  // --- Venues state ---
+  const [venues, setVenues] = useState([]);
+  const [loadingVenues, setLoadingVenues] = useState(true);
+  const [showAddVenue, setShowAddVenue] = useState(false);
+  const [editingVenue, setEditingVenue] = useState(null);
+  const [venueForm, setVenueForm] = useState({
+    name: '', address: '', phone: '', email: '',
+    contact_name: '', parking: '', notes: '', is_active: true
+  });
+  const [savingVenue, setSavingVenue] = useState(false);
+
   const [newPosition, setNewPosition] = useState('');
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
@@ -54,6 +65,7 @@ export default function SettingsView({
     loadRankAccessSettings();
     loadTimeSettings();
     loadLocations();
+    loadVenues();
   }, []);
 
   const loadLocations = async () => {
@@ -69,6 +81,103 @@ export default function SettingsView({
       console.error('Error loading locations:', err.message);
     } finally {
       setLoadingLocations(false);
+    }
+  };
+
+  const loadVenues = async () => {
+    setLoadingVenues(true);
+    try {
+      const { data, error } = await supabase
+        .from('venues')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setVenues(data || []);
+    } catch (err) {
+      console.error('Error loading venues:', err.message);
+    } finally {
+      setLoadingVenues(false);
+    }
+  };
+
+  const resetVenueForm = () => {
+    setVenueForm({ name: '', address: '', phone: '', email: '', contact_name: '', parking: '', notes: '', is_active: true });
+  };
+
+  const openAddVenue = () => {
+    resetVenueForm();
+    setEditingVenue(null);
+    setShowAddVenue(true);
+  };
+
+  const openEditVenue = (venue) => {
+    setVenueForm({
+      name: venue.name || '',
+      address: venue.address || '',
+      phone: venue.phone || '',
+      email: venue.email || '',
+      contact_name: venue.contact_name || '',
+      parking: venue.parking || '',
+      notes: venue.notes || '',
+      is_active: venue.is_active !== false
+    });
+    setEditingVenue(venue);
+    setShowAddVenue(true);
+  };
+
+  const saveVenue = async () => {
+    if (!venueForm.name.trim()) {
+      alert('Venue name is required.');
+      return;
+    }
+    setSavingVenue(true);
+    try {
+      const payload = {
+        name: venueForm.name.trim(),
+        address: venueForm.address.trim() || null,
+        phone: venueForm.phone.trim() || null,
+        email: venueForm.email.trim() || null,
+        contact_name: venueForm.contact_name.trim() || null,
+        parking: venueForm.parking.trim() || null,
+        notes: venueForm.notes.trim() || null,
+        is_active: venueForm.is_active
+      };
+      if (editingVenue) {
+        const { error } = await supabase.from('venues').update(payload).eq('id', editingVenue.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('venues').insert([payload]);
+        if (error) throw error;
+      }
+      await loadVenues();
+      setShowAddVenue(false);
+      setEditingVenue(null);
+      resetVenueForm();
+    } catch (err) {
+      alert('Error saving venue: ' + err.message);
+    } finally {
+      setSavingVenue(false);
+    }
+  };
+
+  const toggleVenueActive = async (venue) => {
+    try {
+      const { error } = await supabase.from('venues').update({ is_active: !venue.is_active }).eq('id', venue.id);
+      if (error) throw error;
+      await loadVenues();
+    } catch (err) {
+      alert('Error updating venue: ' + err.message);
+    }
+  };
+
+  const deleteVenue = async (venue) => {
+    if (!confirm(`Delete "${venue.name}"? This cannot be undone.`)) return;
+    try {
+      const { error } = await supabase.from('venues').delete().eq('id', venue.id);
+      if (error) throw error;
+      await loadVenues();
+    } catch (err) {
+      alert('Error deleting venue: ' + err.message);
     }
   };
 
@@ -554,6 +663,7 @@ export default function SettingsView({
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {[
           { id: 'locations', label: '📍 Locations' },
+          { id: 'venues', label: '🏛️ Venues' },
           { id: 'general', label: '⚙️ General' },
           { id: 'positions', label: '🎰 Positions' },
         ].map(tab => (
@@ -570,6 +680,216 @@ export default function SettingsView({
           </button>
         ))}
       </div>
+
+      )}
+
+      {/* ── VENUES TAB ── */}
+      {activeTab === 'venues' && (
+        <div className="space-y-4">
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Venues</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Save recurring venues so you can auto-fill event details</p>
+            </div>
+            <button
+              onClick={openAddVenue}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
+            >
+              <Plus size={16} />
+              <span>Add Venue</span>
+            </button>
+          </div>
+
+          {/* Add / Edit Form */}
+          {showAddVenue && (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-900">
+              <h4 className="text-lg font-bold text-gray-900 mb-4">
+                {editingVenue ? `Edit: ${editingVenue.name}` : 'New Venue'}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Venue Name *</label>
+                  <input
+                    type="text"
+                    value={venueForm.name}
+                    onChange={e => setVenueForm({ ...venueForm, name: e.target.value })}
+                    placeholder="e.g. Grand Milwaukee Hotel"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Address</label>
+                  <input
+                    type="text"
+                    value={venueForm.address}
+                    onChange={e => setVenueForm({ ...venueForm, address: e.target.value })}
+                    placeholder="123 Main St, Milwaukee, WI 53202"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Contact Person</label>
+                  <input
+                    type="text"
+                    value={venueForm.contact_name}
+                    onChange={e => setVenueForm({ ...venueForm, contact_name: e.target.value })}
+                    placeholder="e.g. Jane Smith"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={venueForm.phone}
+                    onChange={e => setVenueForm({ ...venueForm, phone: e.target.value })}
+                    placeholder="(414) 555-0100"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={venueForm.email}
+                    onChange={e => setVenueForm({ ...venueForm, email: e.target.value })}
+                    placeholder="events@venue.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Parking Info</label>
+                  <input
+                    type="text"
+                    value={venueForm.parking}
+                    onChange={e => setVenueForm({ ...venueForm, parking: e.target.value })}
+                    placeholder="e.g. Free parking in rear lot"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={venueForm.notes}
+                    onChange={e => setVenueForm({ ...venueForm, notes: e.target.value })}
+                    placeholder="Loading dock location, check-in procedure, AV contacts, etc."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={saveVenue}
+                  disabled={savingVenue}
+                  className="bg-red-900 text-white px-5 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2 text-sm"
+                >
+                  <Save size={15} />
+                  <span>{savingVenue ? 'Saving...' : editingVenue ? 'Save Changes' : 'Create Venue'}</span>
+                </button>
+                <button
+                  onClick={() => { setShowAddVenue(false); setEditingVenue(null); resetVenueForm(); }}
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Venue Cards */}
+          {loadingVenues ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-900"></div>
+            </div>
+          ) : venues.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <Building2 size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500 font-medium">No venues saved yet.</p>
+              <p className="text-gray-400 text-sm mt-1">Add your first venue to start auto-filling event details.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {venues.map(venue => (
+                <div
+                  key={venue.id}
+                  className={`bg-white rounded-lg shadow p-5 border-l-4 ${venue.is_active ? 'border-red-900' : 'border-gray-300'}`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Building2 size={16} className={venue.is_active ? 'text-red-900' : 'text-gray-400'} />
+                      <h4 className="font-bold text-gray-900">{venue.name}</h4>
+                      {!venue.is_active && (
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => openEditVenue(venue)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit size={15} />
+                      </button>
+                      <button
+                        onClick={() => toggleVenueActive(venue)}
+                        className={`p-2 rounded transition-colors ${venue.is_active ? 'text-yellow-600 hover:bg-yellow-50' : 'text-green-600 hover:bg-green-50'}`}
+                        title={venue.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        {venue.is_active ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                      </button>
+                      <button
+                        onClick={() => deleteVenue(venue)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 text-sm text-gray-600">
+                    {venue.address && (
+                      <div className="flex items-start space-x-2">
+                        <MapPin size={13} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                        <span>{venue.address}</span>
+                      </div>
+                    )}
+                    {venue.contact_name && (
+                      <div className="flex items-center space-x-2">
+                        <User size={13} className="text-gray-400 flex-shrink-0" />
+                        <span>{venue.contact_name}</span>
+                      </div>
+                    )}
+                    {venue.phone && (
+                      <div className="flex items-center space-x-2">
+                        <Phone size={13} className="text-gray-400 flex-shrink-0" />
+                        <span>{venue.phone}</span>
+                      </div>
+                    )}
+                    {venue.email && (
+                      <div className="flex items-center space-x-2">
+                        <Mail size={13} className="text-gray-400 flex-shrink-0" />
+                        <span>{venue.email}</span>
+                      </div>
+                    )}
+                    {venue.parking && (
+                      <div className="flex items-center space-x-2">
+                        <ParkingCircle size={13} className="text-gray-400 flex-shrink-0" />
+                        <span>{venue.parking}</span>
+                      </div>
+                    )}
+                    {venue.notes && (
+                      <p className="text-gray-400 italic text-xs mt-1 pt-1 border-t border-gray-100">"{venue.notes}"</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── LOCATIONS TAB ── */}
       {activeTab === 'locations' && (
