@@ -37,6 +37,7 @@ export default function EditEventModal({
   const [saveVenueForm, setSaveVenueForm] = useState({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
   const [savingVenue, setSavingVenue] = useState(false);
   const [venueSaved, setVenueSaved] = useState(false);
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
 
   // Load active locations
   useEffect(() => {
@@ -407,44 +408,52 @@ export default function EditEventModal({
                     </div>
                   )}
 
-                  {/* Saved Venue Picker */}
-                  {venues.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Saved Venue</label>
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const selected = venues.find(v => v.id === e.target.value);
-                          if (selected) {
-                            setFormData(f => ({
-                              ...f,
-                              venue: selected.name,
-                              address: selected.address || f.address,
-                              parking: selected.parking || f.parking,
-                            }));
-                          }
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-blue-50 border-blue-300"
-                      >
-                        <option value="">⚡ Auto-fill from saved venue...</option>
-                        {venues.map(v => (
-                          <option key={v.id} value={v.id}>{v.name}{v.address ? ` — ${v.address}` : ''}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-blue-600 mt-1">Selecting a venue fills in the fields below. You can still edit them.</p>
-                    </div>
-                  )}
+                  {/* Saved Venue Picker — inline typeahead on Venue Name field */}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div className="relative">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
                       <input
                         type="text"
                         required
                         value={formData.venue}
-                        onChange={(e) => setFormData({...formData, venue: e.target.value})}
+                        onChange={(e) => {
+                          setFormData({...formData, venue: e.target.value});
+                          setShowVenueSuggestions(true);
+                        }}
+                        onFocus={() => setShowVenueSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 150)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        autoComplete="off"
                       />
+                      {showVenueSuggestions && venues.length > 0 && (() => {
+                        const q = formData.venue.toLowerCase();
+                        const matches = venues.filter(v => v.name.toLowerCase().includes(q));
+                        if (matches.length === 0) return null;
+                        return (
+                          <div className="absolute z-50 top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                            {matches.map(v => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onMouseDown={() => {
+                                  setFormData(f => ({
+                                    ...f,
+                                    venue: v.name,
+                                    address: v.address || f.address,
+                                    parking: v.parking || f.parking,
+                                  }));
+                                  setShowVenueSuggestions(false);
+                                }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-red-50 border-b border-gray-100 last:border-0"
+                              >
+                                <div className="font-medium text-gray-900 text-sm">{v.name}</div>
+                                {v.address && <div className="text-xs text-gray-500 mt-0.5">{v.address}</div>}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div>
