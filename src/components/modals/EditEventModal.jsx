@@ -33,6 +33,10 @@ export default function EditEventModal({
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
   const [venues, setVenues] = useState([]);
+  const [showSaveVenuePrompt, setShowSaveVenuePrompt] = useState(false);
+  const [saveVenueForm, setSaveVenueForm] = useState({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
+  const [savingVenue, setSavingVenue] = useState(false);
+  const [venueSaved, setVenueSaved] = useState(false);
 
   // Load active locations
   useEffect(() => {
@@ -147,34 +151,21 @@ export default function EditEventModal({
         .eq('id', event.id);
       
       if (error) throw error;
-      
-      alert(SUCCESS_MESSAGES.EVENT_SAVED);
-      
-      // Reset form
-      setFormData({
-        name: '',
-        client: '',
-        client_contact: '',
-        date: '',
-        time: '',
-        end_time: '',
-        venue: '',
-        room: '',
-        address: '',
-        positions: [],
-        dress_code: '',
-        parking: '',
-        notes: '',
-        status: STATUS.EVENT.CONFIRMED
-      });
-      
-      // Call success callback (to refresh event list)
-      if (onSuccess) {
-        await onSuccess();
+
+      // Check if venue is already in the library
+      const venueName = formData.venue?.trim();
+      const alreadySaved = venues.some(v => v.name.toLowerCase() === venueName?.toLowerCase());
+      if (venueName && !alreadySaved) {
+        // Pre-fill parking if available
+        setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: formData.parking || '', notes: '' });
+        setShowSaveVenuePrompt(true);
+        setVenueSaved(false);
+        setSaving(false);
+        return; // Don't close yet — let user respond to prompt
       }
-      
-      // Close modal
-      onClose();
+
+      alert(SUCCESS_MESSAGES.EVENT_SAVED);
+      closeAndReset();
     } catch (error) {
       alert(ERROR_MESSAGES.DATA.UPDATE_FAILED + ': ' + error.message);
     } finally {
@@ -182,25 +173,46 @@ export default function EditEventModal({
     }
   };
 
-  const handleClose = () => {
+  const closeAndReset = () => {
     setFormData({
-      name: '',
-      client: '',
-      client_contact: '',
-      date: '',
-      time: '',
-      end_time: '',
-      venue: '',
-      room: '',
-      address: '',
-      positions: [],
-      dress_code: '',
-      parking: '',
-      notes: '',
-      status: STATUS.EVENT.CONFIRMED
+      name: '', client: '', client_contact: '', date: '', time: '', end_time: '',
+      venue: '', room: '', address: '', positions: [], dress_code: '', parking: '',
+      notes: '', status: STATUS.EVENT.CONFIRMED
     });
+    setShowSaveVenuePrompt(false);
+    setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
+    setVenueSaved(false);
+    if (onSuccess) onSuccess();
     onClose();
   };
+
+  const handleSaveVenueToLibrary = async () => {
+    setSavingVenue(true);
+    try {
+      const { error } = await supabase.from('venues').insert([{
+        name: formData.venue.trim(),
+        address: formData.address?.trim() || null,
+        contact_name: saveVenueForm.contact_name?.trim() || null,
+        phone: saveVenueForm.phone?.trim() || null,
+        email: saveVenueForm.email?.trim() || null,
+        parking: saveVenueForm.parking?.trim() || null,
+        notes: saveVenueForm.notes?.trim() || null,
+        is_active: true
+      }]);
+      if (error) throw error;
+      setVenueSaved(true);
+      setTimeout(() => {
+        alert(SUCCESS_MESSAGES.EVENT_SAVED);
+        closeAndReset();
+      }, 800);
+    } catch (err) {
+      alert('Venue save failed: ' + err.message);
+    } finally {
+      setSavingVenue(false);
+    }
+  };
+
+  const handleClose = () => closeAndReset();
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
@@ -216,6 +228,82 @@ export default function EditEventModal({
                 <X size={24} />
               </button>
             </div>
+
+            {/* ── Save Venue Prompt ── */}
+            {showSaveVenuePrompt && (
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold text-blue-900 text-base">
+                      💾 Save "{formData.venue}" to your venue library?
+                    </p>
+                    <p className="text-sm text-blue-700 mt-0.5">
+                      Address already captured. Add contact details to save time next time.
+                    </p>
+                  </div>
+                </div>
+                {!venueSaved ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                      <input
+                        type="text"
+                        placeholder="Contact person name"
+                        value={saveVenueForm.contact_name}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, contact_name: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Phone"
+                        value={saveVenueForm.phone}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, phone: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={saveVenueForm.email}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, email: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Parking info"
+                        value={saveVenueForm.parking}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, parking: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Notes (optional)"
+                        value={saveVenueForm.notes}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, notes: e.target.value }))}
+                        className="md:col-span-2 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={handleSaveVenueToLibrary}
+                        disabled={savingVenue}
+                        className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {savingVenue ? 'Saving...' : 'Save to Library'}
+                      </button>
+                      <button
+                        onClick={() => { alert(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
+                        className="px-5 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50"
+                      >
+                        Skip, don't save
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center space-x-2 text-green-700 font-medium">
+                    <span>✓ Venue saved to library!</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Event Details */}

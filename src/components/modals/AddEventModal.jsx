@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 
-export default function AddEventModal({
+export default function EditEventModal({
   open,
+  event,
   positions,
   workers = [],
   onClose,
@@ -31,29 +33,76 @@ export default function AddEventModal({
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
   const [venues, setVenues] = useState([]);
+  const [showSaveVenuePrompt, setShowSaveVenuePrompt] = useState(false);
+  const [saveVenueForm, setSaveVenueForm] = useState({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
+  const [savingVenue, setSavingVenue] = useState(false);
+  const [venueSaved, setVenueSaved] = useState(false);
 
+  // Load active locations
   useEffect(() => {
-    if (!open) return;
     supabase
       .from('locations')
       .select('id, name, city, state')
       .eq('is_active', true)
       .order('name')
-      .then(({ data }) => {
-        setLocations(data || []);
-        if (data && data.length === 1) {
-          setFormData(f => ({ ...f, location_id: data[0].id }));
-        }
-      });
+      .then(({ data }) => setLocations(data || []));
     supabase
       .from('venues')
       .select('*')
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setVenues(data || []));
-  }, [open]);
+  }, []);
 
-  if (!open) return null;
+  // Populate form when event changes
+  useEffect(() => {
+    if (event) {
+      // Extract just the date part (YYYY-MM-DD) for the date input
+      const dateOnly = event.date ? event.date.split('T')[0] : '';
+      
+      // Migrate old position format to new if needed
+      const migratedPositions = (event.positions || []).map(pos => {
+        if (typeof pos === 'object' && pos.key) {
+          // Already new format with key
+          return pos;
+        } else if (typeof pos === 'object' && pos.name) {
+          // Old format with {name, count} - convert to {key, count}
+          return {
+            key: getPositionKey(pos.name),
+            count: pos.count
+          };
+        } else if (typeof pos === 'string') {
+          // Very old format (just string) - convert to {key, count}
+          return {
+            key: getPositionKey(pos),
+            count: 1
+          };
+        }
+        return pos;
+      });
+      
+      setFormData({
+        name: event.name || '',
+        client: event.client || '',
+        client_contact: event.client_contact || '',
+        date: dateOnly,
+        time: event.time || '',
+        end_time: event.end_time || '',
+        venue: event.venue || '',
+        room: event.room || '',
+        address: event.address || '',
+        positions: migratedPositions,
+        dress_code: event.dress_code || '',
+        parking: event.parking || '',
+        notes: event.notes || '',
+        status: event.status || STATUS.EVENT.CONFIRMED,
+        host_worker_id: event.host_worker_id || null,
+        location_id: event.location_id || null
+      });
+    }
+  }, [event]);
+
+  if (!open || !event) return null;
 
   const positionOptions = positions;
 
@@ -96,65 +145,74 @@ export default function AddEventModal({
     
     setSaving(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('events')
-        .insert([formData]);
+        .update(formData)
+        .eq('id', event.id);
       
       if (error) throw error;
-      
-      alert(SUCCESS_MESSAGES.EVENT_SAVED);
-      
-      // Reset form
-      setFormData({
-        name: '',
-        client: '',
-        client_contact: '',
-        date: '',
-        time: '',
-        end_time: '',
-        venue: '',
-        room: '',
-        address: '',
-        positions: [],
-        dress_code: '',
-        parking: '',
-        notes: '',
-        status: STATUS.EVENT.CONFIRMED
-      });
-      
-      // Call success callback (to refresh event list)
-      if (onSuccess) {
-        await onSuccess();
+
+      // Check if venue is already in the library
+      const venueName = formData.venue?.trim();
+      const alreadySaved = venues.some(v => v.name.toLowerCase() === venueName?.toLowerCase());
+      if (venueName && !alreadySaved) {
+        // Pre-fill parking if available
+        setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: formData.parking || '', notes: '' });
+        setShowSaveVenuePrompt(true);
+        setVenueSaved(false);
+        setSaving(false);
+        return; // Don't close yet — let user respond to prompt
       }
-      
-      // Close modal
-      onClose();
+
+      alert(SUCCESS_MESSAGES.EVENT_SAVED);
+      closeAndReset();
     } catch (error) {
-      alert(ERROR_MESSAGES.DATA.SAVE_FAILED + ': ' + error.message);
+      alert(ERROR_MESSAGES.DATA.UPDATE_FAILED + ': ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleClose = () => {
+  const closeAndReset = () => {
     setFormData({
-      name: '',
-      client: '',
-      client_contact: '',
-      date: '',
-      time: '',
-      end_time: '',
-      venue: '',
-      room: '',
-      address: '',
-      positions: [],
-      dress_code: '',
-      parking: '',
-      notes: '',
-      status: STATUS.EVENT.CONFIRMED
+      name: '', client: '', client_contact: '', date: '', time: '', end_time: '',
+      venue: '', room: '', address: '', positions: [], dress_code: '', parking: '',
+      notes: '', status: STATUS.EVENT.CONFIRMED
     });
+    setShowSaveVenuePrompt(false);
+    setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
+    setVenueSaved(false);
+    if (onSuccess) onSuccess();
     onClose();
   };
+
+  const handleSaveVenueToLibrary = async () => {
+    setSavingVenue(true);
+    try {
+      const { error } = await supabase.from('venues').insert([{
+        name: formData.venue.trim(),
+        address: formData.address?.trim() || null,
+        contact_name: saveVenueForm.contact_name?.trim() || null,
+        phone: saveVenueForm.phone?.trim() || null,
+        email: saveVenueForm.email?.trim() || null,
+        parking: saveVenueForm.parking?.trim() || null,
+        notes: saveVenueForm.notes?.trim() || null,
+        is_active: true
+      }]);
+      if (error) throw error;
+      setVenueSaved(true);
+      setTimeout(() => {
+        alert(SUCCESS_MESSAGES.EVENT_SAVED);
+        closeAndReset();
+      }, 800);
+    } catch (err) {
+      alert('Venue save failed: ' + err.message);
+    } finally {
+      setSavingVenue(false);
+    }
+  };
+
+  const handleClose = () => closeAndReset();
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
@@ -162,7 +220,7 @@ export default function AddEventModal({
         <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full">
           <div className="p-6 max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Create New Event</h3>
+              <h3 className="text-2xl font-bold text-gray-900">Edit Event</h3>
               <button 
                 onClick={handleClose} 
                 className="text-gray-400 hover:text-gray-600"
@@ -170,6 +228,82 @@ export default function AddEventModal({
                 <X size={24} />
               </button>
             </div>
+
+            {/* ── Save Venue Prompt ── */}
+            {showSaveVenuePrompt && (
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold text-blue-900 text-base">
+                      💾 Save "{formData.venue}" to your venue library?
+                    </p>
+                    <p className="text-sm text-blue-700 mt-0.5">
+                      Address already captured. Add contact details to save time next time.
+                    </p>
+                  </div>
+                </div>
+                {!venueSaved ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                      <input
+                        type="text"
+                        placeholder="Contact person name"
+                        value={saveVenueForm.contact_name}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, contact_name: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Phone"
+                        value={saveVenueForm.phone}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, phone: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={saveVenueForm.email}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, email: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Parking info"
+                        value={saveVenueForm.parking}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, parking: e.target.value }))}
+                        className="px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Notes (optional)"
+                        value={saveVenueForm.notes}
+                        onChange={e => setSaveVenueForm(f => ({ ...f, notes: e.target.value }))}
+                        className="md:col-span-2 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={handleSaveVenueToLibrary}
+                        disabled={savingVenue}
+                        className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {savingVenue ? 'Saving...' : 'Save to Library'}
+                      </button>
+                      <button
+                        onClick={() => { alert(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
+                        className="px-5 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50"
+                      >
+                        Skip, don't save
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center space-x-2 text-green-700 font-medium">
+                    <span>✓ Venue saved to library!</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Event Details */}
@@ -184,7 +318,6 @@ export default function AddEventModal({
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="Annual Corporate Casino Night"
                     />
                   </div>
 
@@ -235,7 +368,6 @@ export default function AddEventModal({
                       value={formData.client}
                       onChange={(e) => setFormData({...formData, client: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="John Smith / ABC Company"
                     />
                   </div>
 
@@ -246,7 +378,6 @@ export default function AddEventModal({
                       value={formData.client_contact}
                       onChange={(e) => setFormData({...formData, client_contact: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="john@company.com or (555) 123-4567"
                     />
                   </div>
                 </div>
@@ -313,7 +444,6 @@ export default function AddEventModal({
                         value={formData.venue}
                         onChange={(e) => setFormData({...formData, venue: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        placeholder="Grand Hotel"
                       />
                     </div>
 
@@ -324,7 +454,6 @@ export default function AddEventModal({
                         value={formData.room}
                         onChange={(e) => setFormData({...formData, room: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        placeholder="Ballroom A"
                       />
                     </div>
                   </div>
@@ -336,7 +465,6 @@ export default function AddEventModal({
                       value={formData.address}
                       onChange={(e) => setFormData({...formData, address: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="123 Main St, City, State 12345"
                     />
                   </div>
                 </div>
@@ -378,7 +506,6 @@ export default function AddEventModal({
                       value={formData.dress_code}
                       onChange={(e) => setFormData({...formData, dress_code: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="Black vest, bow tie, white shirt"
                     />
                   </div>
 
@@ -389,7 +516,6 @@ export default function AddEventModal({
                       value={formData.parking}
                       onChange={(e) => setFormData({...formData, parking: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="Free parking in rear lot"
                     />
                   </div>
                 </div>
@@ -403,7 +529,6 @@ export default function AddEventModal({
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   rows="3"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Any additional information about the event..."
                 />
               </div>
 
@@ -413,7 +538,7 @@ export default function AddEventModal({
                   disabled={saving}
                   className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {saving ? 'Creating Event...' : 'Create Event'}
+                  {saving ? 'Updating Event...' : 'Update Event'}
                 </button>
                 <button
                   type="button"
