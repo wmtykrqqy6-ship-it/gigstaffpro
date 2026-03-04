@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 export default function AddEventModal({
   open,
@@ -409,12 +410,11 @@ export default function AddEventModal({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
-                    <input
-                      type="text"
+                    <AddressAutocomplete
                       value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      onChange={(val) => setFormData({...formData, address: val})}
                       placeholder="123 Main St, City, State 12345"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     />
                   </div>
                 </div>

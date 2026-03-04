@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 export default function SettingsView({
   positions,
@@ -721,10 +722,9 @@ export default function SettingsView({
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Address</label>
-                  <input
-                    type="text"
+                  <AddressAutocomplete
                     value={venueForm.address}
-                    onChange={e => setVenueForm({ ...venueForm, address: e.target.value })}
+                    onChange={val => setVenueForm({ ...venueForm, address: val })}
                     placeholder="123 Main St, Milwaukee, WI 53202"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
