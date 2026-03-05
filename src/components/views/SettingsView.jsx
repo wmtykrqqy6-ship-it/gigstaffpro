@@ -1202,18 +1202,21 @@ export default function SettingsView({
           {/* Rank-Based Event Access */}
           <div className="px-6 py-5 border-b border-gray-100">
             <p className="font-semibold text-gray-900 text-sm mb-1">Worker Event Access (Rank-Based)</p>
-            <p className="text-xs text-gray-500 mb-4">How many days before an event each rank can see and sign up. Rank 1 = most experienced, sees events first.</p>
+            <p className="text-xs text-gray-500 mb-5">Set how many days before an event each rank can see and sign up. Rank 1 (most experienced) always gets first access.</p>
             {loadingRankAccess ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-5 gap-3">
-                  {[1,2,3,4,5].map(rank => {
-                    const colors = ['border-red-900 bg-red-50','border-red-700 bg-red-50','border-orange-400 bg-orange-50','border-yellow-400 bg-yellow-50','border-gray-300 bg-gray-50'];
-                    const dotColors = ['bg-red-900','bg-red-700','bg-orange-400','bg-yellow-400','bg-gray-400'];
-                    return (
-                      <div key={rank} className={`rounded-lg border-2 ${colors[rank-1]} p-3 text-center`}>
-                        <div className={`${dotColors[rank-1]} rounded-full h-7 w-7 mx-auto flex items-center justify-center text-white text-xs font-bold mb-2`}>{rank}</div>
+            ) : (() => {
+              const rankColors = ['bg-red-900','bg-red-700','bg-orange-400','bg-yellow-500','bg-gray-400'];
+              const rankLabels = ['Rank 1','Rank 2','Rank 3','Rank 4','Rank 5'];
+              const maxDays = Math.max(...Object.values(rankAccessDays), 1);
+
+              return (
+                <div className="space-y-5">
+                  {/* Inputs row */}
+                  <div className="grid grid-cols-5 gap-3">
+                    {[1,2,3,4,5].map(rank => (
+                      <div key={rank} className="text-center">
+                        <div className={`${rankColors[rank-1]} rounded-full h-7 w-7 mx-auto flex items-center justify-center text-white text-xs font-bold mb-2`}>{rank}</div>
                         <input
                           type="number"
                           min="0"
@@ -1222,16 +1225,57 @@ export default function SettingsView({
                           className="w-full px-2 py-1.5 border border-gray-200 rounded text-center text-sm bg-white focus:ring-2 focus:ring-red-500"
                           disabled={saving}
                         />
-                        <p className="text-xs text-gray-500 mt-1.5">
-                          {rankAccessDays[rank] === 0 ? 'Immediately' : `${rankAccessDays[rank]}d prior`}
-                        </p>
+                        <p className="text-xs text-gray-400 mt-1">days before</p>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+
+                  {/* Visual Timeline */}
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                      <span className="font-medium text-gray-500">← Event posted</span>
+                      <span className="font-medium text-gray-500">Event day →</span>
+                    </div>
+                    {/* Timeline bar */}
+                    <div className="relative h-3 bg-gray-200 rounded-full mb-4">
+                      {[1,2,3,4,5].map(rank => {
+                        const days = rankAccessDays[rank];
+                        const pct = days === 0 ? 0 : Math.min((days / maxDays) * 90, 90);
+                        const leftPct = 100 - pct;
+                        return (
+                          <div
+                            key={rank}
+                            className={`absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full border-2 border-white ${rankColors[rank-1]} flex items-center justify-center text-white font-bold shadow`}
+                            style={{ left: `${leftPct}%`, transform: 'translate(-50%, -50%)', fontSize: '9px' }}
+                            title={`Rank ${rank}: ${days === 0 ? 'immediately' : `${days} days before`}`}
+                          >
+                            {rank}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Legend */}
+                    <div className="space-y-1.5">
+                      {[1,2,3,4,5].map(rank => {
+                        const days = rankAccessDays[rank];
+                        return (
+                          <div key={rank} className="flex items-center space-x-2 text-xs">
+                            <div className={`${rankColors[rank-1]} rounded-full h-4 w-4 flex items-center justify-center text-white font-bold flex-shrink-0`} style={{fontSize:'8px'}}>{rank}</div>
+                            <span className="text-gray-700 font-medium">{rankLabels[rank-1]}</span>
+                            <span className="text-gray-400">—</span>
+                            <span className="text-gray-600">
+                              {days === 0
+                                ? 'Sees event immediately when posted'
+                                : `Unlocks ${days} day${days !== 1 ? 's' : ''} before the event`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400">Set to 0 for immediate access when event is created.</p>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Save All Button */}
