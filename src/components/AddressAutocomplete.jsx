@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY;
 
-// Load the Google Maps JS SDK once globally
 function loadGoogleMapsScript() {
   if (window.google?.maps?.places) return Promise.resolve();
   if (window._googleMapsPromise) return window._googleMapsPromise;
@@ -23,36 +22,43 @@ function loadGoogleMapsScript() {
 export default function AddressAutocomplete({ value, onChange, placeholder, className, required }) {
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
-  const [ready, setReady] = useState(false);
+  const suppressRef = useRef(false); // Prevents onChange echo after place_changed
+
+  // Keep input in sync with external value changes (e.g. venue autofill)
+  useEffect(() => {
+    if (inputRef.current && !suppressRef.current) {
+      inputRef.current.value = value || '';
+    }
+  }, [value]);
 
   useEffect(() => {
-    loadGoogleMapsScript()
-      .then(() => setReady(true))
-      .catch(() => console.error('Failed to load Google Maps'));
-  }, []);
+    loadGoogleMapsScript().then(() => {
+      if (!inputRef.current) return;
 
-  useEffect(() => {
-    if (!ready || !inputRef.current) return;
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+        fields: ['formatted_address']
+      });
 
-    autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' },
-      fields: ['formatted_address']
-    });
-
-    autocompleteRef.current.addListener('place_changed', () => {
-      const place = autocompleteRef.current.getPlace();
-      if (place?.formatted_address) {
-        onChange(place.formatted_address);
-      }
-    });
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current.getPlace();
+        if (place?.formatted_address) {
+          suppressRef.current = true;
+          onChange(place.formatted_address);
+          // Set input value directly so it shows the selection
+          if (inputRef.current) inputRef.current.value = place.formatted_address;
+          setTimeout(() => { suppressRef.current = false; }, 100);
+        }
+      });
+    }).catch(() => console.error('Failed to load Google Maps'));
 
     return () => {
       if (autocompleteRef.current) {
         window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
-  }, [ready]);
+  }, []);
 
   return (
     <input
@@ -60,7 +66,9 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
       type="text"
       required={required}
       defaultValue={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => {
+        if (!suppressRef.current) onChange(e.target.value);
+      }}
       placeholder={placeholder || '123 Main St, City, State 12345'}
       className={className}
       autoComplete="off"
