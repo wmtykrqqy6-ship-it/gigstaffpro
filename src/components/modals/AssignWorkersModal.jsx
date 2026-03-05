@@ -31,7 +31,7 @@ export default function AssignWorkersModal({
 
   const assignedWorkerIds = new Set(
     (assignments || [])
-      .filter(a => a.event_id === event?.id && !['rejected','cancelled'].includes(a.status))
+      .filter(a => a.event_id === event?.id && !['rejected','cancelled','standby'].includes(a.status))
       .map(a => a.worker_id)
   );
   const hostWorkers = (workers || []).filter(w => w.is_host && assignedWorkerIds.has(w.id));
