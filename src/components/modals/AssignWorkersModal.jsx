@@ -29,7 +29,12 @@ export default function AssignWorkersModal({
   const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
   const [savingHost, setSavingHost] = useState(false);
 
-  const hostWorkers = (workers || []).filter(w => w.is_host);
+  const assignedWorkerIds = new Set(
+    (assignments || [])
+      .filter(a => a.event_id === event?.id && !['rejected','cancelled'].includes(a.status))
+      .map(a => a.worker_id)
+  );
+  const hostWorkers = (workers || []).filter(w => w.is_host && assignedWorkerIds.has(w.id));
 
   const handleSaveHost = async (newHostId) => {
     setSavingHost(true);
@@ -264,7 +269,7 @@ export default function AssignWorkersModal({
                 )}
               </div>
               {hostWorkers.length === 0 && (
-                <p className="text-xs text-orange-600 mt-2">No {getHostLabelPlural()} designated yet. Edit a worker and toggle "{getHostLabel()}" to enable them.</p>
+                <p className="text-xs text-orange-600 mt-2">No {getHostLabelPlural()} assigned to this event yet. Assign a worker marked as {getHostLabel()} first.</p>
               )}
             </div>
 
