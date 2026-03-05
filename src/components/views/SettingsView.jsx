@@ -412,9 +412,8 @@ export default function SettingsView({
         if (error) throw error;
       }
 
-      alert('Rank access settings saved successfully!');
     } catch (error) {
-      alert('Error saving settings: ' + error.message);
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -450,9 +449,8 @@ export default function SettingsView({
         if (error) throw error;
       }
 
-      alert('Warehouse address saved successfully!');
     } catch (error) {
-      alert('Error saving warehouse address: ' + error.message);
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -538,9 +536,8 @@ export default function SettingsView({
           }]);
       }
 
-      alert('Time settings saved successfully!');
     } catch (error) {
-      alert('Error saving time settings: ' + error.message);
+      throw error;
     } finally {
       setSaving(false);
     }
