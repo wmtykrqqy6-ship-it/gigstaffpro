@@ -8,7 +8,7 @@ export default function SettingsView({
   positions,
   onUpdatePositions
 }) {
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState('venues');
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
   const [hostLabelSaved, setHostLabelSaved] = useState(false);
 
@@ -663,10 +663,10 @@ export default function SettingsView({
       {/* Tab Bar */}
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {[
-          { id: 'locations', label: '📍 Locations' },
           { id: 'venues', label: '🏛️ Venues' },
-          { id: 'general', label: '⚙️ General' },
+          { id: 'locations', label: '📍 Locations' },
           { id: 'positions', label: '🎰 Positions' },
+          { id: 'general', label: '⚙️ System' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -681,8 +681,6 @@ export default function SettingsView({
           </button>
         ))}
       </div>
-
-      )}
 
       {/* ── VENUES TAB ── */}
       {activeTab === 'venues' && (
@@ -1090,211 +1088,189 @@ export default function SettingsView({
         </div>
       )}
 
-      {/* ── GENERAL TAB ── */}
+
+      {/* ── SYSTEM TAB ── */}
       {activeTab === 'general' && (
-        <div className="space-y-6">
+        <div className="space-y-0 bg-white rounded-lg shadow overflow-hidden">
+
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <h3 className="text-lg font-bold text-gray-900">System Settings</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Configure app-wide preferences. Click Save All at the bottom when done.</p>
+          </div>
 
           {/* Team Leader Label */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-1">Team Leader Label</h3>
-            <p className="text-sm text-gray-500 mb-4">What do you call your event hosts / team leaders? This label appears throughout the app on worker badges, filters, and reports.</p>
-            <div className="flex items-center space-x-3">
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Team Leader Label</p>
+                <p className="text-xs text-gray-500 mt-0.5">What do you call your event hosts / team leaders? Appears on worker badges, filters, and reports.</p>
+              </div>
               <input
                 type="text"
                 value={hostLabelValue}
                 onChange={e => setHostLabelValue(e.target.value)}
-                placeholder="e.g. Host, Manager, Team Lead, Pit Boss"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                placeholder="e.g. Host, Pit Boss"
+                className="w-48 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
                 maxLength={30}
               />
-              <button
-                onClick={handleSaveHostLabel}
-                disabled={!hostLabelValue.trim()}
-                className="px-4 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                {hostLabelSaved ? '\u2713 Saved' : 'Save'}
-              </button>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Examples: Host, Manager, Team Lead, Pit Boss</p>
           </div>
 
           {/* Warehouse Address */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-              <MapPin size={20} />
-              <span>Warehouse Address</span>
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              This address is used for calculating miles traveled to events.
-            </p>
-            {loadingWarehouse ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Warehouse / Home Base Address</p>
+                <p className="text-xs text-gray-500 mt-0.5">Used for calculating miles traveled to events.</p>
               </div>
-            ) : (
-              <div className="space-y-4">
+              {loadingWarehouse ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900 flex-shrink-0" />
+              ) : (
                 <input
                   type="text"
                   value={warehouseAddress}
                   onChange={(e) => setWarehouseAddress(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Enter warehouse address"
+                  className="w-72 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  placeholder="Enter address"
                   disabled={saving}
                 />
-                <button
-                  onClick={saveWarehouseAddress}
-                  disabled={saving}
-                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Save Address'}
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Payment Tracking Toggle */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Payment Tracking</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Control whether workers see payment information for their assignments.
-            </p>
-            {loadingPaymentSetting ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
+          {/* Payment Tracking */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Payment Tracking</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {paymentTrackingEnabled ? 'Workers can see pay info on their assignments.' : 'Payment info is hidden from workers.'}
+                </p>
               </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900 mb-1">
-                    {paymentTrackingEnabled ? 'Payment Tracking Enabled' : 'Payment Tracking Disabled'}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {paymentTrackingEnabled
-                      ? 'Workers will see pay info on assignments.'
-                      : 'Payment features are hidden from workers.'}
-                  </p>
-                </div>
+              {loadingPaymentSetting ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
+              ) : (
                 <button
-                  onClick={() => togglePaymentTracking(!paymentTrackingEnabled)}
-                  disabled={saving}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${paymentTrackingEnabled ? 'bg-green-600' : 'bg-gray-300'} ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => setPaymentTrackingEnabled(!paymentTrackingEnabled)}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors flex-shrink-0 ${paymentTrackingEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
                 >
-                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${paymentTrackingEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${paymentTrackingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
+              )}
+            </div>
+          </div>
+
+          {/* Time & Date */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <p className="font-semibold text-gray-900 text-sm mb-3">Time & Date</p>
+            {loadingTimeSettings ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
+            ) : (
+              <div className="flex flex-wrap gap-6">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                    disabled={saving}
+                  >
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Phoenix">Arizona (MST)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Time Format</label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                      <input type="radio" value="12" checked={timeFormat === '12'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900" />
+                      <span>12-hour (2:30 PM)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                      <input type="radio" value="24" checked={timeFormat === '24'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900" />
+                      <span>24-hour (14:30)</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
           {/* Rank-Based Event Access */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Worker Event Access (Rank-Based)</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Control when workers can see and sign up for events based on their rank.
-            </p>
+          <div className="px-6 py-5 border-b border-gray-100">
+            <p className="font-semibold text-gray-900 text-sm mb-1">Worker Event Access (Rank-Based)</p>
+            <p className="text-xs text-gray-500 mb-4">How many days before an event each rank can see and sign up. Rank 1 = most experienced, sees events first.</p>
             {loadingRankAccess ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-              </div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
             ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[1, 2, 3, 4, 5].map(rank => (
-                    <div key={rank} className="border border-gray-200 rounded-lg p-4">
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Rank {rank} {rank === 1 && '(Best)'} {rank === 5 && '(New)'}
-                      </label>
-                      <div className="flex items-center space-x-2">
+              <div className="space-y-3">
+                <div className="grid grid-cols-5 gap-3">
+                  {[1,2,3,4,5].map(rank => {
+                    const colors = ['border-red-900 bg-red-50','border-red-700 bg-red-50','border-orange-400 bg-orange-50','border-yellow-400 bg-yellow-50','border-gray-300 bg-gray-50'];
+                    const dotColors = ['bg-red-900','bg-red-700','bg-orange-400','bg-yellow-400','bg-gray-400'];
+                    return (
+                      <div key={rank} className={`rounded-lg border-2 ${colors[rank-1]} p-3 text-center`}>
+                        <div className={`${dotColors[rank-1]} rounded-full h-7 w-7 mx-auto flex items-center justify-center text-white text-xs font-bold mb-2`}>{rank}</div>
                         <input
                           type="number"
                           min="0"
                           value={rankAccessDays[rank]}
                           onChange={(e) => setRankAccessDays({ ...rankAccessDays, [rank]: parseInt(e.target.value, 10) || 0 })}
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-center text-sm bg-white focus:ring-2 focus:ring-red-500"
                           disabled={saving}
                         />
-                        <span className="text-sm text-gray-600">days before event</span>
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          {rankAccessDays[rank] === 0 ? 'Immediately' : `${rankAccessDays[rank]}d prior`}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        {rankAccessDays[rank] === 0 ? 'Can see events immediately' : `Can see events ${rankAccessDays[rank]} days before`}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                  <p className="text-blue-900 font-semibold mb-2">Example Timeline:</p>
-                  <ul className="text-blue-800 space-y-1">
-                    <li>• Event created: Rank 1 workers see it immediately</li>
-                    <li>• {rankAccessDays[2]} days before: Rank 2 workers can sign up</li>
-                    <li>• {rankAccessDays[3]} days before: Rank 3 workers can sign up</li>
-                    <li>• {rankAccessDays[4]} days before: Rank 4 workers can sign up</li>
-                    <li>• {rankAccessDays[5]} days before: Rank 5 workers can sign up</li>
-                  </ul>
-                </div>
-                <button
-                  onClick={saveRankAccessSettings}
-                  disabled={saving}
-                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Save Access Settings'}
-                </button>
+                <p className="text-xs text-gray-400">Set to 0 for immediate access when event is created.</p>
               </div>
             )}
           </div>
 
-          {/* Time & Date Settings */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Time & Date Settings</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Configure timezone and time display format for your organization.
-            </p>
-            {loadingTimeSettings ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-900"></div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Timezone</label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    disabled={saving}
-                  >
-                    <option value="America/New_York">Eastern Time (ET)</option>
-                    <option value="America/Chicago">Central Time (CT)</option>
-                    <option value="America/Denver">Mountain Time (MT)</option>
-                    <option value="America/Phoenix">Arizona (MST - No DST)</option>
-                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                    <option value="America/Anchorage">Alaska Time (AKT)</option>
-                    <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Time Format</label>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input type="radio" value="12" checked={timeFormat === '12'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
-                      <span className="text-sm">12-hour (2:30 PM)</span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input type="radio" value="24" checked={timeFormat === '24'} onChange={(e) => setTimeFormat(e.target.value)} disabled={saving} className="w-4 h-4 text-red-900 focus:ring-red-500" />
-                      <span className="text-sm">24-hour (14:30)</span>
-                    </label>
-                  </div>
-                </div>
-                <button
-                  onClick={saveTimeSettings}
-                  disabled={saving}
-                  className="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Save Time Settings'}
-                </button>
-              </div>
-            )}
+          {/* Save All Button */}
+          <div className="px-6 py-5 bg-gray-50 flex items-center justify-between">
+            <p className="text-xs text-gray-400">Changes won't apply until saved.</p>
+            <button
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  setHostLabel(hostLabelValue);
+                  await saveWarehouseAddress();
+                  await saveRankAccessSettings();
+                  await saveTimeSettings();
+                  const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();
+                  if (existingPmt) {
+                    await supabase.from('settings').update({ setting_value: paymentTrackingEnabled.toString(), updated_at: new Date().toISOString() }).eq('setting_key', 'payment_tracking_enabled');
+                  } else {
+                    await supabase.from('settings').insert([{ setting_key: 'payment_tracking_enabled', setting_value: paymentTrackingEnabled.toString() }]);
+                  }
+                  alert('All settings saved!');
+                } catch (err) {
+                  alert('Error saving: ' + err.message);
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+              className="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 disabled:bg-gray-400 font-medium text-sm"
+            >
+              {saving ? 'Saving...' : '💾 Save All Settings'}
+            </button>
           </div>
+
         </div>
       )}
+
 
       {/* ── POSITIONS TAB ── */}
       {activeTab === 'positions' && (
