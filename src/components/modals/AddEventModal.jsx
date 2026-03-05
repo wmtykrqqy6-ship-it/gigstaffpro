@@ -27,11 +27,15 @@ export default function AddEventModal({
     notes: '',
     status: STATUS.EVENT.CONFIRMED,
     host_worker_id: null,
-    location_id: null
+    location_id: null,
+    client_id: null
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
   const [venues, setVenues] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [showSaveVenuePrompt, setShowSaveVenuePrompt] = useState(false);
   const [saveVenueForm, setSaveVenueForm] = useState({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
   const [savingVenue, setSavingVenue] = useState(false);
@@ -57,7 +61,37 @@ export default function AddEventModal({
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setVenues(data || []));
+    supabase
+      .from('clients')
+      .select('id, name, company, phone, email')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setClients(data || []));
   }, [open]);
+
+  const handleClientInput = (val) => {
+    setFormData(f => ({ ...f, client: val, client_id: null }));
+    if (val.length >= 1) {
+      const matches = clients.filter(c =>
+        c.name.toLowerCase().includes(val.toLowerCase()) ||
+        c.company?.toLowerCase().includes(val.toLowerCase())
+      );
+      setClientSuggestions(matches);
+      setShowClientSuggestions(matches.length > 0);
+    } else {
+      setShowClientSuggestions(false);
+    }
+  };
+
+  const selectClient = (client) => {
+    setFormData(f => ({
+      ...f,
+      client: client.name,
+      client_id: client.id,
+      client_contact: client.phone || client.email || f.client_contact
+    }));
+    setShowClientSuggestions(false);
+  };
 
   if (!open) return null;
 
@@ -298,16 +332,37 @@ export default function AddEventModal({
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3">Client Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="relative">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
                     <input
                       type="text"
                       required
                       value={formData.client}
-                      onChange={(e) => setFormData({...formData, client: e.target.value})}
+                      onChange={(e) => handleClientInput(e.target.value)}
+                      onFocus={() => formData.client.length >= 1 && setShowClientSuggestions(clientSuggestions.length > 0)}
+                      onBlur={() => setTimeout(() => setShowClientSuggestions(false), 150)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      placeholder="John Smith / ABC Company"
+                      placeholder="Type to search saved clients..."
+                      autoComplete="off"
                     />
+                    {formData.client_id && (
+                      <span className="absolute right-3 top-9 text-xs text-green-600 font-medium">✓ Linked</span>
+                    )}
+                    {showClientSuggestions && (
+                      <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                        {clientSuggestions.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={() => selectClient(c)}
+                            className="w-full text-left px-3 py-2.5 hover:bg-red-50 border-b border-gray-100 last:border-0"
+                          >
+                            <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                            <p className="text-xs text-gray-500">{[c.company, c.phone || c.email].filter(Boolean).join(' · ')}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>
