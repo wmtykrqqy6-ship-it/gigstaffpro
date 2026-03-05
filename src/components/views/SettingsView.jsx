@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle, Tag, Calendar, DollarSign, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -40,6 +40,20 @@ export default function SettingsView({
   });
   const [savingVenue, setSavingVenue] = useState(false);
 
+  // --- Clients state ---
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
+  const [expandedClient, setExpandedClient] = useState(null);
+  const [clientEvents, setClientEvents] = useState({});
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientForm, setClientForm] = useState({
+    name: '', company: '', phone: '', email: '', notes: '', tags: [], is_active: true
+  });
+  const [savingClient, setSavingClient] = useState(false);
+  const [clientTagInput, setClientTagInput] = useState('');
+
   const [newPosition, setNewPosition] = useState('');
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
@@ -67,6 +81,7 @@ export default function SettingsView({
     loadTimeSettings();
     loadLocations();
     loadVenues();
+    loadClients();
   }, []);
 
   const loadLocations = async () => {
@@ -180,6 +195,125 @@ export default function SettingsView({
     } catch (err) {
       alert('Error deleting venue: ' + err.message);
     }
+  };
+
+  // --- Client functions ---
+  const loadClients = async () => {
+    setLoadingClients(true);
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setClients(data || []);
+    } catch (err) {
+      console.error('Error loading clients:', err.message);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  const loadClientEvents = async (clientId) => {
+    if (clientEvents[clientId]) return; // already loaded
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, name, date, venue, address, positions, status')
+        .eq('client_id', clientId)
+        .order('date', { ascending: false });
+      if (error) throw error;
+      setClientEvents(prev => ({ ...prev, [clientId]: data || [] }));
+    } catch (err) {
+      console.error('Error loading client events:', err.message);
+    }
+  };
+
+  const resetClientForm = () => {
+    setClientForm({ name: '', company: '', phone: '', email: '', notes: '', tags: [], is_active: true });
+    setClientTagInput('');
+  };
+
+  const openAddClient = () => {
+    resetClientForm();
+    setEditingClient(null);
+    setShowAddClient(true);
+  };
+
+  const openEditClient = (client) => {
+    setClientForm({
+      name: client.name || '',
+      company: client.company || '',
+      phone: client.phone || '',
+      email: client.email || '',
+      notes: client.notes || '',
+      tags: client.tags || [],
+      is_active: client.is_active !== false
+    });
+    setClientTagInput('');
+    setEditingClient(client);
+    setShowAddClient(true);
+  };
+
+  const saveClient = async () => {
+    if (!clientForm.name.trim()) { alert('Client name is required.'); return; }
+    setSavingClient(true);
+    try {
+      const payload = {
+        name: clientForm.name.trim(),
+        company: clientForm.company.trim() || null,
+        phone: clientForm.phone.trim() || null,
+        email: clientForm.email.trim() || null,
+        notes: clientForm.notes.trim() || null,
+        tags: clientForm.tags,
+        is_active: clientForm.is_active
+      };
+      if (editingClient) {
+        const { error } = await supabase.from('clients').update(payload).eq('id', editingClient.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('clients').insert([payload]);
+        if (error) throw error;
+      }
+      await loadClients();
+      setShowAddClient(false);
+      setEditingClient(null);
+      resetClientForm();
+    } catch (err) {
+      alert('Error saving client: ' + err.message);
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
+  const deleteClient = async (client) => {
+    if (!confirm(`Delete "${client.name}"? Their events will not be deleted.`)) return;
+    try {
+      const { error } = await supabase.from('clients').delete().eq('id', client.id);
+      if (error) throw error;
+      await loadClients();
+    } catch (err) {
+      alert('Error deleting client: ' + err.message);
+    }
+  };
+
+  const addClientTag = () => {
+    const tag = clientTagInput.trim();
+    if (tag && !clientForm.tags.includes(tag)) {
+      setClientForm(f => ({ ...f, tags: [...f.tags, tag] }));
+    }
+    setClientTagInput('');
+  };
+
+  const removeClientTag = (tag) => {
+    setClientForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
+  };
+
+  const getClientStats = (clientId) => {
+    const events = clientEvents[clientId] || [];
+    const total = events.length;
+    const lastEvent = events[0];
+    return { total, lastEvent };
   };
 
   const resetLocationForm = () => {
@@ -661,6 +795,7 @@ export default function SettingsView({
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {[
           { id: 'venues', label: '🏛️ Venues' },
+          { id: 'clients', label: '👥 Clients' },
           { id: 'locations', label: '📍 Locations' },
           { id: 'positions', label: '🎰 Positions' },
           { id: 'general', label: '⚙️ System' },
@@ -678,6 +813,249 @@ export default function SettingsView({
           </button>
         ))}
       </div>
+
+      {/* ── CLIENTS TAB ── */}
+      {activeTab === 'clients' && (
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Clients</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Manage client profiles, view event history, and auto-fill event details</p>
+            </div>
+            <button
+              onClick={openAddClient}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
+            >
+              <Plus size={16} />
+              <span>Add Client</span>
+            </button>
+          </div>
+
+          {/* Search */}
+          {clients.length > 3 && (
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={clientSearch}
+                onChange={e => setClientSearch(e.target.value)}
+                placeholder="Search clients..."
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+              />
+            </div>
+          )}
+
+          {/* Add / Edit Form */}
+          {showAddClient && (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-900">
+              <h4 className="text-lg font-bold text-gray-900 mb-4">
+                {editingClient ? `Edit: ${editingClient.name}` : 'New Client'}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Client Name *</label>
+                  <input type="text" value={clientForm.name}
+                    onChange={e => setClientForm({ ...clientForm, name: e.target.value })}
+                    placeholder="e.g. John Smith / ABC Corp"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Company</label>
+                  <input type="text" value={clientForm.company}
+                    onChange={e => setClientForm({ ...clientForm, company: e.target.value })}
+                    placeholder="e.g. ABC Corporation"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone</label>
+                  <input type="text" value={clientForm.phone}
+                    onChange={e => setClientForm({ ...clientForm, phone: e.target.value })}
+                    placeholder="(414) 555-0100"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+                  <input type="email" value={clientForm.email}
+                    onChange={e => setClientForm({ ...clientForm, email: e.target.value })}
+                    placeholder="client@company.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Tags</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {clientForm.tags.map(tag => (
+                      <span key={tag} className="inline-flex items-center space-x-1 bg-red-50 text-red-800 text-xs px-2 py-1 rounded-full border border-red-200">
+                        <span>{tag}</span>
+                        <button onClick={() => removeClientTag(tag)} className="hover:text-red-600 ml-1">×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex space-x-2">
+                    <input type="text" value={clientTagInput}
+                      onChange={e => setClientTagInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addClientTag())}
+                      placeholder="e.g. Corporate, Fundraiser, Repeat"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                    />
+                    <button onClick={addClientTag} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+                      + Add
+                    </button>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Notes</label>
+                  <textarea value={clientForm.notes}
+                    onChange={e => setClientForm({ ...clientForm, notes: e.target.value })}
+                    placeholder="Preferences, special requirements, how you met them, etc."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button onClick={saveClient} disabled={savingClient}
+                  className="bg-red-900 text-white px-5 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 flex items-center space-x-2 text-sm"
+                >
+                  <Save size={15} />
+                  <span>{savingClient ? 'Saving...' : editingClient ? 'Save Changes' : 'Create Client'}</span>
+                </button>
+                <button onClick={() => { setShowAddClient(false); setEditingClient(null); resetClientForm(); }}
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Client List */}
+          {loadingClients ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-900" />
+            </div>
+          ) : clients.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <User size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500 font-medium">No clients yet.</p>
+              <p className="text-gray-400 text-sm mt-1">Run the migration SQL first to auto-import clients from your existing events.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {clients
+                .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.company?.toLowerCase().includes(clientSearch.toLowerCase()))
+                .map(client => {
+                  const isExpanded = expandedClient === client.id;
+                  const events = clientEvents[client.id] || [];
+                  const stats = getClientStats(client.id);
+
+                  return (
+                    <div key={client.id} className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
+                      {/* Client Card Header */}
+                      <div className="p-4 flex items-start justify-between">
+                        <div className="flex items-start space-x-3 flex-1 min-w-0">
+                          <div className="bg-red-900 rounded-full h-10 w-10 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                            {client.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 flex-wrap gap-1">
+                              <h4 className="font-bold text-gray-900">{client.name}</h4>
+                              {client.company && <span className="text-sm text-gray-500">— {client.company}</span>}
+                              {!client.is_active && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-500">
+                              {client.phone && <span className="flex items-center space-x-1"><Phone size={11} /><span>{client.phone}</span></span>}
+                              {client.email && <span className="flex items-center space-x-1"><Mail size={11} /><span>{client.email}</span></span>}
+                            </div>
+                            {client.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {client.tags.map(tag => (
+                                  <span key={tag} className="bg-red-50 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-100">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
+                          <button
+                            onClick={() => {
+                              if (!isExpanded) loadClientEvents(client.id);
+                              setExpandedClient(isExpanded ? null : client.id);
+                            }}
+                            className="flex items-center space-x-1 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                          >
+                            <Calendar size={13} />
+                            <span>History</span>
+                            {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                          </button>
+                          <button onClick={() => openEditClient(client)} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                            <Edit size={15} />
+                          </button>
+                          <button onClick={() => deleteClient(client)} className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Notes preview */}
+                      {client.notes && !isExpanded && (
+                        <div className="px-4 pb-3 ml-13">
+                          <p className="text-xs text-gray-400 italic ml-13">"{client.notes}"</p>
+                        </div>
+                      )}
+
+                      {/* Expanded: Event History */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-100 bg-gray-50 px-4 py-4">
+                          {client.notes && (
+                            <p className="text-xs text-gray-500 italic mb-3 pb-3 border-b border-gray-200">"{client.notes}"</p>
+                          )}
+                          <p className="text-xs font-semibold text-gray-700 mb-3 flex items-center space-x-1">
+                            <Calendar size={13} />
+                            <span>Event History</span>
+                            {events.length > 0 && <span className="bg-red-900 text-white text-xs px-1.5 py-0.5 rounded-full ml-1">{events.length}</span>}
+                          </p>
+                          {events.length === 0 ? (
+                            <p className="text-xs text-gray-400 py-2">No linked events yet. Events are linked via the client_id field after running the migration.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {events.map(ev => {
+                                const totalStaff = Array.isArray(ev.positions) ? ev.positions.reduce((sum, p) => sum + (p.count || 0), 0) : 0;
+                                return (
+                                  <div key={ev.id} className="bg-white rounded-lg p-3 border border-gray-200 flex items-start justify-between">
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-900">{ev.name}</p>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {ev.date ? new Date(ev.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                        {ev.venue && ` · ${ev.venue}`}
+                                      </p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0 ml-3">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                        ev.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                        ev.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                        'bg-gray-100 text-gray-600'
+                                      }`}>{ev.status}</span>
+                                      {totalStaff > 0 && <p className="text-xs text-gray-400 mt-1">{totalStaff} staff</p>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── VENUES TAB ── */}
       {activeTab === 'venues' && (
