@@ -528,7 +528,7 @@ export default function ApplicationsView({
                       className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
                     >
                       <CheckCircle size={18} />
-                      <span>Promote to Approved</span>
+                      <span>Approve to Event</span>
                     </button>
                     <button
                       onClick={() => handleReject(app.id)}
