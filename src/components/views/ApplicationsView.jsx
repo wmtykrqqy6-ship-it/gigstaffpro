@@ -15,6 +15,45 @@ export default function ApplicationsView({
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState(null);
 
+  // Helper: check if a position is full for a given app
+  const isPositionFull = (app) => {
+    const event = events.find(e => e.id === app.event_id);
+    if (!event?.positions) return false;
+    const positionDef = event.positions.find(p =>
+      p.key === app.position || p.name === app.position ||
+      getPositionKey(p.name || p.key) === getPositionKey(app.position) ||
+      getPositionLabel(p.key) === app.position
+    );
+    if (!positionDef) return false;
+    const maxCount = positionDef.count || 1;
+    const currentApproved = assignments.filter(a => {
+      if (a.event_id !== app.event_id) return false;
+      if (a.id === app.id) return false;
+      if (['standby','pending','rejected','cancelled'].includes(a.status)) return false;
+      return a.position === app.position ||
+             a.position === positionDef.key ||
+             getPositionKey(a.position) === getPositionKey(app.position);
+    }).length;
+    return currentApproved >= maxCount;
+  };
+
+  const handleApproveToStandby = async (applicationId) => {
+    if (!confirm('Position is full — add this applicant to the standby list?')) return;
+    setProcessingId(applicationId);
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .update({ status: 'standby' })
+        .eq('id', applicationId);
+      if (error) throw error;
+      onReloadAssignments();
+    } catch (error) {
+      alert('Error adding to standby: ' + error.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   // Get all applications with worker and event details
   const applications = assignments
     .map(assignment => {
@@ -85,13 +124,7 @@ export default function ApplicationsView({
         console.log(`Approve check: "${app.position}" | approved: ${currentApproved} | max: ${maxCount}`);
 
         if (currentApproved >= maxCount) {
-          alert(
-            `⚠️ POSITION FULL!\n\n` +
-            `Cannot approve this application.\n\n` +
-            `${app.position} for "${event.name}" is already fully staffed.\n` +
-            `Current: ${currentApproved}/${maxCount}\n\n` +
-            `Please reject this application or increase the position count in the event.`
-          );
+          // Position is full — caller should have used handleApproveToStandby instead
           return;
         }
       }
@@ -459,26 +492,34 @@ export default function ApplicationsView({
                 </div>
 
                 {/* Actions - always full width below info */}
-                {app.status === 'pending' && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => handleApprove(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <CheckCircle size={18} />
-                      <span>Approve</span>
-                    </button>
-                    <button
-                      onClick={() => handleReject(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <XCircle size={18} />
-                      <span>Reject</span>
-                    </button>
-                  </div>
-                )}
+                {app.status === 'pending' && (() => {
+                  const full = isPositionFull(app);
+                  return (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => full ? handleApproveToStandby(app.id) : handleApprove(app.id)}
+                        disabled={processingId === app.id}
+                        className={`${full ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto`}
+                      >
+                        <CheckCircle size={18} />
+                        <span>{full ? '+ Add to Standby' : 'Approve'}</span>
+                      </button>
+                      {full && (
+                        <span className="self-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-lg">
+                          Position full
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleReject(app.id)}
+                        disabled={processingId === app.id}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                      >
+                        <XCircle size={18} />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  );
+                })()}
                 {app.status === 'standby' && (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button
