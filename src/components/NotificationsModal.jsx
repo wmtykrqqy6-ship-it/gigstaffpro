@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Mail, AlertCircle, Clock, CheckCircle, X } from 'lucide-react';
+import { Bell, Mail, AlertCircle, Clock, CheckCircle, X, UserPlus } from 'lucide-react';
 
 export default function NotificationsModal({
   open,
@@ -15,6 +15,7 @@ export default function NotificationsModal({
       case 'warning': return <AlertCircle size={20} className="text-yellow-600" />;
       case 'reminder': return <Clock size={20} className="text-orange-600" />;
       case 'success': return <CheckCircle size={20} className="text-green-600" />;
+      case 'new_worker': return <UserPlus size={20} className="text-purple-600" />;
       default: return <Bell size={20} className="text-gray-600" />;
     }
   };

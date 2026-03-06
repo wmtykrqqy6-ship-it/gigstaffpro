@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Users, AlertCircle, Plus, Clock, 
-  MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList
+  MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList, UserPlus
 } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { formatTime } from '../../utils/dateHelpers';
@@ -315,6 +315,21 @@ export default function DashboardView({
       }
     });
 
+    // New worker signups (last 7 days)
+    workers.forEach(worker => {
+      if (!worker.created_at) return;
+      const workerDate = new Date(worker.created_at);
+      if (workerDate >= sevenDaysAgo) {
+        activities.push({
+          type: 'new_worker',
+          date: worker.created_at,
+          message: `New worker signed up: ${worker.name}`,
+          icon: UserPlus,
+          color: 'purple'
+        });
+      }
+    });
+
     // Sort by date (newest first) and take top 10
     return activities
       .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -531,7 +546,8 @@ export default function DashboardView({
                   blue: 'bg-blue-100 text-blue-600',
                   green: 'bg-green-100 text-green-600',
                   red: 'bg-red-100 text-red-600',
-                  yellow: 'bg-yellow-100 text-yellow-600'
+                  yellow: 'bg-yellow-100 text-yellow-600',
+                  purple: 'bg-purple-100 text-purple-600'
                 };
                 return (
                   <div key={index} className="flex items-start space-x-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors">

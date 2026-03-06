@@ -191,7 +191,23 @@ const saveDismissedNotificationIds = (ids) => {
         });
       }
 
-      // 2. Events within 48 hours that aren't fully staffed
+      // 2. New worker signups (last 7 days)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      workers.forEach(worker => {
+        if (!worker.created_at) return;
+        if (new Date(worker.created_at) >= sevenDaysAgo) {
+          newNotifications.push({
+            id: `new-worker-${worker.id}`,
+            type: 'new_worker',
+            title: 'New Worker Signed Up',
+            message: `${worker.name} created an account`,
+            timestamp: worker.created_at,
+            action: () => setCurrentView('staff')
+          });
+        }
+      });
+
+      // 3. Events within 48 hours that aren't fully staffed
       const soonEvents = events.filter(e => {
         const eventDate = parseDateSafe(e.date);
         const hoursUntil = (eventDate - now) / (1000 * 60 * 60);
