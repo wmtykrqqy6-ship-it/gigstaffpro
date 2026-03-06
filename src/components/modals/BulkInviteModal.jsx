@@ -11,7 +11,7 @@ export default function BulkInviteModal({ open, onClose }) {
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
-  const PORTAL_URL = window.location.origin + '/worker';
+  const PORTAL_URL = 'https://gigstaffpro.vercel.app';
 
   useEffect(() => {
     if (open) { loadInvites(); setName(''); setContact(''); setNote(''); }
@@ -83,7 +83,7 @@ export default function BulkInviteModal({ open, onClose }) {
             <div className="flex justify-between items-center mb-5">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Invite Worker</h3>
-                <p className="text-sm text-gray-500 mt-0.5">Send someone the link to create their worker profile</p>
+                <p className="text-sm text-gray-500 mt-0.5">Track who you've invited and share the app link with them</p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
             </div>
@@ -123,7 +123,7 @@ export default function BulkInviteModal({ open, onClose }) {
             </div>
 
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 text-xs text-blue-800">
-              💡 Log the invite here, then share the link above via text or email. Once they sign up, mark them as Joined.
+              💡 <strong>How it works:</strong> Share the link above with the worker. They'll land on the login screen and enter their PIN to access their portal. Log the invite here so you can track who's been contacted.
             </div>
 
             <button onClick={handleSend} disabled={saving || !name.trim()}
