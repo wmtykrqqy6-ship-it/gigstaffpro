@@ -69,6 +69,17 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             return false;
           }
           
+          // Hide invite-only events unless worker is already assigned
+          if (event.invite_only) {
+            const isAssigned = assignments.some(a =>
+              a.event_id === event.id && a.worker_id === currentWorker.id
+            );
+            if (!isAssigned) {
+              console.log('❌ Invite-only event, worker not assigned');
+              return false;
+            }
+          }
+
           // Not already assigned, applied, or on standby - hide all of these from available events
           const alreadyAssigned = assignments.some(a => {
             if (a.event_id !== event.id) return false;

@@ -369,6 +369,11 @@ export default function EventsView({
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
                       {event.status === 'needs-staff' ? 'Needs Staff' : event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
+                    {event.invite_only && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        🔒 Invite Only
+                      </span>
+                    )}
                     {staffingStatus.total > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'

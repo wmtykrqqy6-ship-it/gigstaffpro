@@ -28,7 +28,8 @@ export default function AddEventModal({
     status: STATUS.EVENT.CONFIRMED,
     host_worker_id: null,
     location_id: null,
-    client_id: null
+    client_id: null,
+    invite_only: false
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
@@ -163,7 +164,7 @@ export default function AddEventModal({
     setFormData({
       name: '', client: '', client_contact: '', date: '', time: '', end_time: '',
       venue: '', room: '', address: '', positions: [], dress_code: '', parking: '',
-      notes: '', status: STATUS.EVENT.CONFIRMED, host_worker_id: null, location_id: null
+      notes: '', status: STATUS.EVENT.CONFIRMED, host_worker_id: null, location_id: null, invite_only: false
     });
     setShowSaveVenuePrompt(false);
     setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
@@ -538,6 +539,21 @@ export default function AddEventModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   placeholder="Any additional information about the event..."
                 />
+              </div>
+
+              {/* Invite Only Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Invite Only</p>
+                  <p className="text-xs text-gray-500">Workers can only join if directly assigned by admin</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({...formData, invite_only: !formData.invite_only})}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.invite_only ? 'bg-red-900' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.invite_only ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
 
               <div className="flex space-x-3 pt-4">
