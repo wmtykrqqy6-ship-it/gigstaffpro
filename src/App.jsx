@@ -44,7 +44,7 @@ import InviteWorkersModal from './components/modals/InviteWorkersModal';
 
 const GigStaffPro = () => {
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(() => sessionStorage.getItem('currentView') || 'dashboard');
   const [workers, setWorkers] = useState([]);
   const [events, setEvents] = useState([]);
   const [positions, setPositions] = useState([]);
@@ -119,6 +119,7 @@ const GigStaffPro = () => {
   // Browser back/forward button support
   const navigate = (view) => {
     window.history.pushState({ view }, '', window.location.pathname);
+    sessionStorage.setItem('currentView', view);
     setCurrentView(view);
   };
 
@@ -990,6 +991,7 @@ setAppPositions(storedPositions);
     setLoggedInWorker(null);
     sessionStorage.removeItem('userRole');
     sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('currentView');
   };
 
   // Check for existing session on load
