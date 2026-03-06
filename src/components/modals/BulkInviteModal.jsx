@@ -30,9 +30,45 @@ export default function BulkInviteModal({ open, onClose }) {
     finally { setLoadingInvites(false); }
   };
 
+  const sendInviteEmail = async (toEmail, toName) => {
+    const html = `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <div style="background: #7f1d1d; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">Vegas on Wheels</h1>
+          <p style="color: #fca5a5; margin: 4px 0 0; font-size: 14px;">Staff Portal Invitation</p>
+        </div>
+        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          <p style="color: #111827; font-size: 16px;">Hi ${toName},</p>
+          <p style="color: #374151;">You've been invited to join the Vegas on Wheels staff portal. Click the button below to get started:</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="https://gigstaffpro.vercel.app" style="background: #7f1d1d; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+              Access Staff Portal
+            </a>
+          </div>
+          <p style="color: #6b7280; font-size: 13px;">Or copy this link: https://gigstaffpro.vercel.app</p>
+          <p style="color: #6b7280; font-size: 13px; margin-top: 24px; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+            Once you're in, you can view upcoming events, manage your schedule, and apply for positions.
+          </p>
+        </div>
+      </div>
+    `;
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: toEmail,
+        subject: 'You\'re invited to join the Vegas on Wheels staff portal',
+        html
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to send email');
+  };
+
   const handleSend = async () => {
     if (!name.trim()) { alert('Please enter a name.'); return; }
     setSaving(true);
+    const isEmail = contact.trim().includes('@');
     try {
       const { error } = await supabase.from('worker_invites').insert([{
         name: name.trim(),
@@ -41,11 +77,22 @@ export default function BulkInviteModal({ open, onClose }) {
         status: 'pending',
       }]);
       if (error) throw error;
+
+      // Send email if contact is an email address
+      if (isEmail) {
+        try {
+          await sendInviteEmail(contact.trim(), name.trim());
+          alert(`✓ Invite logged and email sent to ${contact.trim()}!`);
+        } catch (emailErr) {
+          alert(`✓ Invite logged, but email failed: ${emailErr.message}\n\nShare the link manually: ${PORTAL_URL}`);
+        }
+      }
+
       setName(''); setContact(''); setNote('');
       await loadInvites();
     } catch (err) {
       if (err.message?.includes('relation') || err.message?.includes('does not exist')) {
-        alert(`Run the invite migration SQL first to enable tracking.\n\nFor now, share this link manually:\n${PORTAL_URL}`);
+        alert(`Run the invite migration SQL first.\n\nShare this link manually:\n${PORTAL_URL}`);
       } else {
         alert('Error: ' + err.message);
       }
@@ -123,13 +170,13 @@ export default function BulkInviteModal({ open, onClose }) {
             </div>
 
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 text-xs text-blue-800">
-              💡 <strong>How it works:</strong> Share the link above with the worker. They'll land on the login screen and enter their PIN to access their portal. Log the invite here so you can track who's been contacted.
+              💡 <strong>Email:</strong> If you enter an email address, an invite will be sent automatically. For phone numbers, copy the link and text it manually.
             </div>
 
             <button onClick={handleSend} disabled={saving || !name.trim()}
               className="w-full bg-red-900 text-white py-2.5 rounded-lg hover:bg-red-800 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium flex items-center justify-center space-x-2 mb-6">
               <UserPlus size={18} />
-              <span>{saving ? 'Saving...' : 'Log Invite'}</span>
+              <span>{saving ? 'Sending...' : contact.includes('@') ? 'Log & Send Email' : 'Log Invite'}</span>
             </button>
 
             {/* Invite History */}
