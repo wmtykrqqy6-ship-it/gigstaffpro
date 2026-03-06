@@ -173,7 +173,7 @@ export default function StaffView({
             className="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors"
           >
             <Mail size={20} />
-            <span>Bulk Invite</span>
+            <span>Invite Worker</span>
           </button>
           <button 
             onClick={onShowAddWorker}
