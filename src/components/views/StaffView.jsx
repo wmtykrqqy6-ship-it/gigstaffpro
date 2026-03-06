@@ -112,8 +112,11 @@ export default function StaffView({
 
     // Rank filter
     if (rankFilter !== 'all') {
-      if (rankFilter === '5-star' && worker.reliability !== 5) return false;
-      if (rankFilter !== '5-star' && worker.rank !== parseInt(rankFilter)) return false;
+      if (rankFilter === 'new') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        if (!worker.created_at || new Date(worker.created_at) < sevenDaysAgo) return false;
+      } else if (rankFilter === '5-star' && worker.reliability !== 5) return false;
+      else if (rankFilter !== '5-star' && rankFilter !== 'new' && worker.rank !== parseInt(rankFilter)) return false;
     }
 
     // Reliability filter
@@ -266,6 +269,7 @@ export default function StaffView({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               >
                 <option value="all">All Ranks</option>
+                <option value="new">✦ New (last 7 days)</option>
                 <option value="1">Rank 1</option>
                 <option value="2">Rank 2</option>
                 <option value="3">Rank 3</option>
@@ -400,6 +404,11 @@ export default function StaffView({
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 flex-shrink-0">
                             <Shield size={10} className="mr-0.5" />
                             {getHostLabel()}
+                          </span>
+                        )}
+                        {worker.created_at && (new Date() - new Date(worker.created_at)) < 7 * 24 * 60 * 60 * 1000 && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 border border-green-200 flex-shrink-0">
+                            ✦ New
                           </span>
                         )}
                       </div>
