@@ -62,7 +62,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const filledSlots = (assignments || []).filter(a => a.event_id === event.id && a.position === selectedPosition).length;
   const openSlots = Math.max(0, totalSlots - filledSlots);
 
-  const positionInvites = invitations.filter(i => i.position === selectedPosition);
+  const positionInvites = invitations.filter(i => i.position_key === selectedPosition);
   const pendingInvites = positionInvites.filter(i => i.status === 'pending');
   const acceptedInvites = positionInvites.filter(i => i.status === 'accepted');
   const confirmedInvites = positionInvites.filter(i => i.status === 'confirmed');
@@ -118,7 +118,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     expiresAt.setHours(expiresAt.getHours() + windowHours);
     return workerIds.map(workerId => {
       const worker = workers.find(w => w.id === workerId);
-      return { event_id: event.id, worker_id: workerId, position: selectedPosition, status: 'pending', rank_tier: worker?.rank || 1, window_hours: windowHours, expires_at: expiresAt.toISOString(), invited_at: new Date().toISOString() };
+      return { event_id: event.id, worker_id: workerId, position_key: selectedPosition, status: 'pending', rank_tier: worker?.rank || 1, window_hours: windowHours, expires_at: expiresAt.toISOString(), invited_at: new Date().toISOString() };
     });
   };
 
@@ -168,7 +168,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const handleConfirmWorker = async (invitation) => {
     setConfirming(invitation.id);
     try {
-      await supabase.from('assignments').insert({ event_id: event.id, worker_id: invitation.worker_id, position: invitation.position, status: 'confirmed' });
+      await supabase.from('assignments').insert({ event_id: event.id, worker_id: invitation.worker_id, position: invitation.position_key, status: 'confirmed' });
       await supabase.from('invitations').update({ status: 'confirmed', responded_at: new Date().toISOString() }).eq('id', invitation.id);
       const otherAccepted = acceptedInvites.filter(i => i.id !== invitation.id);
       if (otherAccepted.length > 0) await supabase.from('invitations').update({ status: 'standby' }).in('id', otherAccepted.map(i => i.id));
@@ -240,7 +240,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               })
               .map(pos => {
               const isFull = pos.open <= 0;
-              const hasAccepted = invitations.filter(i => i.position === pos.key && i.status === 'accepted').length > 0;
+              const hasAccepted = invitations.filter(i => i.position_key === pos.key && i.status === 'accepted').length > 0;
               return (
                 <button key={pos.key} onClick={() => setSelectedPosition(pos.key)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5 ${selectedPosition === pos.key ? 'bg-red-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
