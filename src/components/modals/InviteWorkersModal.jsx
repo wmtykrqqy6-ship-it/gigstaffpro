@@ -139,6 +139,47 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     setSending(true);
     try {
       await supabase.from('invitations').insert(buildInviteRecords(confirmSend.workerIds));
+
+      // Send email to workers who have an email address
+      const positionLabel = selectedPosition || 'a position';
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + windowHours);
+      const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+      const emailPromises = confirmSend.workerIds.map(workerId => {
+        const worker = workers.find(w => w.id === workerId);
+        if (!worker?.email) return null;
+
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+            <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+              <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
+              <p style="color:#fca5a5;margin:6px 0 0">Staff Portal Invitation</p>
+            </div>
+            <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+              <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
+              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
+              <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">View Invitation →</a>
+              </div>
+              <p style="color:#9ca3af;font-size:12px;text-align:center">Log in to accept or decline this invitation.</p>
+            </div>
+          </div>`;
+
+        return fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: worker.email,
+            subject: `You're invited: ${event.name}`,
+            html
+          })
+        });
+      }).filter(Boolean);
+
+      await Promise.allSettled(emailPromises);
+
       setSelectedWorkers(new Set());
       setConfirmSend(null);
       await loadInvitations();
@@ -150,7 +191,6 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const handleReInvite = async (inv) => {
     setReInviting(inv.id);
     try {
-      // Reset the declined invite back to pending with a fresh window
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + windowHours);
       await supabase.from('invitations').update({
@@ -160,6 +200,33 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         expires_at: expiresAt.toISOString(),
         window_hours: windowHours
       }).eq('id', inv.id);
+
+      // Re-send email if worker has one
+      const worker = workers.find(w => w.id === inv.worker_id);
+      if (worker?.email) {
+        const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+            <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+              <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
+              <p style="color:#fca5a5;margin:6px 0 0">Staff Portal Invitation</p>
+            </div>
+            <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+              <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
+              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong>.</p>
+              <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">View Invitation →</a>
+              </div>
+            </div>
+          </div>`;
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: worker.email, subject: `Re-invite: ${event.name}`, html })
+        });
+      }
+
       await loadInvitations();
     } catch (err) { alert('Error re-inviting worker: ' + err.message); }
     finally { setReInviting(null); }
