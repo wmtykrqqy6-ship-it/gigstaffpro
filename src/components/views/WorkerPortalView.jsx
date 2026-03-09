@@ -636,19 +636,19 @@ export default function WorkerPortalView({
                         {dayAssignments.length > 0 && (
                           <div className="space-y-0.5">
                             {dayAssignments.slice(0, 2).map((assignment, idx) => (
-                              <div
-                                key={idx}
-                                className="text-white bg-blue-500 rounded truncate block sm:hidden"
-                                style={{ fontSize: '9px', padding: '2px 3px', lineHeight: 1.2 }}
-                              >
-                                {formatTime(assignment.event.time, timeFormat)}
-                              </div>
-                              <div
-                                key={`${idx}-desktop`}
-                                className="text-white bg-blue-500 rounded truncate text-xs px-1 py-0.5 leading-snug hidden sm:block"
-                              >
-                                {formatTime(assignment.event.time, timeFormat)} · {assignment.event.name}
-                              </div>
+                              <React.Fragment key={idx}>
+                                <div
+                                  className="text-white bg-blue-500 rounded truncate block sm:hidden"
+                                  style={{ fontSize: '9px', padding: '2px 3px', lineHeight: 1.2 }}
+                                >
+                                  {formatTime(assignment.event.time, timeFormat)}
+                                </div>
+                                <div
+                                  className="text-white bg-blue-500 rounded truncate text-xs px-1 py-0.5 leading-snug hidden sm:block"
+                                >
+                                  {formatTime(assignment.event.time, timeFormat)} · {assignment.event.name}
+                                </div>
+                              </React.Fragment>
                             ))}
                             {dayAssignments.length > 2 && (
                               <div style={{ fontSize: '9px' }} className="text-gray-500 leading-none">
