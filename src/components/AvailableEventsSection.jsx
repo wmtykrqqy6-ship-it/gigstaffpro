@@ -467,9 +467,8 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                 
                 <div className="mb-3">
                   <p className="text-xs font-semibold text-gray-600 mb-2">Available Positions:</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                     {matchingPositions.map(position => {
-                      // Check if worker is on standby for this position
                       const positionKey = getPositionKey(position);
                       const onStandby = assignments.some(a =>
                         a.event_id === event.id &&
@@ -479,24 +478,23 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       );
 
                       if (onStandby) {
-                        // Calculate standby position (1st, 2nd, 3rd in line)
                         const standbyList = assignments
                           .filter(a =>
                             a.event_id === event.id &&
                             a.status === 'standby' &&
                             (getPositionKey(a.position) === positionKey || a.position === position)
                           )
-                          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Oldest first
+                          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                         
                         const standbyPosition = standbyList.findIndex(a => a.worker_id === currentWorker.id) + 1;
                         
                         return (
                           <div
                             key={position}
-                            className="bg-orange-100 border-2 border-orange-400 text-orange-800 text-xs px-3 py-1 rounded-lg font-medium flex items-center space-x-1"
+                            className="bg-orange-100 border-2 border-orange-400 text-orange-800 text-xs px-3 py-2.5 rounded-lg font-medium flex items-center justify-center space-x-1"
                           >
-                            <Clock size={14} />
-                            <span>On Standby #{standbyPosition}: {position}</span>
+                            <Clock size={13} />
+                            <span>Standby #{standbyPosition}: {position}</span>
                           </div>
                         );
                       }
@@ -506,9 +504,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                           key={position}
                           onClick={() => applyToEvent(event, position)}
                           disabled={applying}
-                          className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                          className="bg-green-600 text-white text-sm px-3 py-2.5 rounded-lg hover:bg-green-700 active:bg-green-800 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-center"
                         >
-                          Apply: {position}
+                          {position}
                         </button>
                       );
                     })}

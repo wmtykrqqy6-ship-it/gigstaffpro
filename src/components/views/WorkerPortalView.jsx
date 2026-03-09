@@ -459,49 +459,49 @@ export default function WorkerPortalView({
 
         {/* Standby Events Section */}
         {standbyAssignments.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center space-x-3">
-                <h3 className="text-xl font-bold text-gray-900">Standby List</h3>
-                <span className="bg-orange-100 text-orange-800 text-sm font-medium px-3 py-1 rounded-full">
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="mb-3">
+              <div className="flex items-center space-x-2 mb-0.5">
+                <h3 className="text-lg font-bold text-gray-900">Standby List</h3>
+                <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full">
                   {standbyAssignments.length} Event{standbyAssignments.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <p className="text-sm text-gray-500">You'll be notified if a spot opens up</p>
+              <p className="text-xs text-gray-500">You'll be notified if a spot opens up</p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {standbyAssignments.map(assignment => {
                 const eventDate = parseDateSafe(assignment.event.date);
                 return (
-                  <div key={assignment.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-bold text-gray-900">{assignment.event.name}</h4>
-                          <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full">
+                  <div key={assignment.id} className="border border-orange-200 bg-orange-50 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <h4 className="font-bold text-gray-900 text-sm">{assignment.event.name}</h4>
+                          <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
                             #{assignment.standbyPosition} in line
                           </span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-gray-600">
+                        <div className="flex flex-col gap-1 text-sm text-gray-600">
                           <div className="flex items-center space-x-1">
-                            <Calendar size={14} />
+                            <Calendar size={13} className="flex-shrink-0" />
                             <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                           </div>
                           <div className="flex items-center space-x-1">
-                            <Clock size={14} />
+                            <Clock size={13} className="flex-shrink-0" />
                             <span>{formatTime(assignment.event.time, timeFormat)}{assignment.event.end_time ? ` - ${formatTime(assignment.event.end_time, timeFormat)}` : ''}</span>
                           </div>
                           {assignment.event.venue && (
                             <div className="flex items-center space-x-1">
-                              <MapPin size={14} />
-                              <span>{assignment.event.venue}</span>
+                              <MapPin size={13} className="flex-shrink-0" />
+                              <span className="truncate">{assignment.event.venue}</span>
                             </div>
                           )}
                         </div>
                         <div className="mt-2">
-                          <span className="text-sm font-medium text-orange-700">
-                            Position: {getPositionLabel(assignment.position)}
+                          <span className="text-xs font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded">
+                            {getPositionLabel(assignment.position)}
                           </span>
                         </div>
                       </div>
@@ -515,7 +515,7 @@ export default function WorkerPortalView({
                             alert('Error removing from standby: ' + e.message);
                           }
                         }}
-                        className="ml-4 text-gray-400 hover:text-red-600 transition-colors"
+                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors p-1"
                         title="Leave standby list"
                       >
                         <XCircle size={20} />
