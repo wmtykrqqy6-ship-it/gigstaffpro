@@ -577,6 +577,12 @@ export default function AssignWorkersModal({
                                             }
                                             
                                             if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
+                                              // Check if position is still full
+                                              const currentFilled = posAssignments.filter(a => a.status !== 'standby').length;
+                                              if (currentFilled >= needed) {
+                                                alert(`⛔ Cannot promote — the ${getPositionLabel(pos.key || pos.name)} position is still full (${currentFilled}/${needed}).\n\nRemove an assigned worker first, then promote from standby.`);
+                                                return;
+                                              }
                                               // Update assignment to change status from 'standby' to 'approved'
                                               supabase
                                                 .from('assignments')
