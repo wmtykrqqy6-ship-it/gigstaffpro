@@ -625,22 +625,30 @@ export default function WorkerPortalView({
                             setSelectedEventModal(isSelected ? null : dayAssignments);
                           }
                         }}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center relative
-                          ${isToday ? 'border-2 border-red-500 bg-red-50' : ''}
-                          ${isSelected ? 'bg-blue-100 border-2 border-blue-500' : ''}
-                          ${!isToday && !isSelected && isPast ? 'bg-gray-50' : ''}
-                          ${!isToday && !isSelected && !isPast ? 'border border-gray-200' : ''}
-                          ${hasEvents ? 'cursor-pointer' : ''}
-                        `}
+                        className={`aspect-square border rounded-lg p-1 ${
+                          isToday ? 'border-red-500 border-2 bg-red-50' :
+                          isSelected ? 'border-blue-400 border-2 bg-blue-50' :
+                          isPast ? 'bg-gray-50 border-gray-100' :
+                          'border-gray-200 hover:bg-gray-50'
+                        } ${hasEvents ? 'cursor-pointer' : ''} overflow-hidden`}
                       >
-                        <span className={`text-sm font-semibold ${isToday ? 'text-red-600' : isPast ? 'text-gray-400' : 'text-gray-900'}`}>
-                          {day}
-                        </span>
-                        {hasEvents && (
-                          <div className="flex gap-0.5 mt-0.5">
-                            {dayAssignments.slice(0, 3).map((_, idx) => (
-                              <div key={idx} className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        <div className={`text-xs font-semibold mb-0.5 ${isToday ? 'text-red-600' : isPast ? 'text-gray-400' : 'text-gray-900'}`}>{day}</div>
+                        {dayAssignments.length > 0 && (
+                          <div className="space-y-0.5">
+                            {dayAssignments.slice(0, 2).map((assignment, idx) => (
+                              <div
+                                key={idx}
+                                className="text-white bg-blue-500 rounded px-0.5 py-0.5 leading-none truncate"
+                                style={{ fontSize: '9px' }}
+                              >
+                                {formatTime(assignment.event.time, timeFormat)}
+                              </div>
                             ))}
+                            {dayAssignments.length > 2 && (
+                              <div style={{ fontSize: '9px' }} className="text-gray-500 leading-none">
+                                +{dayAssignments.length - 2}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
