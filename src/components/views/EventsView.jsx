@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -17,11 +17,12 @@ export default function EventsView({
   activeLocation = 'all'
 }) {
   const [statusFilter, setStatusFilter] = useState('active');
-  const [dateRangeFilter, setDateRangeFilter] = useState('next-30');
+  const [dateRangeFilter, setDateRangeFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [locations, setLocations] = useState([]);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Scope events by global location context first
   const scopedEvents = activeLocation === 'all'
@@ -172,15 +173,92 @@ export default function EventsView({
 
       {/* Filter Bar */}
       <div className="bg-white rounded-lg shadow p-4 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Status Filter */}
+
+        {/* Mobile: compact toggle row */}
+        <div className="flex items-center gap-2 md:hidden">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-3 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(f => !f)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors flex-shrink-0 ${
+              showFilters || statusFilter !== 'active' || dateRangeFilter !== 'all' || locationFilter !== 'all'
+                ? 'bg-red-900 text-white border-red-900'
+                : 'bg-white text-gray-700 border-gray-300'
+            }`}
+          >
+            <SlidersHorizontal size={15} />
+            Filters
+            {(statusFilter !== 'active' || dateRangeFilter !== 'all' || locationFilter !== 'all') && (
+              <span className="bg-white text-red-900 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {[statusFilter !== 'active', dateRangeFilter !== 'all', locationFilter !== 'all'].filter(Boolean).length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Mobile: expanded filters */}
+        {showFilters && (
+          <div className="grid grid-cols-2 gap-3 md:hidden">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                <option value="active">Active</option>
+                <option value="all">All</option>
+                <option value="needs-staff">Needs Staff</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
+              <select value={dateRangeFilter} onChange={(e) => setDateRangeFilter(e.target.value)}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                <option value="all">All Time</option>
+                <option value="next-30">Next 30 Days</option>
+                <option value="this-week">Next 7 Days</option>
+                <option value="this-month">This Month</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                <option value="date">Date ↑</option>
+                <option value="date-desc">Date ↓</option>
+                <option value="name">Name A-Z</option>
+                <option value="staffing">Staffing ↑</option>
+              </select>
+            </div>
+            {locations.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Market</label>
+                <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
+                  className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
+                  <option value="all">All Markets</option>
+                  {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Desktop: always-visible full filter grid */}
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
               <option value="active">Active Events</option>
               <option value="all">All Events</option>
               <option value="needs-staff">Needs Staff</option>
@@ -189,47 +267,32 @@ export default function EventsView({
               <option value="archived">Archived</option>
             </select>
           </div>
-
-          {/* Date Range Filter */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
-            <select
-              value={dateRangeFilter}
-              onChange={(e) => setDateRangeFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
+            <select value={dateRangeFilter} onChange={(e) => setDateRangeFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+              <option value="all">All Time</option>
               <option value="next-30">Next 30 Days</option>
               <option value="this-week">Next 7 Days</option>
               <option value="this-month">This Month</option>
-              <option value="all">All Time</option>
             </select>
           </div>
-
-          {/* Location Filter - only shows if multiple locations */}
           {locations.length > 1 ? (
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Market</label>
-              <select
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
+              <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
                 <option value="all">All Markets</option>
                 {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}{loc.city ? ` — ${loc.city}` : ''}
-                  </option>
+                  <option key={loc.id} value={loc.id}>{loc.name}{loc.city ? ` — ${loc.city}` : ''}</option>
                 ))}
               </select>
             </div>
           ) : (
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
                 <option value="date">Date (Earliest First)</option>
                 <option value="date-desc">Date (Latest First)</option>
                 <option value="name">Name (A-Z)</option>
@@ -238,30 +301,20 @@ export default function EventsView({
               </select>
             </div>
           )}
-
-          {/* Search */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
-            <input
-              type="text"
-              placeholder="Event name or venue..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
+            <input type="text" placeholder="Event name or venue..."
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" />
           </div>
         </div>
 
-        {/* Sort By row - only shows when location filter is visible */}
         {locations.length > 1 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
                 <option value="date">Date (Earliest First)</option>
                 <option value="date-desc">Date (Latest First)</option>
                 <option value="name">Name (A-Z)</option>
@@ -273,7 +326,7 @@ export default function EventsView({
         )}
 
         {/* Active Filters Summary */}
-        {(statusFilter !== 'active' || dateRangeFilter !== 'next-30' || searchTerm || locationFilter !== 'all') && (
+        {(statusFilter !== 'active' || dateRangeFilter !== 'all' || searchTerm || locationFilter !== 'all') && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-gray-600">Active filters:</span>
             {statusFilter !== 'active' && (
@@ -281,7 +334,7 @@ export default function EventsView({
                 Status: {statusFilter === 'all' ? 'All Events' : statusFilter}
               </span>
             )}
-            {dateRangeFilter !== 'next-30' && (
+            {dateRangeFilter !== 'all' && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
                 {dateRangeFilter === 'this-week' ? 'Next 7 Days' :
                  dateRangeFilter === 'this-month' ? 'This Month' : 'All Time'}
