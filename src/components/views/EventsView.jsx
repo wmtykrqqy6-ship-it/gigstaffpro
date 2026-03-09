@@ -174,9 +174,9 @@ export default function EventsView({
       {/* Filter Bar */}
       <div className="bg-white rounded-lg shadow p-4 space-y-4">
 
-        {/* Mobile: compact toggle row */}
-        <div className="flex items-center gap-2 md:hidden">
-          <div className="flex-1 relative">
+        {/* Search + Filters toggle row (all screen sizes) */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
             <input
               type="text"
               placeholder="Search events..."
@@ -203,15 +203,15 @@ export default function EventsView({
           </button>
         </div>
 
-        {/* Mobile: expanded filters */}
+        {/* Expanded filters (all screen sizes) */}
         {showFilters && (
-          <div className="grid grid-cols-2 gap-3 md:hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
-                <option value="active">Active</option>
-                <option value="all">All</option>
+                <option value="active">Active Events</option>
+                <option value="all">All Events</option>
                 <option value="needs-staff">Needs Staff</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
@@ -232,10 +232,11 @@ export default function EventsView({
               <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
                 className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
-                <option value="date">Date ↑</option>
-                <option value="date-desc">Date ↓</option>
-                <option value="name">Name A-Z</option>
-                <option value="staffing">Staffing ↑</option>
+                <option value="date">Date (Earliest First)</option>
+                <option value="date-desc">Date (Latest First)</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="staffing">Staffing (Low to High)</option>
+                <option value="staffing-desc">Staffing (High to Low)</option>
               </select>
             </div>
             {locations.length > 1 && (
@@ -245,83 +246,11 @@ export default function EventsView({
                   className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500">
                   <option value="all">All Markets</option>
                   {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    <option key={loc.id} value={loc.id}>{loc.name}{loc.city ? ` — ${loc.city}` : ''}</option>
                   ))}
                 </select>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Desktop: always-visible full filter grid */}
-        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-              <option value="active">Active Events</option>
-              <option value="all">All Events</option>
-              <option value="needs-staff">Needs Staff</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
-            <select value={dateRangeFilter} onChange={(e) => setDateRangeFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-              <option value="all">All Time</option>
-              <option value="next-30">Next 30 Days</option>
-              <option value="this-week">Next 7 Days</option>
-              <option value="this-month">This Month</option>
-            </select>
-          </div>
-          {locations.length > 1 ? (
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Market</label>
-              <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                <option value="all">All Markets</option>
-                {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>{loc.name}{loc.city ? ` — ${loc.city}` : ''}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                <option value="date">Date (Earliest First)</option>
-                <option value="date-desc">Date (Latest First)</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="staffing">Staffing (Low to High)</option>
-                <option value="staffing-desc">Staffing (High to Low)</option>
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
-            <input type="text" placeholder="Event name or venue..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" />
-          </div>
-        </div>
-
-        {locations.length > 1 && (
-          <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                <option value="date">Date (Earliest First)</option>
-                <option value="date-desc">Date (Latest First)</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="staffing">Staffing (Low to High)</option>
-                <option value="staffing-desc">Staffing (High to Low)</option>
-              </select>
-            </div>
           </div>
         )}
 
