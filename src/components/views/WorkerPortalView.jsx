@@ -638,12 +638,16 @@ export default function WorkerPortalView({
                             {dayAssignments.slice(0, 2).map((assignment, idx) => (
                               <div
                                 key={idx}
-                                className="text-white bg-blue-500 rounded truncate sm:text-xs"
+                                className="text-white bg-blue-500 rounded truncate block sm:hidden"
                                 style={{ fontSize: '9px', padding: '2px 3px', lineHeight: 1.2 }}
                               >
-                                {/* Mobile: time only. Desktop (sm+): time + event name */}
-                                <span className="sm:hidden">{formatTime(assignment.event.time, timeFormat)}</span>
-                                <span className="hidden sm:inline">{formatTime(assignment.event.time, timeFormat)} · {assignment.event.name}</span>
+                                {formatTime(assignment.event.time, timeFormat)}
+                              </div>
+                              <div
+                                key={`${idx}-desktop`}
+                                className="text-white bg-blue-500 rounded truncate text-xs px-1 py-0.5 leading-snug hidden sm:block"
+                              >
+                                {formatTime(assignment.event.time, timeFormat)} · {assignment.event.name}
                               </div>
                             ))}
                             {dayAssignments.length > 2 && (
