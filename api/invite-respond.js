@@ -4,7 +4,13 @@
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
-const PORTAL_URL = 'https://gigstaffpro.vercel.app';
+
+const headers = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  Prefer: 'return=minimal'
+};
 
 export default async function handler(req, res) {
   const { token, action } = req.query;
@@ -16,7 +22,7 @@ export default async function handler(req, res) {
   // Look up the invitation by token
   const getRes = await fetch(
     `${SUPABASE_URL}/rest/v1/invitations?token=eq.${token}&select=*`,
-    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    { headers }
   );
   const invites = await getRes.json();
 
@@ -27,7 +33,7 @@ export default async function handler(req, res) {
   const invite = invites[0];
 
   if (invite.status !== 'pending') {
-    const msg = invite.status === 'accepted'
+    const msg = invite.status === 'accepted' || invite.status === 'confirmed'
       ? 'You already accepted this invitation!'
       : invite.status === 'declined'
       ? 'You already declined this invitation.'
@@ -40,27 +46,58 @@ export default async function handler(req, res) {
   // Check expiry
   if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
     await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
-      method: 'PATCH',
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      method: 'PATCH', headers,
       body: JSON.stringify({ status: 'expired' })
     });
     return res.status(200).send(errorPage('Sorry, this invitation has expired. Contact your manager.'));
   }
 
-  // Update the invitation status
-  await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
-    method: 'PATCH',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ status: action, responded_at: new Date().toISOString() })
-  });
-
   if (action === 'accepted') {
+    // 1. Create the assignment immediately
+    await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        event_id: invite.event_id,
+        worker_id: invite.worker_id,
+        position: invite.position_key,
+        status: 'approved'
+      })
+    });
+
+    // 2. Mark invite as confirmed
+    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ status: 'confirmed', responded_at: new Date().toISOString() })
+    });
+
+    // 3. Expire any other pending invites for this same event+position slot if now full
+    // (best-effort, not critical)
+    const posRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${invite.event_id}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
+      { headers }
+    );
+    const others = await posRes.json();
+    if (others?.length > 0) {
+      const ids = others.map(i => i.id);
+      await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=in.(${ids.join(',')})`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ status: 'expired' })
+      });
+    }
+
     return res.status(200).send(successPage(
       '✅ Invitation Accepted!',
-      "You're confirmed. Log in to the staff portal to view your upcoming events.",
+      "You're confirmed for this event. Log in to the staff portal to view your upcoming schedule.",
       'accepted'
     ));
   } else {
+    // Declined
+    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ status: 'declined', responded_at: new Date().toISOString() })
+    });
+
     return res.status(200).send(successPage(
       'Invitation Declined',
       "We've noted your response. Log in to the staff portal to view other available events.",
