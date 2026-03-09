@@ -471,6 +471,16 @@ setPayRates(ratesMap);
         });
         setBonuses(bonusesMap);
       }
+
+      // Load travel tiers
+      const { data: tiersData, error: tiersError } = await supabase
+        .from('travel_tiers')
+        .select('*')
+        .order('min_miles', { ascending: true });
+
+      if (!tiersError && tiersData) {
+        setTravelTiers(tiersData);
+      }
     } catch (error) {
     }
   };
