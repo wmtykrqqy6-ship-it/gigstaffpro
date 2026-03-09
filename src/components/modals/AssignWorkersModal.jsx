@@ -602,7 +602,9 @@ export default function AssignWorkersModal({
                                                 .catch(err => alert('Error: ' + err.message));
                                             }
                                           }}
-                                          className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                          className={`px-3 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700 ${
+                                            posAssignments.filter(a => a.status !== 'standby').length >= needed ? 'hidden' : ''
+                                          }`}
                                           title="Promote to assigned"
                                         >
                                           Promote
