@@ -146,9 +146,22 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       expiresAt.setHours(expiresAt.getHours() + windowHours);
       const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-      const emailPromises = confirmSend.workerIds.map(workerId => {
+      const emailPromises = confirmSend.workerIds.map(async workerId => {
         const worker = workers.find(w => w.id === workerId);
         if (!worker?.email) return null;
+
+        // Fetch the token for this worker's invite
+        const { data: inviteRows } = await supabase
+          .from('invitations')
+          .select('token')
+          .eq('event_id', event.id)
+          .eq('worker_id', workerId)
+          .eq('status', 'pending')
+          .order('invited_at', { ascending: false })
+          .limit(1);
+        const token = inviteRows?.[0]?.token || '';
+        const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
+        const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
 
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
@@ -160,10 +173,11 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              <div style="text-align:center;margin:28px 0">
-                <a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">View Invitation →</a>
+              <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
+                <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
+                <a href="${declineUrl}" style="background:#e5e7eb;color:#374151;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
-              <p style="color:#9ca3af;font-size:12px;text-align:center">Log in to accept or decline this invitation.</p>
+              <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
             </div>
           </div>`;
 
@@ -205,6 +219,15 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       const worker = workers.find(w => w.id === inv.worker_id);
       if (worker?.email) {
         const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        // Fetch fresh token
+        const { data: inviteRows } = await supabase
+          .from('invitations')
+          .select('token')
+          .eq('id', inv.id)
+          .limit(1);
+        const token = inviteRows?.[0]?.token || '';
+        const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
+        const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -215,9 +238,11 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong>.</p>
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              <div style="text-align:center;margin:28px 0">
-                <a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">View Invitation →</a>
+              <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
+                <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
+                <a href="${declineUrl}" style="background:#e5e7eb;color:#374151;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
+              <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
             </div>
           </div>`;
         await fetch('/api/send-email', {
