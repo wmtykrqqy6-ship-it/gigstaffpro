@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
-export default function AddWorkerModal({
+export default function EditWorkerModal({
   open,
-  savingWorker,
+  worker,
   positions,
   onClose,
-  onSaveWorker
+  onSuccess
 }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -14,52 +15,67 @@ export default function AddWorkerModal({
     phone: '',
     skills: [],
     rank: 1,
-    reliability: 5.0,
-    total_gigs: 0
   });
+  const [saving, setSaving] = useState(false);
 
-  // Use positions from settings as available skills
+  useEffect(() => {
+    if (worker) {
+      setFormData({
+        name: worker.name || '',
+        email: worker.email || '',
+        phone: worker.phone || '',
+        skills: Array.isArray(worker.skills) ? worker.skills : [],
+        rank: worker.rank || 1,
+      });
+    }
+  }, [worker]);
+
   const skillOptions = positions || [];
+
+  const toggleSkill = (skillKey) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skillKey)
+        ? prev.skills.filter(s => s !== skillKey)
+        : [...prev.skills, skillKey]
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (formData.skills.length === 0) {
       alert('Please select at least one skill');
       return;
     }
+    setSaving(true);
+    const { error } = await supabase
+      .from('workers')
+      .update({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        skills: formData.skills,
+        rank: formData.rank,
+      })
+      .eq('id', worker.id);
 
-    const ok = await onSaveWorker(formData);
-    if (ok) {
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        skills: [],
-        rank: 1,
-        reliability: 5.0,
-        total_gigs: 0
-      });
+    setSaving(false);
+    if (error) {
+      alert('Error saving worker: ' + error.message);
+    } else {
+      if (onSuccess) onSuccess();
+      onClose();
     }
   };
 
-  const toggleSkill = (skill) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.includes(skill)
-        ? prev.skills.filter(s => s !== skill)
-        : [...prev.skills, skill]
-    }));
-  };
-
-  if (!open) return null;
+  if (!open || !worker) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">Add New Worker</h3>
+            <h3 className="text-2xl font-bold text-gray-900">Edit Worker</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X size={24} />
             </button>
@@ -79,10 +95,9 @@ export default function AddWorkerModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 type="email"
-                required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -109,7 +124,6 @@ export default function AddWorkerModal({
                   const skillKey = skill.key || skill;
                   const skillLabel = skill.label || skill;
                   const isSelected = formData.skills.includes(skillKey);
-
                   return (
                     <button
                       key={skillKey}
@@ -144,24 +158,23 @@ export default function AddWorkerModal({
             <div className="flex space-x-3 pt-4">
               <button
                 type="submit"
-                disabled={savingWorker}
+                disabled={saving}
                 className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
-                {savingWorker ? (
+                {saving ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                     <span>Saving...</span>
                   </>
                 ) : (
-                  <span>Add Worker</span>
+                  <span>Save Changes</span>
                 )}
               </button>
-
               <button
                 type="button"
                 onClick={onClose}
-                disabled={savingWorker}
-                className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={saving}
+                className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
