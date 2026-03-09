@@ -1,4 +1,4 @@
-ACimport React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
