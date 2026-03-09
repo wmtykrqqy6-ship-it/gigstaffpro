@@ -8,6 +8,7 @@ export default function StaffView({
   loading,
   error,
   workers,
+  assignments = [],
   onShowBulkInvite,
   onShowAddWorker,
   onSetPin,
@@ -142,6 +143,10 @@ export default function StaffView({
     return true;
   });
 
+  // Compute live gig counts from assignments (approved/confirmed only)
+  const getGigCount = (workerId) =>
+    assignments.filter(a => a.worker_id === workerId && ['approved', 'confirmed', 'assigned'].includes(a.status)).length;
+
   // Sort workers
   const sortedWorkers = [...filteredWorkers].sort((a, b) => {
     if (sortBy === 'name') {
@@ -149,7 +154,7 @@ export default function StaffView({
     } else if (sortBy === 'rating') {
       return (b.reliability || 0) - (a.reliability || 0);
     } else if (sortBy === 'gigs') {
-      return (b.total_gigs || 0) - (a.total_gigs || 0);
+      return getGigCount(b.id) - getGigCount(a.id);
     } else if (sortBy === 'rank') {
       return (a.rank || 999) - (b.rank || 999);
     }
@@ -433,7 +438,7 @@ export default function StaffView({
                       </div>
                     </div>
                     <div className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                      {worker.total_gigs || 0} gigs
+                      {getGigCount(worker.id)} gigs
                     </div>
                   </div>
                   

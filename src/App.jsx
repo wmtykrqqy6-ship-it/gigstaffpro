@@ -868,6 +868,7 @@ setAppPositions(storedPositions);
           loading={loading}
           error={error}
           workers={workers}
+          assignments={assignments}
           activeLocation={activeLocation}
           onShowBulkInvite={() => setShowBulkInvite(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
