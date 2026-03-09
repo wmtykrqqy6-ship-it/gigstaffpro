@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+ACimport React, { useState } from 'react';
 import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
@@ -638,10 +638,12 @@ export default function WorkerPortalView({
                             {dayAssignments.slice(0, 2).map((assignment, idx) => (
                               <div
                                 key={idx}
-                                className="text-white bg-blue-500 rounded px-0.5 py-0.5 leading-none truncate"
-                                style={{ fontSize: '9px' }}
+                                className="text-white bg-blue-500 rounded truncate sm:text-xs"
+                                style={{ fontSize: '9px', padding: '2px 3px', lineHeight: 1.2 }}
                               >
-                                {formatTime(assignment.event.time, timeFormat)}
+                                {/* Mobile: time only. Desktop (sm+): time + event name */}
+                                <span className="sm:hidden">{formatTime(assignment.event.time, timeFormat)}</span>
+                                <span className="hidden sm:inline">{formatTime(assignment.event.time, timeFormat)} · {assignment.event.name}</span>
                               </div>
                             ))}
                             {dayAssignments.length > 2 && (
