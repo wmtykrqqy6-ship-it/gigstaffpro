@@ -562,7 +562,7 @@ export default function WorkerPortalView({
               {/* Month Navigation */}
               <div className="flex items-center justify-between mb-4">
                 <button
-                  onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1))}
+                  onClick={() => { setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1)); setSelectedEventModal(null); }}
                   className="p-2 hover:bg-gray-100 rounded"
                 >
                   <ChevronDown size={20} className="transform rotate-90" />
@@ -571,7 +571,7 @@ export default function WorkerPortalView({
                   {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </h4>
                 <button
-                  onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1))}
+                  onClick={() => { setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1)); setSelectedEventModal(null); }}
                   className="p-2 hover:bg-gray-100 rounded"
                 >
                   <ChevronDown size={20} className="transform -rotate-90" />
@@ -580,8 +580,8 @@ export default function WorkerPortalView({
 
               {/* Calendar Grid */}
               <div className="grid grid-cols-7 gap-1">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
+                {['S','M','T','W','T','F','S'].map((day, i) => (
+                  <div key={i} className="text-center text-xs font-semibold text-gray-500 py-1">
                     {day}
                   </div>
                 ))}
@@ -596,69 +596,51 @@ export default function WorkerPortalView({
                   
                   const days = [];
                   
-                  // Empty cells before month starts
                   for (let i = 0; i < firstDay; i++) {
                     days.push(<div key={`empty-${i}`} className="aspect-square"></div>);
                   }
                   
-                  // Days of the month
                   for (let day = 1; day <= daysInMonth; day++) {
                     const currentDate = new Date(year, month, day);
                     currentDate.setHours(0, 0, 0, 0);
-                    // Format date as YYYY-MM-DD without timezone conversion
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     
                     const dayAssignments = workerAssignments
                       .filter(a => {
                         if (!a.event || !a.event.date) return false;
-                        
-                        // Normalize the event date to YYYY-MM-DD format
-                        // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
-                        const eventDateStr = a.event.date.split('T')[0];
-                        
-                        return eventDateStr === dateStr;
+                        return a.event.date.split('T')[0] === dateStr;
                       })
-                      .sort((a, b) => {
-                        // Sort by event start time (earliest first)
-                        const timeA = a.event.time || '00:00';
-                        const timeB = b.event.time || '00:00';
-                        return timeA.localeCompare(timeB);
-                      });
+                      .sort((a, b) => (a.event.time || '').localeCompare(b.event.time || ''));
                     
                     const isToday = currentDate.getTime() === today.getTime();
                     const isPast = currentDate < today;
+                    const hasEvents = dayAssignments.length > 0;
+                    const isSelected = selectedEventModal && selectedEventModal[0]?.event?.date?.split('T')[0] === dateStr;
                     
                     days.push(
                       <div
                         key={day}
                         onClick={() => {
-                          if (dayAssignments.length > 0) {
-                            setSelectedEventModal(dayAssignments);
+                          if (hasEvents) {
+                            setSelectedEventModal(isSelected ? null : dayAssignments);
                           }
                         }}
-                        className={`aspect-square border rounded-lg p-1 ${
-                          isToday ? 'border-red-500 border-2 bg-red-50' :
-                          isPast ? 'bg-gray-50' :
-                          'border-gray-200 hover:bg-gray-50'
-                        } ${dayAssignments.length > 0 ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} relative`}
+                        className={`aspect-square rounded-lg flex flex-col items-center justify-center relative
+                          ${isToday ? 'border-2 border-red-500 bg-red-50' : ''}
+                          ${isSelected ? 'bg-blue-100 border-2 border-blue-500' : ''}
+                          ${!isToday && !isSelected && isPast ? 'bg-gray-50' : ''}
+                          ${!isToday && !isSelected && !isPast ? 'border border-gray-200' : ''}
+                          ${hasEvents ? 'cursor-pointer' : ''}
+                        `}
                       >
-                        <div className="text-sm font-semibold text-gray-900">{day}</div>
-                        {dayAssignments.length > 0 && (
-                          <div className="mt-1 space-y-0.5">
-                            {dayAssignments.slice(0, 2).map((assignment, idx) => (
-                              <div
-                                key={idx}
-                                className="text-xs bg-blue-500 text-white px-1 py-0.5 rounded truncate"
-                                title={`${assignment.event.name} - ${getPositionLabel(assignment.position)}`}
-                              >
-                                {formatTime(assignment.event.time, timeFormat)} {assignment.position}
-                              </div>
+                        <span className={`text-sm font-semibold ${isToday ? 'text-red-600' : isPast ? 'text-gray-400' : 'text-gray-900'}`}>
+                          {day}
+                        </span>
+                        {hasEvents && (
+                          <div className="flex gap-0.5 mt-0.5">
+                            {dayAssignments.slice(0, 3).map((_, idx) => (
+                              <div key={idx} className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                             ))}
-                            {dayAssignments.length > 2 && (
-                              <div className="text-xs text-gray-600">
-                                +{dayAssignments.length - 2} more
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
@@ -669,15 +651,46 @@ export default function WorkerPortalView({
                 })()}
               </div>
 
-              {/* Legend */}
-              <div className="mt-4 flex items-center justify-center space-x-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-red-500 rounded"></div>
-                  <span className="text-gray-600">Today</span>
+              {/* Selected Day Detail Panel */}
+              {selectedEventModal && selectedEventModal.length > 0 && (
+                <div className="mt-3 border-t pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {parseDateSafe(selectedEventModal[0].event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </p>
+                  {selectedEventModal.map((assignment, idx) => (
+                    <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="font-bold text-gray-900 text-sm">{assignment.event.name}</p>
+                      <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-gray-600">
+                        {assignment.event.time && (
+                          <span className="flex items-center gap-1">
+                            <Clock size={11} />
+                            {formatTime(assignment.event.time, timeFormat)}{assignment.event.end_time ? ` – ${formatTime(assignment.event.end_time, timeFormat)}` : ''}
+                          </span>
+                        )}
+                        {assignment.event.venue && (
+                          <span className="flex items-center gap-1">
+                            <MapPin size={11} />
+                            {assignment.event.venue}
+                          </span>
+                        )}
+                      </div>
+                      <span className="inline-block mt-1.5 text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded font-medium">
+                        {getPositionLabel(assignment.position)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                  <span className="text-gray-600">Your Events</span>
+              )}
+
+              {/* Legend */}
+              <div className="mt-4 flex items-center justify-center space-x-4 text-xs">
+                <div className="flex items-center space-x-1.5">
+                  <div className="w-3.5 h-3.5 border-2 border-red-500 rounded"></div>
+                  <span className="text-gray-500">Today</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <span className="text-gray-500">Your Events</span>
                 </div>
               </div>
             </div>
