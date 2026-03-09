@@ -215,9 +215,15 @@ export default function WorkerPortalView({
           .eq('worker_id', currentWorker.id)
           .eq('status', 'pending')
           .order('invited_at', { ascending: false });
-        setPendingInvites(data || []);
+        setPendingInvites((data || []).filter(i => !i.expires_at || new Date(i.expires_at) > new Date()));
       };
       loadPendingInvites();
+
+      // Check every 30 seconds and remove any that have since expired
+      const timer = setInterval(() => {
+        setPendingInvites(prev => prev.filter(i => !i.expires_at || new Date(i.expires_at) > new Date()));
+      }, 30000);
+      return () => clearInterval(timer);
     }, [currentWorker?.id]);
 
     const handleInviteResponse = async (invitation, response) => {
