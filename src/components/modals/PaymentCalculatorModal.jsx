@@ -53,6 +53,12 @@ export default function PaymentCalculatorModal({
     return null;
   }
 
+  // Detect Lake Geneva zip code (53147) from event address
+  const isLakeGenevaZip = (address) => {
+    if (!address) return false;
+    return /\b53147\b/.test(address);
+  };
+
   useEffect(() => {
     if (assignmentData) {
       // Check if event has payment settings configured
@@ -65,7 +71,8 @@ export default function PaymentCalculatorModal({
       } else {
         setHours(assignmentData.defaultHours || 0);
         setMiles(0);
-        setIsLakeGeneva(false);
+        // Auto-detect Lake Geneva from event address zip code
+        setIsLakeGeneva(isLakeGenevaZip(selectedEvent?.address));
         setIsHoliday(false);
       }
     }
@@ -301,6 +308,9 @@ export default function PaymentCalculatorModal({
                 />
                 <label htmlFor="lakeGeneva" className="text-sm font-medium text-gray-700 cursor-pointer">
                   Lake Geneva Event (+$15)
+                  {isLakeGenevaZip(selectedEvent?.address) && (
+                    <span className="ml-2 text-xs text-green-600 font-normal">✓ Auto-detected (zip 53147)</span>
+                  )}
                 </label>
               </div>
 
