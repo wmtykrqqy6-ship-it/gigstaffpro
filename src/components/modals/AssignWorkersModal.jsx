@@ -4,6 +4,11 @@ import { supabase } from '../../supabaseClient';
 import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 
+const isLakeGenevaZip = (address) => {
+  if (!address) return false;
+  return /\b53147\b/.test(address);
+};
+
 export default function AssignWorkersModal({
   open,
   event,
@@ -12,6 +17,7 @@ export default function AssignWorkersModal({
   assignments,
   positions,
   eventPaymentSettings,
+  warehouseAddress,
   onClose,
   onAssign,
   onUnassign,
@@ -25,6 +31,8 @@ export default function AssignWorkersModal({
   const [eventMiles, setEventMiles] = useState(0);
   const [eventIsLakeGeneva, setEventIsLakeGeneva] = useState(false);
   const [eventIsHoliday, setEventIsHoliday] = useState(false);
+  const [milesAutoFilled, setMilesAutoFilled] = useState(false);
+  const [milesLoading, setMilesLoading] = useState(false);
   const [expandedPositions, setExpandedPositions] = useState({});
   const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
   const [savingHost, setSavingHost] = useState(false);
@@ -79,8 +87,26 @@ export default function AssignWorkersModal({
       
       setEventHours(defaultHours);
       setEventMiles(0);
-      setEventIsLakeGeneva(false);
+      setMilesAutoFilled(false);
+
+      // Auto-detect Lake Geneva (zip 53147)
+      setEventIsLakeGeneva(isLakeGenevaZip(event.address));
       setEventIsHoliday(false);
+
+      // Auto-fetch miles from warehouse to event
+      if (event.address && warehouseAddress) {
+        setMilesLoading(true);
+        fetch(`/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(event.address)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.miles != null) {
+              setEventMiles(data.miles);
+              setMilesAutoFilled(true);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setMilesLoading(false));
+      }
     } else if (event && eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
@@ -88,8 +114,10 @@ export default function AssignWorkersModal({
       setEventMiles(settings.miles);
       setEventIsLakeGeneva(settings.isLakeGeneva);
       setEventIsHoliday(settings.isHoliday);
+      setMilesAutoFilled(false);
+      setMilesLoading(false);
     }
-  }, [event, eventPaymentSettings]);
+  }, [event, eventPaymentSettings, warehouseAddress]);
 
   // Early return AFTER all hooks
   if (!open || !event) return null;
@@ -316,12 +344,16 @@ export default function AssignWorkersModal({
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Miles *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Miles *{' '}
+                        {milesLoading && <span className="text-xs text-gray-400 font-normal">⟳ Calculating...</span>}
+                        {!milesLoading && milesAutoFilled && <span className="text-xs text-green-600 font-normal">✓ Auto-filled</span>}
+                      </label>
                       <input
                         type="number"
                         min="0"
                         value={eventMiles}
-                        onChange={(e) => setEventMiles(parseInt(e.target.value, 10) || 0)}
+                        onChange={(e) => { setEventMiles(parseInt(e.target.value, 10) || 0); setMilesAutoFilled(false); }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                       />
                     </div>
@@ -334,7 +366,12 @@ export default function AssignWorkersModal({
                         onChange={(e) => setEventIsLakeGeneva(e.target.checked)}
                         className="rounded border-gray-300 text-green-700 focus:ring-green-500"
                       />
-                      <span className="text-sm font-medium text-gray-700">Lake Geneva (+$15)</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Lake Geneva (+$15){' '}
+                        {eventIsLakeGeneva && isLakeGenevaZip(event?.address) && (
+                          <span className="text-xs text-green-600 font-normal">✓ Auto-detected (zip 53147)</span>
+                        )}
+                      </span>
                     </label>
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input

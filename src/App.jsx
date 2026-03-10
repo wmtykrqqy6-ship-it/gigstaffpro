@@ -1138,6 +1138,7 @@ setAppPositions(storedPositions);
         assignments={assignments}
         positions={positions}
         eventPaymentSettings={eventPaymentSettings}
+        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowAssignModal(false);
           setSelectedEvent(null);
