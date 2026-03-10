@@ -12,6 +12,7 @@ export default function PaymentCalculatorModal({
   payRates,
   calculatePay,
   getPayRateKey,
+  warehouseAddress,
   onClose,
   onSuccess
 }) {
@@ -20,6 +21,7 @@ export default function PaymentCalculatorModal({
   const [isLakeGeneva, setIsLakeGeneva] = useState(false);
   const [isHoliday, setIsHoliday] = useState(false);
   const [calculation, setCalculation] = useState(null);
+  const [fetchingMiles, setFetchingMiles] = useState(false);
 
   // Don't show payment modal if payment tracking is disabled
   if (!paymentTrackingEnabled) {
@@ -68,6 +70,35 @@ export default function PaymentCalculatorModal({
       }
     }
   }, [assignmentData, eventPaymentSettings, selectedEvent]);
+
+  // Auto-fetch miles from warehouse to event address
+  useEffect(() => {
+    if (!open || !assignmentData || !selectedEvent) return;
+    // If event already has payment settings with miles set, skip auto-fetch
+    if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
+    // Need both a warehouse address and an event address
+    const eventAddress = selectedEvent.address;
+    if (!eventAddress || !warehouseAddress) return;
+
+    const fetchMiles = async () => {
+      setFetchingMiles(true);
+      try {
+        const res = await fetch(
+          `/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(eventAddress)}`
+        );
+        const data = await res.json();
+        if (data.miles !== undefined) {
+          setMiles(data.miles);
+        }
+      } catch (err) {
+        // Silently fail — admin can fill in manually
+      } finally {
+        setFetchingMiles(false);
+      }
+    };
+
+    fetchMiles();
+  }, [open, assignmentData, selectedEvent, warehouseAddress]);
 
   useEffect(() => {
     if (assignmentData && hours > 0) {
@@ -240,14 +271,24 @@ export default function PaymentCalculatorModal({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Miles from Warehouse *
+                  {fetchingMiles && (
+                    <span className="ml-2 text-xs text-blue-500 font-normal">⟳ Calculating...</span>
+                  )}
+                  {!fetchingMiles && miles > 0 && selectedEvent?.address && (
+                    <span className="ml-2 text-xs text-green-600 font-normal">✓ Auto-filled</span>
+                  )}
                 </label>
                 <input
                   type="number"
                   min="0"
                   value={miles}
+                  disabled={fetchingMiles}
                   onChange={(e) => setMiles(parseInt(e.target.value, 10) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                 />
+                {!selectedEvent?.address && (
+                  <p className="text-xs text-gray-400 mt-1">No address on event — enter miles manually</p>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">

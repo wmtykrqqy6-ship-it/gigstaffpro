@@ -52,6 +52,7 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
+  const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddWorker, setShowAddWorker] = useState(false);
@@ -605,8 +606,8 @@ setAppPositions(storedPositions);
         .eq('setting_key', 'warehouse_address')
         .single();
       
-      if (!warehouseError && warehouseData) {
-        // Warehouse address loaded, stored in settings
+      if (!warehouseError && warehouseData?.setting_value) {
+        setWarehouseAddress(warehouseData.setting_value);
       }
     } catch (error) {
       const defaultPositions = ['Dealer', 'Poker Dealer', 'Blackjack Dealer', 'Roulette Dealer', 'Craps Dealer', 'Host', 'Bartender'].sort();
@@ -1186,6 +1187,7 @@ setAppPositions(storedPositions);
         payRates={payRates}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}
+        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowPaymentModal(false);
           setAssignmentPaymentData(null);
