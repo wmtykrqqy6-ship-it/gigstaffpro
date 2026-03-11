@@ -305,9 +305,9 @@ export default function WorkerPortalView({  loggedInWorker,
                 const eventDate = parseDateSafe(invEvent.date);
 
                 // How many spots remain for this position on this event
-                const totalForPos = (invEvent.positions || []).find(p => p.position === inv.position)?.count || 0;
+                const totalForPos = (invEvent.positions || []).find(p => p.position === inv.position_key || p.key === inv.position_key)?.count || 0;
                 const confirmedForPos = (assignments || []).filter(a =>
-                  a.event_id === inv.event_id && a.position === inv.position && a.status !== 'standby'
+                  a.event_id === inv.event_id && a.position === inv.position_key && a.status !== 'standby'
                 ).length;
                 const spotsLeft = Math.max(0, totalForPos - confirmedForPos);
 
@@ -344,7 +344,7 @@ export default function WorkerPortalView({  loggedInWorker,
                         </div>
                         <div className="flex items-center space-x-3 mt-2">
                           <span className="text-xs font-semibold text-white bg-gray-700 px-2 py-0.5 rounded-full">
-                            {getPositionLabel(inv.position)}
+                            {getPositionLabel(inv.position_key)}
                           </span>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                             spotsLeft <= 1 ? 'bg-red-100 text-red-700' :
@@ -364,8 +364,8 @@ export default function WorkerPortalView({  loggedInWorker,
                         {/* Pay estimate */}
                         {paymentTrackingEnabled && eventPaymentSettings[inv.event_id] && (() => {
                           const s = eventPaymentSettings[inv.event_id];
-                          const rateKey = getPayRateKey(inv.position);
-                          const hourlyRate = payRates[rateKey] || payRates[inv.position] || 0;
+                          const rateKey = getPayRateKey(inv.position_key);
+                          const hourlyRate = payRates[rateKey] || payRates[inv.position_key] || 0;
                           if (!hourlyRate || !s.hours) return null;
                           const basePay = s.hours * hourlyRate;
                           let travelPay = 0;
