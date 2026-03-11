@@ -378,16 +378,15 @@ const handleSaveWorker = async (formData) => {
     setEventPaymentSettings(prev => ({ ...prev, [eventId]: settings }));
 
     // Persist to DB
-    console.log('💾 Saving payment settings for event:', eventId, settings);
-    const { data: upsertData, error: upsertError } = await supabase.from('event_payment_settings').upsert({
+    const { error: upsertError } = await supabase.from('event_payment_settings').upsert({
       event_id: eventId,
       hours: settings.hours || null,
       miles: settings.miles || null,
       is_lake_geneva: settings.isLakeGeneva || false,
       is_holiday: settings.isHoliday || false,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'event_id' }).select();
-    console.log('💾 Upsert result — data:', upsertData, 'error:', upsertError);
+    }, { onConflict: 'event_id' });
+    if (upsertError) console.error('Failed to persist payment settings:', upsertError);
   };
 
   const loadPendingReportsCount = async () => {
@@ -499,20 +498,17 @@ setPayRates(ratesMap);
         .select('*');
 
       if (epsError) { console.error('Failed to load payment settings:', epsError); }
-      else {
-        console.log('📦 Loaded event_payment_settings rows:', epsData);
-        if (epsData && epsData.length > 0) {
-          const epsMap = {};
-          epsData.forEach(row => {
-            epsMap[row.event_id] = {
-              hours: row.hours,
-              miles: row.miles,
-              isLakeGeneva: row.is_lake_geneva,
-              isHoliday: row.is_holiday
-            };
-          });
-          setEventPaymentSettings(epsMap);
-        }
+      else if (epsData && epsData.length > 0) {
+        const epsMap = {};
+        epsData.forEach(row => {
+          epsMap[row.event_id] = {
+            hours: row.hours,
+            miles: row.miles,
+            isLakeGeneva: row.is_lake_geneva,
+            isHoliday: row.is_holiday
+          };
+        });
+        setEventPaymentSettings(epsMap);
       }
     } catch (error) {
       console.error('loadPaymentConfig error:', error);
@@ -795,7 +791,72 @@ setAppPositions(storedPositions);
       }
       
       setEvents(migratedEvents);
+
+      // Auto-create payment settings for events that don't have them yet
+      autoCreatePaymentSettings(migratedEvents);
     } catch (error) {
+    }
+  };
+
+  const autoCreatePaymentSettings = async (eventsToCheck) => {
+    try {
+      // Get current warehouse address from state or default
+      const warehouse = warehouseAddress || '535 S 93rd St, Milwaukee, WI 53214';
+
+      // Load existing payment settings to know which events already have them
+      const { data: existing } = await supabase.from('event_payment_settings').select('event_id');
+      const existingIds = new Set((existing || []).map(r => r.event_id));
+
+      // Only process future/confirmed events without settings
+      const needsSettings = (eventsToCheck || []).filter(e =>
+        !existingIds.has(e.id) &&
+        e.status !== 'archived' &&
+        e.address
+      );
+
+      if (needsSettings.length === 0) return;
+
+      // Process each event — fetch distance, calculate hours, detect Lake Geneva
+      const isLakeGenevaZip = (address) => address && address.includes('53147');
+
+      const parseHours = (time, end_time) => {
+        if (!time || !end_time) return 4;
+        const [sh, sm] = time.split(':').map(Number);
+        const [eh, em] = end_time.split(':').map(Number);
+        let hours = (eh + em / 60) - (sh + sm / 60);
+        if (hours < 0) hours += 24;
+        return Math.round(hours * 10) / 10;
+      };
+
+      for (const event of needsSettings) {
+        let miles = 0;
+        try {
+          const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(warehouse)}&destination=${encodeURIComponent(event.address)}`);
+          const data = await res.json();
+          if (data.miles != null) miles = data.miles;
+        } catch (_) {}
+
+        const hours = parseHours(event.time, event.end_time);
+        const isLakeGeneva = isLakeGenevaZip(event.address);
+
+        const { error } = await supabase.from('event_payment_settings').upsert({
+          event_id: event.id,
+          hours,
+          miles,
+          is_lake_geneva: isLakeGeneva,
+          is_holiday: false,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'event_id' });
+
+        if (!error) {
+          setEventPaymentSettings(prev => ({
+            ...prev,
+            [event.id]: { hours, miles, isLakeGeneva, isHoliday: false }
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('autoCreatePaymentSettings error:', err);
     }
   };
 
