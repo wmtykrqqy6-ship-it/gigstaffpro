@@ -4,6 +4,22 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 
+const getPayRateKey = (position) => {
+  const p = String(position || '').toLowerCase().trim();
+  if (p.includes('blackjack')) return 'blackjack_dealer';
+  if (p.includes('roulette')) return 'roulette_dealer';
+  if (p.includes('poker')) return 'poker_dealer';
+  if (p.includes('craps')) return 'craps_dealer';
+  if (p.includes('baccarat')) return 'baccarat_dealer';
+  if (p.includes('event lead')) return 'event_lead';
+  if (p === 'dealer') return 'dealer';
+  if (p.includes('host')) return 'host';
+  if (p.includes('bartender')) return 'bartender';
+  if (p.includes('server')) return 'server';
+  if (p.includes('cashier')) return 'cashier';
+  return p.replace(/\s+/g, '_');
+};
+
 export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, onClose, onReloadAssignments }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -52,8 +68,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     if (!hours) return null;
 
     // Find hourly rate — try label and key variants
-    const rateKey = positionLabel.toLowerCase().replace(/\s+/g, '_');
-    const hourlyRate = payRates[positionLabel] || payRates[rateKey] || 0;
+    const rateKey = getPayRateKey(positionLabel);
+    const hourlyRate = payRates[rateKey] || payRates[positionLabel] || 0;
     if (!hourlyRate) return null;
 
     const basePay = hours * hourlyRate;

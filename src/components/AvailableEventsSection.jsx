@@ -4,6 +4,22 @@ import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 
+const getPayRateKey = (position) => {
+  const p = String(position || '').toLowerCase().trim();
+  if (p.includes('blackjack')) return 'blackjack_dealer';
+  if (p.includes('roulette')) return 'roulette_dealer';
+  if (p.includes('poker')) return 'poker_dealer';
+  if (p.includes('craps')) return 'craps_dealer';
+  if (p.includes('baccarat')) return 'baccarat_dealer';
+  if (p.includes('event lead')) return 'event_lead';
+  if (p === 'dealer') return 'dealer';
+  if (p.includes('host')) return 'host';
+  if (p.includes('bartender')) return 'bartender';
+  if (p.includes('server')) return 'server';
+  if (p.includes('cashier')) return 'cashier';
+  return p.replace(/\s+/g, '_');
+};
+
 const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
     const [eventDistances, setEventDistances] = useState({}); // { eventId: miles | 'loading' | 'error' }
@@ -516,8 +532,8 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                     if (!hours) return null;
 
                     const payLines = matchingPositions.map(position => {
-                      const rateKey = position.toLowerCase().replace(/\s+/g, '_');
-                      const hourlyRate = payRates[position] || payRates[rateKey] || 0;
+                      const rateKey = getPayRateKey(position);
+                      const hourlyRate = payRates[rateKey] || payRates[position] || 0;
                       if (!hourlyRate) return null;
 
                       const basePay = hours * hourlyRate;
