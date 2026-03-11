@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, CheckCircle, Trash2 } from 'lucide-react';
+import { X, Search, CheckCircle, Trash2, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
@@ -33,6 +33,10 @@ export default function AssignWorkersModal({
   const [eventIsHoliday, setEventIsHoliday] = useState(false);
   const [milesAutoFilled, setMilesAutoFilled] = useState(false);
   const [milesLoading, setMilesLoading] = useState(false);
+  const [workerDistances, setWorkerDistances] = useState({}); // { workerId: miles }
+  const [distancesLoading, setDistancesLoading] = useState(false);
+  const [sortByDistance, setSortByDistance] = useState(false);
+  const [maxMiles, setMaxMiles] = useState('');
   const [expandedPositions, setExpandedPositions] = useState({});
   const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
   const [savingHost, setSavingHost] = useState(false);
@@ -66,12 +70,11 @@ export default function AssignWorkersModal({
     }));
   };
 
-  // Initialize event payment settings (hours, Lake Geneva, saved settings)
-  // Does NOT handle miles — that's handled separately below
+  // Initialize event payment settings from event or calculate defaults
   useEffect(() => {
     if (!event) return;
     setSelectedHostId(event.host_worker_id || '');
-
+    
     if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
       let defaultHours = 4;
@@ -85,12 +88,30 @@ export default function AssignWorkersModal({
         defaultHours = endHours - startHours;
         if (defaultHours < 0) defaultHours += 24;
       }
+      
       setEventHours(defaultHours);
       setEventMiles(0);
       setMilesAutoFilled(false);
+
+      // Auto-detect Lake Geneva (zip 53147)
       setEventIsLakeGeneva(isLakeGenevaZip(event.address));
       setEventIsHoliday(false);
-    } else {
+
+      // Auto-fetch miles from warehouse to event
+      if (event.address && warehouseAddress) {
+        setMilesLoading(true);
+        fetch(`/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(event.address)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.miles != null) {
+              setEventMiles(data.miles);
+              setMilesAutoFilled(true);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setMilesLoading(false));
+      }
+    } else if (event && eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
       setEventHours(settings.hours);
@@ -100,27 +121,7 @@ export default function AssignWorkersModal({
       setMilesAutoFilled(false);
       setMilesLoading(false);
     }
-  }, [event, eventPaymentSettings]);
-
-  // Separate effect: auto-fetch miles when warehouse becomes available
-  // Runs whenever warehouseAddress arrives (may be delayed by async load)
-  useEffect(() => {
-    if (!event?.address || !warehouseAddress) return;
-    if (eventPaymentSettings[event.id]) return; // already saved — don't overwrite
-    if (milesAutoFilled) return; // already fetched this session
-
-    setMilesLoading(true);
-    fetch(`/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(event.address)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.miles != null) {
-          setEventMiles(data.miles);
-          setMilesAutoFilled(true);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setMilesLoading(false));
-  }, [warehouseAddress, event]);
+  }, [event, eventPaymentSettings, warehouseAddress]);
 
   // Early return AFTER all hooks
   if (!open || !event) return null;
@@ -408,25 +409,48 @@ export default function AssignWorkersModal({
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
                 {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
+                  <button onClick={() => setSearchTerm('')} className="text-gray-400 hover:text-gray-600">
                     <X size={20} />
                   </button>
                 )}
               </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="showOnlyAvailable"
-                  checked={showOnlyAvailable}
-                  onChange={(e) => setShowOnlyAvailable(e.target.checked)}
-                  className="rounded border-gray-300 text-red-900 focus:ring-red-500"
-                />
-                <label htmlFor="showOnlyAvailable" className="text-sm text-gray-700 cursor-pointer">
-                  Show only unassigned workers
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="showOnlyAvailable"
+                    checked={showOnlyAvailable}
+                    onChange={(e) => setShowOnlyAvailable(e.target.checked)}
+                    className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-gray-700">Show only unassigned workers</span>
                 </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sortByDistance}
+                    onChange={(e) => setSortByDistance(e.target.checked)}
+                    className="rounded border-gray-300 text-red-900 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-gray-700 flex items-center space-x-1">
+                    <Navigation size={14} className="text-gray-500" />
+                    <span>Sort by proximity</span>
+                    {distancesLoading && <span className="text-xs text-gray-400 ml-1">loading...</span>}
+                  </span>
+                </label>
+                {sortByDistance && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">Max miles:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Any"
+                      value={maxMiles}
+                      onChange={(e) => setMaxMiles(e.target.value)}
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -446,18 +470,26 @@ export default function AssignWorkersModal({
                   .filter(worker => {
                     if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                     if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
-                    
+
+                    // Max miles filter
+                    if (sortByDistance && maxMiles !== '') {
+                      const dist = workerDistances[worker.id];
+                      if (dist != null && dist > parseInt(maxMiles, 10)) return false;
+                    }
+
                     // Use position key matching
                     const workerSkillKeys = Array.isArray(worker.skills) ? worker.skills : [];
                     const posKey = pos.key || getPositionKey(pos.name || pos);
-                    
-                    // Check if any worker skill matches this position
                     return workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
                   })
                   .sort((a, b) => {
-                    // Sort by rank first (lower is better)
+                    if (sortByDistance) {
+                      const distA = workerDistances[a.id] ?? Infinity;
+                      const distB = workerDistances[b.id] ?? Infinity;
+                      if (distA !== distB) return distA - distB;
+                    }
+                    // Default: rank first (lower is better), then reliability
                     if (a.rank !== b.rank) return a.rank - b.rank;
-                    // Then by reliability (higher is better)
                     return b.reliability - a.reliability;
                   });
 
@@ -742,6 +774,12 @@ export default function AssignWorkersModal({
                                       <span className="text-xs text-gray-600 flex items-center">
                                         ⭐ {worker.reliability.toFixed(1)}
                                       </span>
+                                      {workerDistances[worker.id] != null && (
+                                        <span className="text-xs text-gray-500 flex items-center space-x-0.5">
+                                          <Navigation size={11} className="text-gray-400" />
+                                          <span>{workerDistances[worker.id]} mi</span>
+                                        </span>
+                                      )}
                                       {hasTimeConflict && (
                                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
                                           TIME CONFLICT

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
@@ -8,6 +8,8 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [reliabilityLog, setReliabilityLog] = useState([]);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [loadingLog, setLoadingLog] = useState(false);
   const [editData, setEditData] = useState({
     email: worker?.email || '',
@@ -57,6 +59,180 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
     eventDate.setHours(0, 0, 0, 0);
     return eventDate < today;
   }).length;
+
+  const loadJsPDF = () => new Promise((resolve, reject) => {
+    if (window.jspdf) { resolve(window.jspdf.jsPDF); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => resolve(window.jspdf.jsPDF);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  const generateMileageReport = async () => {
+    if (!worker.address) {
+      alert('This worker has no home address saved. Please add their address first.');
+      return;
+    }
+    setGeneratingReport(true);
+    try {
+      const jsPDF = await loadJsPDF();
+
+      // Get approved assignments for the selected year
+      const yearAssignments = assignments.filter(a => {
+        if (a.worker_id !== worker.id) return false;
+        if (a.status !== 'approved' && a.status !== 'assigned') return false;
+        const ev = events.find(e => e.id === a.event_id);
+        if (!ev) return false;
+        return new Date(ev.date).getFullYear() === reportYear;
+      });
+
+      if (yearAssignments.length === 0) {
+        alert(`No approved assignments found for ${worker.name} in ${reportYear}.`);
+        setGeneratingReport(false);
+        return;
+      }
+
+      // Fetch distances for all events with addresses
+      const eventsForAssignments = yearAssignments
+        .map(a => events.find(e => e.id === a.event_id))
+        .filter(Boolean);
+
+      const distanceMap = {};
+      await Promise.all(
+        eventsForAssignments
+          .filter(ev => ev.address)
+          .map(ev =>
+            fetch(`/api/get-distance?origin=${encodeURIComponent(worker.address)}&destination=${encodeURIComponent(ev.address)}`)
+              .then(r => r.json())
+              .then(d => { if (d.miles != null) distanceMap[ev.id] = d.miles; })
+              .catch(() => {})
+          )
+      );
+
+      // Build PDF
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let y = 20;
+
+      // Header
+      doc.setFillColor(127, 0, 0);
+      doc.rect(0, 0, pageW, 36, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Vegas on Wheels', margin, 14);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Mileage Report — ${reportYear}`, margin, 24);
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, margin, 31);
+      y = 48;
+
+      // Worker info block
+      doc.setTextColor(30, 30, 30);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Worker Information', margin, y);
+      y += 7;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Name: ${worker.name}`, margin, y); y += 6;
+      doc.text(`Home Address: ${worker.address}`, margin, y); y += 6;
+      if (worker.email) { doc.text(`Email: ${worker.email}`, margin, y); y += 6; }
+      y += 4;
+
+      // Divider
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, y, pageW - margin, y);
+      y += 8;
+
+      // Table header
+      doc.setFillColor(245, 245, 245);
+      doc.rect(margin, y - 4, pageW - margin * 2, 10, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 30, 30);
+      const col = { date: margin, event: margin + 25, address: margin + 80, miles: pageW - margin - 16 };
+      doc.text('Date', col.date, y + 2);
+      doc.text('Event', col.event, y + 2);
+      doc.text('Address', col.address, y + 2);
+      doc.text('Miles', col.miles, y + 2);
+      y += 12;
+
+      let totalMiles = 0;
+      let rowCount = 0;
+
+      // Sort by date
+      const sortedAssignments = [...yearAssignments].sort((a, b) => {
+        const ea = events.find(e => e.id === a.event_id);
+        const eb = events.find(e => e.id === b.event_id);
+        return new Date(ea?.date || 0) - new Date(eb?.date || 0);
+      });
+
+      for (const assignment of sortedAssignments) {
+        const ev = events.find(e => e.id === assignment.event_id);
+        if (!ev) continue;
+
+        // New page if needed
+        if (y > 260) {
+          doc.addPage();
+          y = 20;
+        }
+
+        const miles = distanceMap[ev.id];
+        if (miles != null) totalMiles += miles;
+
+        const dateStr = new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const eventName = (ev.name || '').substring(0, 28);
+        const addr = (ev.address || 'N/A').substring(0, 35);
+        const milesStr = miles != null ? `${miles} mi` : 'N/A';
+
+        if (rowCount % 2 === 0) {
+          doc.setFillColor(252, 252, 252);
+          doc.rect(margin, y - 4, pageW - margin * 2, 8, 'F');
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        doc.text(dateStr, col.date, y);
+        doc.text(eventName, col.event, y);
+        doc.setTextColor(100, 100, 100);
+        doc.text(addr, col.address, y);
+        doc.setTextColor(40, 40, 40);
+        doc.text(milesStr, col.miles, y);
+        y += 9;
+        rowCount++;
+      }
+
+      // Total row
+      y += 2;
+      doc.setDrawColor(127, 0, 0);
+      doc.line(margin, y, pageW - margin, y);
+      y += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(30, 30, 30);
+      doc.text(`Total Events: ${rowCount}`, margin, y);
+      doc.setTextColor(127, 0, 0);
+      doc.text(`Total Miles: ${totalMiles} mi`, col.miles - 30, y);
+      y += 10;
+
+      // Footer note
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(150, 150, 150);
+      doc.text('Distances calculated from worker home address to event address. For tax purposes only.', margin, y);
+
+      doc.save(`mileage-report-${worker.name.replace(/\s+/g, '-').toLowerCase()}-${reportYear}.pdf`);
+    } catch (err) {
+      alert('Error generating report: ' + err.message);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
 
   const handlePhotoUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -405,6 +581,53 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           </div>
         </div>
       </div>
+      {/* Annual Mileage Report */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Annual Mileage Report</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Per-event mileage from home address for tax purposes</p>
+          </div>
+          <FileDown size={22} className="text-gray-400" />
+        </div>
+
+        {!worker.address ? (
+          <div className="flex items-start space-x-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <Navigation size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Home address required</p>
+              <p className="text-xs text-amber-600 mt-0.5">Add a home address to this worker's profile to generate mileage reports.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <select
+                value={reportYear}
+                onChange={(e) => setReportYear(parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+              >
+                {[0,1,2].map(offset => {
+                  const yr = new Date().getFullYear() - offset;
+                  return <option key={yr} value={yr}>{yr}</option>;
+                })}
+              </select>
+            </div>
+            <div className="pt-5">
+              <button
+                onClick={generateMileageReport}
+                disabled={generatingReport}
+                className="flex items-center space-x-2 bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-400 text-sm font-medium"
+              >
+                <FileDown size={16} />
+                <span>{generatingReport ? 'Generating...' : `Download ${reportYear} PDF`}</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Reliability History */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
