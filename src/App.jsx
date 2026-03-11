@@ -378,15 +378,16 @@ const handleSaveWorker = async (formData) => {
     setEventPaymentSettings(prev => ({ ...prev, [eventId]: settings }));
 
     // Persist to DB
-    const { error: upsertError } = await supabase.from('event_payment_settings').upsert({
+    console.log('💾 Saving payment settings for event:', eventId, settings);
+    const { data: upsertData, error: upsertError } = await supabase.from('event_payment_settings').upsert({
       event_id: eventId,
       hours: settings.hours || null,
       miles: settings.miles || null,
       is_lake_geneva: settings.isLakeGeneva || false,
       is_holiday: settings.isHoliday || false,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'event_id' });
-    if (upsertError) console.error('Failed to persist payment settings:', upsertError);
+    }, { onConflict: 'event_id' }).select();
+    console.log('💾 Upsert result — data:', upsertData, 'error:', upsertError);
   };
 
   const loadPendingReportsCount = async () => {
@@ -498,19 +499,23 @@ setPayRates(ratesMap);
         .select('*');
 
       if (epsError) { console.error('Failed to load payment settings:', epsError); }
-      else if (epsData && epsData.length > 0) {
-        const epsMap = {};
-        epsData.forEach(row => {
-          epsMap[row.event_id] = {
-            hours: row.hours,
-            miles: row.miles,
-            isLakeGeneva: row.is_lake_geneva,
-            isHoliday: row.is_holiday
-          };
-        });
-        setEventPaymentSettings(epsMap);
+      else {
+        console.log('📦 Loaded event_payment_settings rows:', epsData);
+        if (epsData && epsData.length > 0) {
+          const epsMap = {};
+          epsData.forEach(row => {
+            epsMap[row.event_id] = {
+              hours: row.hours,
+              miles: row.miles,
+              isLakeGeneva: row.is_lake_geneva,
+              isHoliday: row.is_holiday
+            };
+          });
+          setEventPaymentSettings(epsMap);
+        }
       }
     } catch (error) {
+      console.error('loadPaymentConfig error:', error);
     }
   };
 const getPayRateKey = (position) => {
