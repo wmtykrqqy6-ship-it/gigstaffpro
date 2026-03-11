@@ -201,6 +201,14 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
 
+        const invitePay = calcEstimatedPay(positionLabel, event.id);
+        const invitePayHtml = invitePay
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
+               <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p>
+               <p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p>
+             </div>`
+          : '';
+
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -210,14 +218,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
-              ${(() => {
-                const pay = calcEstimatedPay(positionLabel, event.id);
-                if (!pay) return '';
-                return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
-                  <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${pay.total}</p>
-                  <p style="margin:0;font-size:12px;color:#4b5563">${pay.breakdown}</p>
-                </div>`;
-              })()}
+              ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
@@ -274,6 +275,14 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const token = inviteRows?.[0]?.token || '';
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
+        const reInvitePay = calcEstimatedPay(inv.position, event.id);
+        const reInvitePayHtml = reInvitePay
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
+               <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p>
+               <p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p>
+             </div>`
+          : '';
+
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -283,14 +292,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${inv.position}</strong>.</p>
-              ${(() => {
-                const pay = calcEstimatedPay(inv.position, event.id);
-                if (!pay) return '';
-                return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
-                  <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${pay.total}</p>
-                  <p style="margin:0;font-size:12px;color:#4b5563">${pay.breakdown}</p>
-                </div>`;
-              })()}
+              ${reInvitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>

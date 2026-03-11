@@ -847,6 +847,8 @@ setAppPositions(storedPositions);
           rankAccessDays={rankAccessDays}
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
+          travelTiers={travelTiers}
+          bonuses={bonuses}
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}

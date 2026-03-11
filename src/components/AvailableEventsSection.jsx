@@ -4,7 +4,7 @@ import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, onReloadAssignments }) => {
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
     const [eventDistances, setEventDistances] = useState({}); // { eventId: miles | 'loading' | 'error' }
     const fetchedRef = useRef(false); // prevent re-fetching same worker/events
@@ -513,32 +513,40 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
                     const settings = eventPaymentSettings[event.id];
                     const { hours, miles, isLakeGeneva, isHoliday } = settings;
+                    if (!hours) return null;
 
-                    // Calculate per matching position
                     const payLines = matchingPositions.map(position => {
                       const rateKey = position.toLowerCase().replace(/\s+/g, '_');
                       const hourlyRate = payRates[position] || payRates[rateKey] || 0;
-                      if (!hourlyRate || !hours) return null;
+                      if (!hourlyRate) return null;
 
                       const basePay = hours * hourlyRate;
-                      let travelPay = 0;
-                      // Simple travel tier lookup
-                      const travelTierList = Object.entries(payRates)
-                        .filter(([k]) => k.startsWith('travel_')) || [];
 
-                      const lakeBonus = isLakeGeneva ? 15 : 0;
+                      let travelPay = 0;
+                      for (const tier of travelTiers) {
+                        const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
+                        const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
+                        const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
+                        if (miles >= min && miles <= max) { travelPay = amt; break; }
+                      }
+
+                      const lakeBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
                       const subtotal = basePay + travelPay + lakeBonus;
-                      const total = isHoliday ? subtotal * 1.5 : subtotal;
-                      return { position, hourlyRate, total: total.toFixed(0) };
+                      const holidayMult = isHoliday ? (bonuses['Holiday Multiplier'] || 1.5) : 1.0;
+                      const total = subtotal * holidayMult;
+                      return { position, hourlyRate, travelPay, total: total.toFixed(0) };
                     }).filter(Boolean);
 
                     if (payLines.length === 0) return null;
                     return (
                       <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
-                        <p className="text-xs font-semibold text-gray-700 mb-1">Estimated Pay:</p>
-                        {payLines.map(({ position, hourlyRate, total }) => (
+                        <p className="text-xs font-semibold text-gray-700 mb-1">💰 Estimated Pay:</p>
+                        {payLines.map(({ position, hourlyRate, travelPay, total }) => (
                           <div key={position} className="flex items-center justify-between">
-                            <span className="text-xs text-gray-600">{position} ({hours}h × ${hourlyRate}/hr)</span>
+                            <span className="text-xs text-gray-600">
+                              {position} · {hours}h × ${hourlyRate}/hr
+                              {travelPay > 0 && ` + $${travelPay} travel`}
+                            </span>
                             <span className="text-sm font-bold text-green-700">~${total}</span>
                           </div>
                         ))}
