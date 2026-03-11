@@ -69,6 +69,16 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
     document.head.appendChild(script);
   });
 
+  // IRS standard mileage rates by year (update annually)
+  const IRS_MILEAGE_RATES = {
+    2025: 0.70,
+    2024: 0.67,
+    2023: 0.655,
+    2022: 0.585, // first half; 0.625 second half — use blended avg
+    2021: 0.56,
+  };
+  const getIrsRate = (year) => IRS_MILEAGE_RATES[year] || 0.67; // fallback to recent rate
+
   const generateMileageReport = async () => {
     if (!worker.address) {
       alert('This worker has no home address saved. Please add their address first.');
@@ -207,24 +217,52 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         rowCount++;
       }
 
-      // Total row
-      y += 2;
+      // Total + IRS calculation box
+      const irsRate = getIrsRate(reportYear);
+      const irsDeduction = (totalMiles * irsRate).toFixed(2);
+
+      y += 4;
       doc.setDrawColor(127, 0, 0);
       doc.line(margin, y, pageW - margin, y);
-      y += 7;
+      y += 8;
+
+      // Summary box
+      doc.setFillColor(250, 245, 245);
+      doc.setDrawColor(200, 180, 180);
+      doc.roundedRect(margin, y - 4, pageW - margin * 2, 32, 3, 3, 'FD');
+      y += 4;
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(30, 30, 30);
-      doc.text(`Total Events: ${rowCount}`, margin, y);
+      doc.text(`Total Events: ${rowCount}`, margin + 6, y);
+      doc.text(`Total Miles: ${totalMiles} mi`, margin + 70, y);
+      y += 8;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`IRS Standard Mileage Rate (${reportYear}):`, margin + 6, y);
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(127, 0, 0);
-      doc.text(`Total Miles: ${totalMiles} mi`, col.miles - 30, y);
-      y += 10;
+      doc.text(`$${irsRate.toFixed(3)}/mile`, margin + 90, y);
+      y += 8;
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text('Estimated Mileage Deduction:', margin + 6, y);
+      doc.setTextColor(127, 0, 0);
+      doc.text(`$${Number(irsDeduction).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, margin + 110, y);
+      y += 12;
 
       // Footer note
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(150, 150, 150);
-      doc.text('Distances calculated from worker home address to event address. For tax purposes only.', margin, y);
+      doc.text('Distances calculated from worker home address to event address.', margin, y);
+      y += 5;
+      doc.text(`IRS rate sourced from IRS.gov. Consult a tax professional. For independent contractors (1099) filing Schedule C.`, margin, y);
 
       doc.save(`mileage-report-${worker.name.replace(/\s+/g, '-').toLowerCase()}-${reportYear}.pdf`);
     } catch (err) {
