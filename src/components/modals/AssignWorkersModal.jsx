@@ -66,11 +66,12 @@ export default function AssignWorkersModal({
     }));
   };
 
-  // Initialize event payment settings from event or calculate defaults
+  // Initialize event payment settings (hours, Lake Geneva, saved settings)
+  // Does NOT handle miles — that's handled separately below
   useEffect(() => {
     if (!event) return;
     setSelectedHostId(event.host_worker_id || '');
-    
+
     if (!eventPaymentSettings[event.id]) {
       // Calculate default hours
       let defaultHours = 4;
@@ -84,30 +85,12 @@ export default function AssignWorkersModal({
         defaultHours = endHours - startHours;
         if (defaultHours < 0) defaultHours += 24;
       }
-      
       setEventHours(defaultHours);
       setEventMiles(0);
       setMilesAutoFilled(false);
-
-      // Auto-detect Lake Geneva (zip 53147)
       setEventIsLakeGeneva(isLakeGenevaZip(event.address));
       setEventIsHoliday(false);
-
-      // Auto-fetch miles from warehouse to event
-      if (event.address && warehouseAddress) {
-        setMilesLoading(true);
-        fetch(`/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(event.address)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.miles != null) {
-              setEventMiles(data.miles);
-              setMilesAutoFilled(true);
-            }
-          })
-          .catch(() => {})
-          .finally(() => setMilesLoading(false));
-      }
-    } else if (event && eventPaymentSettings[event.id]) {
+    } else {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
       setEventHours(settings.hours);
@@ -117,7 +100,27 @@ export default function AssignWorkersModal({
       setMilesAutoFilled(false);
       setMilesLoading(false);
     }
-  }, [event, eventPaymentSettings, warehouseAddress]);
+  }, [event, eventPaymentSettings]);
+
+  // Separate effect: auto-fetch miles when warehouse becomes available
+  // Runs whenever warehouseAddress arrives (may be delayed by async load)
+  useEffect(() => {
+    if (!event?.address || !warehouseAddress) return;
+    if (eventPaymentSettings[event.id]) return; // already saved — don't overwrite
+    if (milesAutoFilled) return; // already fetched this session
+
+    setMilesLoading(true);
+    fetch(`/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(event.address)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.miles != null) {
+          setEventMiles(data.miles);
+          setMilesAutoFilled(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setMilesLoading(false));
+  }, [warehouseAddress, event]);
 
   // Early return AFTER all hooks
   if (!open || !event) return null;
