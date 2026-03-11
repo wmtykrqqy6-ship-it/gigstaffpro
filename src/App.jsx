@@ -1210,12 +1210,7 @@ setAppPositions(storedPositions);
           }
         }}
         onReloadAssignments={loadAssignments}
-        onSavePaymentSettings={(eventId, settings) => {
-          setEventPaymentSettings({
-            ...eventPaymentSettings,
-            [eventId]: settings
-          });
-        }}
+        onSavePaymentSettings={handleSaveEventPaymentSettings}
       />
       <PaymentCalculatorModal
         open={showPaymentModal}
