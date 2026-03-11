@@ -10,6 +10,7 @@ export default function EditEventModal({
   event,
   positions,
   workers = [],
+  warehouses = [],
   onClose,
   onSuccess
 }) {
@@ -173,6 +174,27 @@ export default function EditEventModal({
     return found ? found.count : 0;
   };
 
+
+  // Auto-assign nearest warehouse by distance
+  const assignNearestWarehouse = async (address) => {
+    if (!address || warehouses.length === 0) return null;
+    if (warehouses.length === 1) return warehouses[0].id;
+    try {
+      const results = await Promise.all(
+        warehouses.map(wh =>
+          fetch(`/api/get-distance?origin=${encodeURIComponent(wh.address)}&destination=${encodeURIComponent(address)}`)
+            .then(r => r.json())
+            .then(d => ({ id: wh.id, miles: d.miles ?? Infinity }))
+            .catch(() => ({ id: wh.id, miles: Infinity }))
+        )
+      );
+      results.sort((a, b) => a.miles - b.miles);
+      return results[0].id;
+    } catch {
+      return warehouses.find(w => w.is_primary)?.id || warehouses[0]?.id || null;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -183,9 +205,11 @@ export default function EditEventModal({
     
     setSaving(true);
     try {
+      const warehouseId = await assignNearestWarehouse(formData.address);
+      const saveData = { ...formData, warehouse_id: warehouseId };
       const { error } = await supabase
         .from('events')
-        .update(formData)
+        .update(saveData)
         .eq('id', event.id);
       
       if (error) throw error;

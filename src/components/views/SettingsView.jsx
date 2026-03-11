@@ -58,8 +58,13 @@ export default function SettingsView({
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
-  const [warehouseAddress, setWarehouseAddress] = useState('');
-  const [loadingWarehouse, setLoadingWarehouse] = useState(true);
+  // --- Warehouses state ---
+  const [warehouses, setWarehouses] = useState([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(true);
+  const [showAddWarehouse, setShowAddWarehouse] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState(null);
+  const [warehouseForm, setWarehouseForm] = useState({ name: '', address: '' });
+  const [savingWarehouse, setSavingWarehouse] = useState(false);
   const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
   const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
   const [rankAccessDays, setRankAccessDays] = useState({
@@ -75,7 +80,7 @@ export default function SettingsView({
   const [loadingTimeSettings, setLoadingTimeSettings] = useState(true);
 
   useEffect(() => {
-    loadWarehouseAddress();
+    loadWarehouses();
     loadPaymentTrackingSetting();
     loadRankAccessSettings();
     loadTimeSettings();
@@ -417,24 +422,72 @@ export default function SettingsView({
     }
   };
 
-  const loadWarehouseAddress = async () => {
+  const loadWarehouses = async () => {
+    setLoadingWarehouses(true);
     try {
       const { data, error } = await supabase
-        .from('settings')
+        .from('warehouses')
         .select('*')
-        .eq('setting_key', 'warehouse_address')
-        .single();
-      
-      if (!error && data) {
-        setWarehouseAddress(data.setting_value || '');
-      } else {
-        // Set default for Vegas on Wheels
-        setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
-      }
-    } catch (error) {
-      setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
+        .order('is_primary', { ascending: false })
+        .order('name');
+      if (!error) setWarehouses(data || []);
+    } catch (err) {
+      console.error('Error loading warehouses:', err.message);
     } finally {
-      setLoadingWarehouse(false);
+      setLoadingWarehouses(false);
+    }
+  };
+
+  const saveWarehouse = async () => {
+    if (!warehouseForm.name.trim()) { alert('Warehouse name is required.'); return; }
+    if (!warehouseForm.address.trim()) { alert('Warehouse address is required.'); return; }
+    setSavingWarehouse(true);
+    try {
+      if (editingWarehouse) {
+        const { error } = await supabase.from('warehouses').update({
+          name: warehouseForm.name.trim(),
+          address: warehouseForm.address.trim()
+        }).eq('id', editingWarehouse.id);
+        if (error) throw error;
+      } else {
+        const isPrimary = warehouses.length === 0;
+        const { error } = await supabase.from('warehouses').insert([{
+          name: warehouseForm.name.trim(),
+          address: warehouseForm.address.trim(),
+          is_primary: isPrimary
+        }]);
+        if (error) throw error;
+      }
+      await loadWarehouses();
+      setShowAddWarehouse(false);
+      setEditingWarehouse(null);
+      setWarehouseForm({ name: '', address: '' });
+    } catch (err) {
+      alert('Error saving warehouse: ' + err.message);
+    } finally {
+      setSavingWarehouse(false);
+    }
+  };
+
+  const deleteWarehouse = async (wh) => {
+    if (wh.is_primary) { alert('Cannot delete the primary warehouse. Set another as primary first.'); return; }
+    if (!confirm(`Delete "${wh.name}"? Events assigned to it will lose their warehouse assignment.`)) return;
+    try {
+      const { error } = await supabase.from('warehouses').delete().eq('id', wh.id);
+      if (error) throw error;
+      await loadWarehouses();
+    } catch (err) {
+      alert('Error deleting warehouse: ' + err.message);
+    }
+  };
+
+  const setPrimaryWarehouse = async (wh) => {
+    try {
+      await supabase.from('warehouses').update({ is_primary: false }).neq('id', wh.id);
+      await supabase.from('warehouses').update({ is_primary: true }).eq('id', wh.id);
+      await loadWarehouses();
+    } catch (err) {
+      alert('Error updating primary warehouse: ' + err.message);
     }
   };
 
@@ -1492,26 +1545,110 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Warehouse Address */}
+          {/* Warehouses */}
           <div className="px-6 py-5 border-b border-gray-100">
-            <div className="flex items-start justify-between gap-6">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="font-semibold text-gray-900 text-sm">Warehouse / Home Base Address</p>
-                <p className="text-xs text-gray-500 mt-0.5">Used for calculating miles traveled to events.</p>
+                <p className="font-semibold text-gray-900 text-sm">Warehouses / Staging Locations</p>
+                <p className="text-xs text-gray-500 mt-0.5">Events are auto-assigned to the nearest warehouse. Used for travel pay calculation.</p>
               </div>
-              {loadingWarehouse ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900 flex-shrink-0" />
-              ) : (
-                <input
-                  type="text"
-                  value={warehouseAddress}
-                  onChange={(e) => setWarehouseAddress(e.target.value)}
-                  className="w-72 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
-                  placeholder="Enter address"
-                  disabled={saving}
-                />
-              )}
+              <button
+                onClick={() => { setWarehouseForm({ name: '', address: '' }); setEditingWarehouse(null); setShowAddWarehouse(true); }}
+                className="flex items-center space-x-1 text-sm bg-red-900 text-white px-3 py-1.5 rounded-lg hover:bg-red-800"
+              >
+                <Plus size={14} />
+                <span>Add</span>
+              </button>
             </div>
+
+            {loadingWarehouses ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
+            ) : (
+              <div className="space-y-2">
+                {warehouses.length === 0 && (
+                  <p className="text-sm text-gray-400 italic">No warehouses configured. Add one to enable travel pay calculations.</p>
+                )}
+                {warehouses.map(wh => (
+                  <div key={wh.id} className={`flex items-center justify-between p-3 rounded-lg border ${wh.is_primary ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-sm text-gray-900">{wh.name}</span>
+                        {wh.is_primary && <span className="text-xs bg-red-900 text-white px-2 py-0.5 rounded-full">Primary</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{wh.address}</p>
+                    </div>
+                    <div className="flex items-center space-x-1 ml-3">
+                      {!wh.is_primary && (
+                        <button
+                          onClick={() => setPrimaryWarehouse(wh)}
+                          title="Set as primary"
+                          className="text-xs text-red-700 hover:text-red-900 px-2 py-1 rounded hover:bg-red-50 border border-red-200"
+                        >
+                          Set Primary
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setWarehouseForm({ name: wh.name, address: wh.address }); setEditingWarehouse(wh); setShowAddWarehouse(true); }}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                        title="Edit"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      {!wh.is_primary && (
+                        <button
+                          onClick={() => deleteWarehouse(wh)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showAddWarehouse && (
+              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                <p className="font-medium text-sm text-gray-900">{editingWarehouse ? 'Edit Warehouse' : 'New Warehouse'}</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={warehouseForm.name}
+                    onChange={e => setWarehouseForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. Main Warehouse, East Side Storage"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Address *</label>
+                  <input
+                    type="text"
+                    value={warehouseForm.address}
+                    onChange={e => setWarehouseForm(f => ({ ...f, address: e.target.value }))}
+                    placeholder="535 S 93rd St, Milwaukee, WI 53214"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={saveWarehouse}
+                    disabled={savingWarehouse}
+                    className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 text-sm disabled:bg-gray-400"
+                  >
+                    {savingWarehouse ? 'Saving...' : 'Save Warehouse'}
+                  </button>
+                  <button
+                    onClick={() => { setShowAddWarehouse(false); setEditingWarehouse(null); }}
+                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Payment Tracking */}
@@ -1664,7 +1801,6 @@ export default function SettingsView({
                 setSaving(true);
                 try {
                   setHostLabel(hostLabelValue);
-                  await saveWarehouseAddress();
                   await saveRankAccessSettings();
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();
