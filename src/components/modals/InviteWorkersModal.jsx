@@ -4,6 +4,14 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 
+const fmtTime = (t) => {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+};
+
 const getPayRateKey = (position) => {
   const p = String(position || '').toLowerCase().trim();
   if (p.includes('blackjack')) return 'blackjack_dealer';
@@ -225,6 +233,20 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
              </div>`
           : '';
 
+        const timeStr = event.time
+          ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
+          : '';
+        const detailRows = [
+          event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
+          event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
+          timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
+          event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
+          event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
+        ].filter(Boolean).join('');
+        const detailsHtml = detailRows
+          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${detailRows}</table>`
+          : '';
+
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -234,6 +256,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
+              ${detailsHtml}
               ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
@@ -241,6 +264,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                 <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
               <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
+              <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
+              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Thanks,<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
             </div>
           </div>`;
 
@@ -291,12 +316,26 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const token = inviteRows?.[0]?.token || '';
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
-        const reInvitePay = calcEstimatedPay(inv.position, event.id);
+        const reInvitePay = calcEstimatedPay(inv.position_key, event.id);
         const reInvitePayHtml = reInvitePay
           ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
                <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p>
                <p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p>
              </div>`
+          : '';
+
+        const riTimeStr = event.time
+          ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
+          : '';
+        const riDetailRows = [
+          event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
+          event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
+          riTimeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${riTimeStr}</td></tr>` : '',
+          event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
+          event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
+        ].filter(Boolean).join('');
+        const riDetailsHtml = riDetailRows
+          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${riDetailRows}</table>`
           : '';
 
         const html = `
@@ -307,7 +346,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${inv.position}</strong>.</p>
+              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${getPositionLabel(inv.position_key)}</strong>.</p>
+              ${riDetailsHtml}
               ${reInvitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
@@ -315,6 +355,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
                 <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
               <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
+              <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
+              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Thanks,<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
             </div>
           </div>`;
         await fetch('/api/send-email', {
