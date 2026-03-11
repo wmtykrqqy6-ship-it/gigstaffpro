@@ -1,12 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
-import { Calendar, Clock, MapPin, Users, CheckCircle, Award } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 
 const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
+    const [eventDistances, setEventDistances] = useState({}); // { eventId: miles | 'loading' | 'error' }
+    const fetchedRef = useRef(false); // prevent re-fetching same worker/events
     
+    // Fetch distances from worker home to each available event
+    useEffect(() => {
+      const workerAddress = currentWorker?.address;
+      if (!workerAddress || !events?.length) return;
+
+      // Build a key to detect when worker or events change
+      const key = workerAddress + '|' + events.map(e => e.id).join(',');
+      if (fetchedRef.current === key) return;
+      fetchedRef.current = key;
+
+      const eventsWithAddress = events.filter(e => e.address);
+      if (eventsWithAddress.length === 0) return;
+
+      // Mark all as loading
+      setEventDistances(prev => {
+        const next = { ...prev };
+        eventsWithAddress.forEach(e => { next[e.id] = 'loading'; });
+        return next;
+      });
+
+      // Fetch distances in parallel (one call per event)
+      eventsWithAddress.forEach(event => {
+        fetch(`/api/get-distance?origin=${encodeURIComponent(workerAddress)}&destination=${encodeURIComponent(event.address)}`)
+          .then(r => r.json())
+          .then(data => {
+            setEventDistances(prev => ({
+              ...prev,
+              [event.id]: data.miles != null ? data.miles : 'error'
+            }));
+          })
+          .catch(() => {
+            setEventDistances(prev => ({ ...prev, [event.id]: 'error' }));
+          });
+      });
+    }, [currentWorker?.address, events]);
+
     // Calculate which events the worker can see based on rank
     const getAvailableEvents = () => {
       const today = new Date();
@@ -437,15 +475,39 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                     <div className="mt-2 p-2 bg-white rounded border border-gray-200">
                       <p className="text-xs font-semibold text-gray-700 mb-1">Address:</p>
                       <p className="text-xs text-gray-900 mb-1">{event.address}</p>
-                      <a 
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center space-x-1"
-                      >
-                        <MapPin size={12} />
-                        <span>Open in Google Maps</span>
-                      </a>
+                      <div className="flex items-center justify-between">
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center space-x-1"
+                        >
+                          <MapPin size={12} />
+                          <span>Open in Google Maps</span>
+                        </a>
+                        {/* Distance from worker home */}
+                        {currentWorker?.address ? (
+                          <span className="inline-flex items-center space-x-1 text-xs text-gray-500">
+                            <Navigation size={11} className="text-gray-400" />
+                            {eventDistances[event.id] === 'loading' ? (
+                              <span className="text-gray-400">calculating...</span>
+                            ) : eventDistances[event.id] === 'error' || eventDistances[event.id] == null ? null : (
+                              <span>~{eventDistances[event.id]} mi from you</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-600 font-medium inline-flex items-center space-x-1">
+                            <Navigation size={11} />
+                            <span>Add your address to see distance</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!event.address && !currentWorker?.address && (
+                    <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200 flex items-center space-x-1">
+                      <Navigation size={11} className="text-amber-500 flex-shrink-0" />
+                      <span className="text-xs text-amber-700">Add your address in your profile to see distance</span>
                     </div>
                   )}
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (
