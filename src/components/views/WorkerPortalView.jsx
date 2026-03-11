@@ -9,8 +9,23 @@ import ProfileView from './ProfileView';
 import HistoryView from './HistoryView';
 import PostEventReportModal from '../modals/PostEventReportModal';
 
-export default function WorkerPortalView({
-  loggedInWorker,
+const getPayRateKey = (position) => {
+  const p = String(position || '').toLowerCase().trim();
+  if (p.includes('blackjack')) return 'blackjack_dealer';
+  if (p.includes('roulette')) return 'roulette_dealer';
+  if (p.includes('poker')) return 'poker_dealer';
+  if (p.includes('craps')) return 'craps_dealer';
+  if (p.includes('baccarat')) return 'baccarat_dealer';
+  if (p.includes('event lead')) return 'event_lead';
+  if (p === 'dealer') return 'dealer';
+  if (p.includes('host')) return 'host';
+  if (p.includes('bartender')) return 'bartender';
+  if (p.includes('server')) return 'server';
+  if (p.includes('cashier')) return 'cashier';
+  return p.replace(/\s+/g, '_');
+};
+
+export default function WorkerPortalView({  loggedInWorker,
   workers = [],
   assignments,
   events,
@@ -20,8 +35,6 @@ export default function WorkerPortalView({
   rankAccessDays,
   eventPaymentSettings,
   payRates,
-  travelTiers = [],
-  bonuses = {},
   onReloadAssignments,
   onReloadWorker,
   currentTab = 'dashboard'
@@ -330,7 +343,7 @@ export default function WorkerPortalView({
                           )}
                         </div>
                         <div className="flex items-center space-x-3 mt-2">
-                          <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                          <span className="text-xs font-semibold text-white bg-gray-700 px-2 py-0.5 rounded-full">
                             {getPositionLabel(inv.position)}
                           </span>
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
@@ -348,6 +361,34 @@ export default function WorkerPortalView({
                             </span>
                           )}
                         </div>
+                        {/* Pay estimate */}
+                        {paymentTrackingEnabled && eventPaymentSettings[inv.event_id] && (() => {
+                          const s = eventPaymentSettings[inv.event_id];
+                          const rateKey = getPayRateKey(inv.position);
+                          const hourlyRate = payRates[rateKey] || payRates[inv.position] || 0;
+                          if (!hourlyRate || !s.hours) return null;
+                          const basePay = s.hours * hourlyRate;
+                          let travelPay = 0;
+                          for (const tier of travelTiers) {
+                            const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
+                            const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
+                            const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
+                            if (s.miles >= min && s.miles <= max) { travelPay = amt; break; }
+                          }
+                          const lakeBonus = s.isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
+                          const subtotal = basePay + travelPay + lakeBonus;
+                          const total = (s.isHoliday ? subtotal * (bonuses['Holiday Multiplier'] || 1.5) : subtotal).toFixed(0);
+                          return (
+                            <div className="mt-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                              <span className="text-xs text-gray-600">
+                                {s.hours}h × ${hourlyRate}/hr
+                                {travelPay > 0 && ` + $${travelPay} travel`}
+                                {lakeBonus > 0 && ` + $${lakeBonus} LG`}
+                              </span>
+                              <span className="text-sm font-bold text-green-700">💰 ~${total}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                     {!isExpired && (
@@ -363,7 +404,7 @@ export default function WorkerPortalView({
                         <button
                           onClick={() => handleInviteResponse(inv, 'declined')}
                           disabled={respondingInvite === inv.id}
-                          className="flex-1 flex items-center justify-center space-x-1.5 py-2 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-600 border border-gray-300 rounded-lg text-sm font-medium transition-colors"
+                          className="flex-1 flex items-center justify-center space-x-1.5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white border border-red-600 rounded-lg text-sm font-medium transition-colors"
                         >
                           <XCircle size={15} />
                           <span>Decline</span>
@@ -456,8 +497,6 @@ export default function WorkerPortalView({
           paymentTrackingEnabled={paymentTrackingEnabled}
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
-          travelTiers={travelTiers}
-          bonuses={bonuses}
           onReloadAssignments={onReloadAssignments}
         />
 

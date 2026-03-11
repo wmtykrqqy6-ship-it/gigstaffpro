@@ -238,7 +238,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
-                <a href="${declineUrl}" style="background:#e5e7eb;color:#374151;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
+                <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
               <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
             </div>
@@ -312,7 +312,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
-                <a href="${declineUrl}" style="background:#e5e7eb;color:#374151;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
+                <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
               </div>
               <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
             </div>
