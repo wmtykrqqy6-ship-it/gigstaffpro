@@ -373,11 +373,23 @@ const handleSaveWorker = async (formData) => {
   };
 
   // Handler for saving event payment settings
-  const handleSaveEventPaymentSettings = (eventId, settings) => {
-    setEventPaymentSettings({
-      ...eventPaymentSettings,
-      [eventId]: settings
-    });
+  const handleSaveEventPaymentSettings = async (eventId, settings) => {
+    // Update local state immediately
+    setEventPaymentSettings(prev => ({ ...prev, [eventId]: settings }));
+
+    // Persist to DB
+    try {
+      await supabase.from('event_payment_settings').upsert({
+        event_id: eventId,
+        hours: settings.hours || null,
+        miles: settings.miles || null,
+        is_lake_geneva: settings.isLakeGeneva || false,
+        is_holiday: settings.isHoliday || false,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'event_id' });
+    } catch (err) {
+      console.error('Failed to persist payment settings:', err);
+    }
   };
 
   const loadPendingReportsCount = async () => {
@@ -481,6 +493,24 @@ setPayRates(ratesMap);
 
       if (!tiersError && tiersData) {
         setTravelTiers(tiersData);
+      }
+
+      // Load persisted event payment settings
+      const { data: epsData } = await supabase
+        .from('event_payment_settings')
+        .select('*');
+
+      if (epsData && epsData.length > 0) {
+        const epsMap = {};
+        epsData.forEach(row => {
+          epsMap[row.event_id] = {
+            hours: row.hours,
+            miles: row.miles,
+            isLakeGeneva: row.is_lake_geneva,
+            isHoliday: row.is_holiday
+          };
+        });
+        setEventPaymentSettings(epsMap);
       }
     } catch (error) {
     }
