@@ -20,6 +20,8 @@ export default function WorkerPortalView({
   rankAccessDays,
   eventPaymentSettings,
   payRates,
+  travelTiers = [],
+  bonuses = {},
   onReloadAssignments,
   onReloadWorker,
   currentTab = 'dashboard'
