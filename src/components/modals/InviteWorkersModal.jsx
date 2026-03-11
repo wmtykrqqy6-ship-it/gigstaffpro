@@ -4,6 +4,14 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 
+const fmtDate = (d) => {
+  if (!d) return d;
+  // Convert YYYY-MM-DD to M-D-YYYY
+  const parts = d.split('-');
+  if (parts.length === 3) return `${parseInt(parts[1])}-${parseInt(parts[2])}-${parts[0]}`;
+  return d;
+};
+
 const fmtTime = (t) => {
   if (!t) return '';
   const [h, m] = t.split(':').map(Number);
@@ -255,7 +263,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
+              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${fmtDate(event.date)}</strong> as <strong>${positionLabel}</strong>.</p>
               ${detailsHtml}
               ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
@@ -346,7 +354,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${getPositionLabel(inv.position_key)}</strong>.</p>
+              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${fmtDate(event.date)}</strong> as <strong>${getPositionLabel(inv.position_key)}</strong>.</p>
               ${riDetailsHtml}
               ${reInvitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
