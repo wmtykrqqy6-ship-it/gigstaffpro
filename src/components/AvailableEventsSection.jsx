@@ -510,21 +510,46 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       <span className="text-xs text-amber-700">Add your address in your profile to see distance</span>
                     </div>
                   )}
-                  {paymentTrackingEnabled && eventPaymentSettings[event.id] && (
-                    <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-700">Estimated Pay:</span>
-                        <span className="text-sm font-bold text-green-700">
-                          ~${eventPaymentSettings[event.id].hours && payRates[matchingPositions[0]] 
-                            ? (eventPaymentSettings[event.id].hours * payRates[matchingPositions[0]]).toFixed(0)
-                            : '???'}
-                        </span>
+                  {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
+                    const settings = eventPaymentSettings[event.id];
+                    const { hours, miles, isLakeGeneva, isHoliday } = settings;
+
+                    // Calculate per matching position
+                    const payLines = matchingPositions.map(position => {
+                      const rateKey = position.toLowerCase().replace(/\s+/g, '_');
+                      const hourlyRate = payRates[position] || payRates[rateKey] || 0;
+                      if (!hourlyRate || !hours) return null;
+
+                      const basePay = hours * hourlyRate;
+                      let travelPay = 0;
+                      // Simple travel tier lookup
+                      const travelTierList = Object.entries(payRates)
+                        .filter(([k]) => k.startsWith('travel_')) || [];
+
+                      const lakeBonus = isLakeGeneva ? 15 : 0;
+                      const subtotal = basePay + travelPay + lakeBonus;
+                      const total = isHoliday ? subtotal * 1.5 : subtotal;
+                      return { position, hourlyRate, total: total.toFixed(0) };
+                    }).filter(Boolean);
+
+                    if (payLines.length === 0) return null;
+                    return (
+                      <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Estimated Pay:</p>
+                        {payLines.map(({ position, hourlyRate, total }) => (
+                          <div key={position} className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">{position} ({hours}h × ${hourlyRate}/hr)</span>
+                            <span className="text-sm font-bold text-green-700">~${total}</span>
+                          </div>
+                        ))}
+                        {(isLakeGeneva || isHoliday) && (
+                          <p className="text-xs text-green-600 mt-1">
+                            {[isLakeGeneva && '+$15 Lake Geneva', isHoliday && '1.5× holiday'].filter(Boolean).join(' • ')} included
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {eventPaymentSettings[event.id].hours || '?'} hrs • Plus travel pay
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
                 
                 <div className="mb-3">

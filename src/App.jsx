@@ -52,16 +52,7 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
-  const [warehouses, setWarehouses] = useState([]);
-  // Helper: get warehouse address for an event (uses event.warehouse_id, falls back to primary)
-  const getWarehouseForEvent = (event) => {
-    if (!event || warehouses.length === 0) return null;
-    if (event.warehouse_id) {
-      return warehouses.find(w => w.id === event.warehouse_id) || warehouses.find(w => w.is_primary) || warehouses[0];
-    }
-    return warehouses.find(w => w.is_primary) || warehouses[0];
-  };
-
+  const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddWorker, setShowAddWorker] = useState(false);
@@ -608,23 +599,15 @@ setAppPositions(storedPositions);
         }
       }
 
-      // Load warehouses
-      const { data: warehouseData } = await supabase
-        .from('warehouses')
+      // Load warehouse address
+      const { data: warehouseData, error: warehouseError } = await supabase
+        .from('settings')
         .select('*')
-        .order('is_primary', { ascending: false })
-        .order('name');
-      if (warehouseData && warehouseData.length > 0) {
-        setWarehouses(warehouseData);
-      } else {
-        // Fallback: use legacy warehouse_address setting
-        const { data: legacySetting } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('setting_key', 'warehouse_address')
-          .single();
-        const addr = legacySetting?.setting_value || '535 S 93rd St, Milwaukee, WI 53214';
-        setWarehouses([{ id: 'primary', name: 'Main Warehouse', address: addr, is_primary: true }]);
+        .eq('setting_key', 'warehouse_address')
+        .single();
+      
+      if (!warehouseError && warehouseData?.setting_value) {
+        setWarehouseAddress(warehouseData.setting_value);
       }
     } catch (error) {
       const defaultPositions = ['Dealer', 'Poker Dealer', 'Blackjack Dealer', 'Roulette Dealer', 'Craps Dealer', 'Host', 'Bartender'].sort();
@@ -1093,6 +1076,10 @@ setAppPositions(storedPositions);
         workers={workers}
         assignments={assignments}
         events={events}
+        payRates={payRates}
+        eventPaymentSettings={eventPaymentSettings}
+        travelTiers={travelTiers}
+        bonuses={bonuses}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={loadAssignments}
       />
@@ -1133,7 +1120,6 @@ setAppPositions(storedPositions);
         open={showAddEvent}
         positions={positions}
         workers={workers}
-        warehouses={warehouses}
         onClose={() => setShowAddEvent(false)}
         onSuccess={loadEvents}
       />
@@ -1142,7 +1128,6 @@ setAppPositions(storedPositions);
         event={selectedEvent}
         positions={positions}
         workers={workers}
-        warehouses={warehouses}
         onClose={() => {
           setShowEditEvent(false);
           setSelectedEvent(null);
@@ -1157,7 +1142,7 @@ setAppPositions(storedPositions);
         assignments={assignments}
         positions={positions}
         eventPaymentSettings={eventPaymentSettings}
-        warehouseAddress={getWarehouseForEvent(selectedEvent)?.address || ''}
+        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowAssignModal(false);
           setSelectedEvent(null);
@@ -1207,7 +1192,7 @@ setAppPositions(storedPositions);
         payRates={payRates}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}
-        warehouseAddress={getWarehouseForEvent(selectedEvent)?.address || ''}
+        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowPaymentModal(false);
           setAssignmentPaymentData(null);

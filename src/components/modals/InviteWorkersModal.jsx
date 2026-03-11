@@ -4,7 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 
-export default function InviteWorkersModal({ open, event, workers, assignments, events, onClose, onReloadAssignments }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, onClose, onReloadAssignments }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -43,6 +43,44 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     }, 10000);
     return () => clearInterval(tick);
   }, [lastRefreshed]);
+
+  // Calculate estimated pay for a position using event payment settings
+  const calcEstimatedPay = (positionLabel, eventId) => {
+    const settings = eventPaymentSettings[eventId];
+    if (!settings || !positionLabel) return null;
+    const { hours, miles, isLakeGeneva, isHoliday } = settings;
+    if (!hours) return null;
+
+    // Find hourly rate — try label and key variants
+    const rateKey = positionLabel.toLowerCase().replace(/\s+/g, '_');
+    const hourlyRate = payRates[positionLabel] || payRates[rateKey] || 0;
+    if (!hourlyRate) return null;
+
+    const basePay = hours * hourlyRate;
+
+    let travelPay = 0;
+    for (const tier of travelTiers) {
+      const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
+      const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
+      const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
+      if (miles >= min && miles <= max) { travelPay = amt; break; }
+    }
+
+    const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
+    const subtotal = basePay + travelPay + lakeGenevaBonus;
+    const holidayMult = isHoliday ? (bonuses['Holiday Multiplier'] || 1.5) : 1.0;
+    const total = subtotal * holidayMult;
+
+    return {
+      total: total.toFixed(0),
+      breakdown: [
+        `${hours} hrs × $${hourlyRate}/hr = $${basePay.toFixed(0)}`,
+        travelPay > 0 ? `Travel: $${travelPay}` : null,
+        lakeGenevaBonus > 0 ? `Lake Geneva bonus: $${lakeGenevaBonus}` : null,
+        isHoliday ? `Holiday multiplier: ${holidayMult}×` : null,
+      ].filter(Boolean).join(' • ')
+    };
+  };
 
   const loadInvitations = async () => {
     setLoading(true);
@@ -172,6 +210,14 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${positionLabel}</strong>.</p>
+              ${(() => {
+                const pay = calcEstimatedPay(positionLabel, event.id);
+                if (!pay) return '';
+                return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
+                  <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${pay.total}</p>
+                  <p style="margin:0;font-size:12px;color:#4b5563">${pay.breakdown}</p>
+                </div>`;
+              })()}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
@@ -236,7 +282,15 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong>.</p>
+              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${event.date}</strong> as <strong>${inv.position}</strong>.</p>
+              ${(() => {
+                const pay = calcEstimatedPay(inv.position, event.id);
+                if (!pay) return '';
+                return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
+                  <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${pay.total}</p>
+                  <p style="margin:0;font-size:12px;color:#4b5563">${pay.breakdown}</p>
+                </div>`;
+              })()}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
                 <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
