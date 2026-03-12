@@ -501,6 +501,8 @@ export default function WorkerPortalView({  loggedInWorker,
           paymentTrackingEnabled={paymentTrackingEnabled}
           eventPaymentSettings={eventPaymentSettings}
           payRates={payRates}
+          travelTiers={travelTiers}
+          bonuses={bonuses}
           onReloadAssignments={onReloadAssignments}
         />
 
