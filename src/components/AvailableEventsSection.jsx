@@ -529,21 +529,23 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
                     const settings = eventPaymentSettings[event.id];
                     const { hours, miles, isLakeGeneva, isHoliday } = settings;
-                    if (!hours) return null;
+                    const numHours = Number(hours) || 0;
+                    const numMiles = Number(miles) || 0;
+                    if (!numHours) return null;
 
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
                       const hourlyRate = payRates[rateKey] || payRates[position] || 0;
                       if (!hourlyRate) return null;
 
-                      const basePay = hours * hourlyRate;
+                      const basePay = numHours * hourlyRate;
 
                       let travelPay = 0;
                       for (const tier of travelTiers) {
                         const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
                         const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
                         const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
-                        if (miles >= min && miles <= max) { travelPay = amt; break; }
+                        if (numMiles >= min && numMiles <= max) { travelPay = amt; break; }
                       }
 
                       const lakeBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
@@ -560,7 +562,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                         {payLines.map(({ position, hourlyRate, travelPay, total }) => (
                           <div key={position} className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">
-                              {position} · {hours}h × ${hourlyRate}/hr
+                              {position} · {numHours}h × ${hourlyRate}/hr
                               {travelPay > 0 && ` + $${travelPay} travel`}
                             </span>
                             <span className="text-sm font-bold text-green-700">~${total}</span>

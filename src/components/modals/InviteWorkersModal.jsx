@@ -81,21 +81,22 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     const settings = eventPaymentSettings[eventId];
     if (!settings || !positionLabel) return null;
     const { hours, miles, isLakeGeneva, isHoliday } = settings;
-    if (!hours) return null;
+    const numHours = Number(hours) || 0;
+    const numMiles = Number(miles) || 0;
+    if (!numHours) return null;
 
-    // Find hourly rate — try label and key variants
     const rateKey = getPayRateKey(positionLabel);
     const hourlyRate = payRates[rateKey] || payRates[positionLabel] || 0;
     if (!hourlyRate) return null;
 
-    const basePay = hours * hourlyRate;
+    const basePay = numHours * hourlyRate;
 
     let travelPay = 0;
     for (const tier of travelTiers) {
       const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
       const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
       const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
-      if (miles >= min && miles <= max) { travelPay = amt; break; }
+      if (numMiles >= min && numMiles <= max) { travelPay = amt; break; }
     }
 
     const lakeGenevaBonus = isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
@@ -106,7 +107,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     return {
       total: total.toFixed(0),
       breakdown: [
-        `${hours} hrs × $${hourlyRate}/hr = $${basePay.toFixed(0)}`,
+        `${numHours} hrs × $${hourlyRate}/hr = $${basePay.toFixed(0)}`,
         travelPay > 0 ? `Travel: $${travelPay}` : null,
         lakeGenevaBonus > 0 ? `Lake Geneva bonus: $${lakeGenevaBonus}` : null,
         isHoliday ? `Holiday multiplier: ${holidayMult}×` : null,

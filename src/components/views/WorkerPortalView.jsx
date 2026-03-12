@@ -368,14 +368,16 @@ export default function WorkerPortalView({  loggedInWorker,
                           const s = eventPaymentSettings[inv.event_id];
                           const rateKey = getPayRateKey(inv.position_key);
                           const hourlyRate = payRates[rateKey] || payRates[inv.position_key] || 0;
-                          if (!hourlyRate || !s.hours) return null;
-                          const basePay = s.hours * hourlyRate;
+                          const numHours = Number(s.hours) || 0;
+                          const numMiles = Number(s.miles) || 0;
+                          if (!hourlyRate || !numHours) return null;
+                          const basePay = numHours * hourlyRate;
                           let travelPay = 0;
                           for (const tier of travelTiers) {
                             const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
                             const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
                             const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
-                            if (s.miles >= min && s.miles <= max) { travelPay = amt; break; }
+                            if (numMiles >= min && numMiles <= max) { travelPay = amt; break; }
                           }
                           const lakeBonus = s.isLakeGeneva ? (bonuses['Lake Geneva'] || 15) : 0;
                           const subtotal = basePay + travelPay + lakeBonus;
@@ -383,7 +385,7 @@ export default function WorkerPortalView({  loggedInWorker,
                           return (
                             <div className="mt-2 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
                               <span className="text-xs text-gray-600">
-                                {s.hours}h × ${hourlyRate}/hr
+                                {numHours}h × ${hourlyRate}/hr
                                 {travelPay > 0 && ` + $${travelPay} travel`}
                                 {lakeBonus > 0 && ` + $${lakeBonus} LG`}
                               </span>
