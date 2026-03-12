@@ -541,12 +541,11 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       const basePay = numHours * hourlyRate;
 
                       let travelPay = 0;
-                      console.log('🚗 Travel check: miles=', numMiles, 'tiers=', travelTiers);
+                      console.log('🚗 Travel check — miles:', numMiles, '| tiers count:', travelTiers.length, '| tiers:', JSON.stringify(travelTiers));
                       for (const tier of travelTiers) {
                         const min = Number(tier.min_miles ?? tier.minMiles ?? 0);
                         const max = Number(tier.max_miles ?? tier.maxMiles ?? 0);
                         const amt = Number(tier.pay_amount ?? tier.payAmount ?? tier.amount ?? 0);
-                        console.log(`  tier: ${min}-${max} = $${amt}, match: ${numMiles >= min && numMiles <= max}`);
                         if (numMiles >= min && numMiles <= max) { travelPay = amt; break; }
                       }
 
