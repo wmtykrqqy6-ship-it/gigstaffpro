@@ -37,7 +37,8 @@ export default function WorkerPortalView({  loggedInWorker,
   payRates,
   travelTiers = [],
   bonuses = {},
-  marketPayRates = {},
+  locationPayRates = {},
+  locations = [],
   getEffectiveRate,
   onReloadAssignments,
   onReloadWorker,
@@ -505,7 +506,8 @@ export default function WorkerPortalView({  loggedInWorker,
           payRates={payRates}
           travelTiers={travelTiers}
           bonuses={bonuses}
-          marketPayRates={marketPayRates}
+          locationPayRates={locationPayRates}
+          locations={locations}
           getEffectiveRate={getEffectiveRate}
           onReloadAssignments={onReloadAssignments}
         />

@@ -10,8 +10,8 @@ export default function PaymentCalculatorModal({
   eventPaymentSettings,
   paymentTrackingEnabled,
   payRates,
-  markets = [],
-  marketPayRates = {},
+  locations = [],
+  locationPayRates = {},
   getEffectiveRate,
   calculatePay,
   getPayRateKey,
@@ -26,9 +26,13 @@ export default function PaymentCalculatorModal({
   const [calculation, setCalculation] = useState(null);
   const [fetchingMiles, setFetchingMiles] = useState(false);
 
-  // Derive active market for this event
-  const eventMarketId = selectedEvent ? (eventPaymentSettings[selectedEvent.id]?.marketId || selectedEvent.market_id || null) : null;
-  const activeMarket = markets.find(m => m.id === eventMarketId) || null;
+  // Event location drives hourly rate
+  const eventLocationId = selectedEvent?.location_id || eventPaymentSettings[selectedEvent?.id]?.locationId || null;
+  const eventLocation = locations.find(l => l.id === eventLocationId) || null;
+
+  // Worker home location drives travel origin
+  const worker = workers?.find(w => w.id === assignmentData?.workerId);
+  const workerHomeLocation = locations.find(l => l.id === worker?.home_location_id) || null;
 
   // Don't show payment modal if payment tracking is disabled
   if (!paymentTrackingEnabled) {
@@ -85,34 +89,31 @@ export default function PaymentCalculatorModal({
     }
   }, [assignmentData, eventPaymentSettings, selectedEvent]);
 
-  // Auto-fetch miles from warehouse to event address
+  // Auto-fetch miles: worker home location address → event address (fallback to warehouse)
   useEffect(() => {
     if (!open || !assignmentData || !selectedEvent) return;
-    // If event already has payment settings with miles set, skip auto-fetch
     if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
-    // Need both a warehouse address and an event address
     const eventAddress = selectedEvent.address;
-    if (!eventAddress || !warehouseAddress) return;
+    if (!eventAddress) return;
+    const travelOrigin = workerHomeLocation?.address || warehouseAddress;
+    if (!travelOrigin) return;
 
     const fetchMiles = async () => {
       setFetchingMiles(true);
       try {
         const res = await fetch(
-          `/api/get-distance?origin=${encodeURIComponent(warehouseAddress)}&destination=${encodeURIComponent(eventAddress)}`
+          `/api/get-distance?origin=${encodeURIComponent(travelOrigin)}&destination=${encodeURIComponent(eventAddress)}`
         );
         const data = await res.json();
-        if (data.miles !== undefined) {
-          setMiles(data.miles);
-        }
+        if (data.miles !== undefined) setMiles(data.miles);
       } catch (err) {
         // Silently fail — admin can fill in manually
       } finally {
         setFetchingMiles(false);
       }
     };
-
     fetchMiles();
-  }, [open, assignmentData, selectedEvent, warehouseAddress]);
+  }, [open, assignmentData, selectedEvent, warehouseAddress, workerHomeLocation]);
 
   useEffect(() => {
     if (assignmentData && hours > 0) {
@@ -122,11 +123,11 @@ export default function PaymentCalculatorModal({
         miles,
         isLakeGeneva,
         isHoliday,
-        eventMarketId
+        eventLocationId
       );
       setCalculation(calc);
     }
-  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay, eventMarketId]);
+  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay, eventLocationId]);
 
   const handleConfirm = async () => {
     if (!assignmentData || !calculation) return;
@@ -155,10 +156,10 @@ export default function PaymentCalculatorModal({
           holiday_multiplier: calculation.holidayMultiplier,
           total_pay: calculation.totalPay,
           payment_status: 'pending',
-          hourly_rate_snapshot: getEffectiveRate ? getEffectiveRate(assignmentData.position, eventMarketId) : null,
+          hourly_rate_snapshot: getEffectiveRate ? getEffectiveRate(assignmentData.position, eventLocationId) : null,
           travel_pay_snapshot: calculation.travelPay,
           distance_snapshot: miles,
-          market_id_snapshot: eventMarketId || null
+          market_id_snapshot: eventLocationId || null
         }]);
       
       if (error) throw error;
@@ -260,13 +261,16 @@ export default function PaymentCalculatorModal({
           </div>
 
           <div className="space-y-6">
-            {/* Market badge */}
-            {activeMarket && (
+            {/* Location badge */}
+            {eventLocation && (
               <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center justify-between">
                 <p className="text-sm text-blue-800">
-                  📍 <strong>{activeMarket.name}</strong> market rates apply to this event
+                  📍 <strong>{eventLocation.name}</strong> rates apply · 
+                  {workerHomeLocation && workerHomeLocation.id !== eventLocationId
+                    ? <span className="ml-1">Travel from <strong>{workerHomeLocation.name}</strong></span>
+                    : <span className="ml-1">Local event</span>
+                  }
                 </p>
-                <span className="text-xs text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full">Auto-detected</span>
               </div>
             )}
 
@@ -299,7 +303,7 @@ export default function PaymentCalculatorModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Miles from Warehouse *
+                  Miles from {workerHomeLocation?.name || 'Warehouse'} *
                   {fetchingMiles && (
                     <span className="ml-2 text-xs text-blue-500 font-normal">⟳ Calculating...</span>
                   )}

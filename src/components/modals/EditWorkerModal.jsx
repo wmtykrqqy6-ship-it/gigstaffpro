@@ -6,6 +6,7 @@ export default function EditWorkerModal({
   open,
   worker,
   positions,
+  locations = [],
   onClose,
   onSuccess
 }) {
@@ -15,6 +16,7 @@ export default function EditWorkerModal({
     phone: '',
     skills: [],
     rank: 1,
+    home_location_id: null,
   });
   const [saving, setSaving] = useState(false);
 
@@ -26,6 +28,7 @@ export default function EditWorkerModal({
         phone: worker.phone || '',
         skills: Array.isArray(worker.skills) ? worker.skills : [],
         rank: worker.rank || 1,
+        home_location_id: worker.home_location_id || null,
       });
     }
   }, [worker]);
@@ -56,6 +59,7 @@ export default function EditWorkerModal({
         phone: formData.phone,
         skills: formData.skills,
         rank: formData.rank,
+        home_location_id: formData.home_location_id || null,
       })
       .eq('id', worker.id);
 
@@ -115,6 +119,22 @@ export default function EditWorkerModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="(555) 123-4567"
               />
+            </div>
+
+            {/* Home Location */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Home Location</label>
+              <select
+                value={formData.home_location_id || ''}
+                onChange={(e) => setFormData({ ...formData, home_location_id: e.target.value || null })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">— No home location set —</option>
+                {locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>{loc.name}{loc.city ? ` (${loc.city})` : ''}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Used to calculate travel pay from worker's base to the event.</p>
             </div>
 
             <div>

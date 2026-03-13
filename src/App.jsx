@@ -52,8 +52,8 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
-  const [markets, setMarkets] = useState([]);
-  const [marketPayRates, setMarketPayRates] = useState({}); // { market_id: { position_key: rate } }
+  const [locations, setLocations] = useState([]);
+  const [locationPayRates, setLocationPayRates] = useState({}); // { location_id: { position_key: rate } }
   const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -489,30 +489,26 @@ setPayRates(ratesMap);
         .from('travel_tiers')
         .select('*')
         .order('min_miles', { ascending: true });
+      if (!tiersError && tiersData) setTravelTiers(tiersData);
 
-      if (!tiersError && tiersData) {
-        setTravelTiers(tiersData);
-      }
-
-      // Load markets + market pay rates
-      const { data: marketsData } = await supabase
-        .from('markets')
+      // Load locations
+      const { data: locsData } = await supabase
+        .from('locations')
         .select('*')
         .eq('is_active', true)
         .order('name');
-      setMarkets(marketsData || []);
+      setLocations(locsData || []);
 
-      const { data: mprData } = await supabase
-        .from('market_pay_rates')
-        .select('*');
-      const mprMap = {};
-      (mprData || []).forEach(r => {
-        if (!mprMap[r.market_id]) mprMap[r.market_id] = {};
+      // Load location pay rate overrides
+      const { data: lprData } = await supabase.from('location_pay_rates').select('*');
+      const lprMap = {};
+      (lprData || []).forEach(r => {
+        if (!lprMap[r.location_id]) lprMap[r.location_id] = {};
         const key = getPayRateKey(r.position);
-        mprMap[r.market_id][key] = Number(r.hourly_rate) || 0;
-        mprMap[r.market_id][r.position] = Number(r.hourly_rate) || 0;
+        lprMap[r.location_id][key] = Number(r.hourly_rate) || 0;
+        lprMap[r.location_id][r.position] = Number(r.hourly_rate) || 0;
       });
-      setMarketPayRates(mprMap);
+      setLocationPayRates(lprMap);
 
       // Load persisted event payment settings
       const { data: epsData, error: epsError } = await supabase
@@ -521,10 +517,10 @@ setPayRates(ratesMap);
 
       if (epsError) { console.error('Failed to load payment settings:', epsError); }
       else if (epsData && epsData.length > 0) {
-        // Also load events to get market_id
-        const { data: eventsForMarket } = await supabase.from('events').select('id, market_id');
-        const eventMarketMap = {};
-        (eventsForMarket || []).forEach(e => { eventMarketMap[e.id] = e.market_id; });
+        // Load events to get location_id
+        const { data: eventsForLoc } = await supabase.from('events').select('id, location_id');
+        const eventLocMap = {};
+        (eventsForLoc || []).forEach(e => { eventLocMap[e.id] = e.location_id; });
 
         const epsMap = {};
         epsData.forEach(row => {
@@ -533,7 +529,7 @@ setPayRates(ratesMap);
             miles: row.miles,
             isLakeGeneva: row.is_lake_geneva,
             isHoliday: row.is_holiday,
-            marketId: eventMarketMap[row.event_id] || null
+            locationId: eventLocMap[row.event_id] || null
           };
         });
         setEventPaymentSettings(epsMap);
@@ -560,21 +556,21 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-  // Get effective hourly rate for a position, using market override if available
-  const getEffectiveRate = (position, marketId) => {
+  // Get effective hourly rate for a position, using location override if available
+  const getEffectiveRate = (position, locationId) => {
     const rateKey = getPayRateKey(position);
-    if (marketId && marketPayRates[marketId]) {
-      const marketRate = marketPayRates[marketId][rateKey] || marketPayRates[marketId][position];
-      if (marketRate) return marketRate;
+    if (locationId && locationPayRates[locationId]) {
+      const locRate = locationPayRates[locationId][rateKey] || locationPayRates[locationId][position];
+      if (locRate) return locRate;
     }
     return payRates[rateKey] || payRates[position] || 0;
   };
 
-  // Payment calculation function based on PRD
-  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday, marketId = null) => {
+  // Payment calculation — locationId drives hourly rate, miles drives travel pay
+  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday, locationId = null) => {
 
-    // Step 1: Calculate base pay using market rate if available
-    const hourlyRate = getEffectiveRate(position, marketId);
+    // Step 1: Calculate base pay using location rate if available
+    const hourlyRate = getEffectiveRate(position, locationId);
     const basePay = hours * hourlyRate;
 
     // Step 2: Calculate travel pay
@@ -839,12 +835,6 @@ setAppPositions(storedPositions);
       const { data: existing } = await supabase.from('event_payment_settings').select('event_id');
       const existingIds = new Set((existing || []).map(r => r.event_id));
 
-      // Load fresh markets for detection
-      const { data: activeMarkets } = await supabase
-        .from('markets')
-        .select('*')
-        .eq('is_active', true);
-
       const needsSettings = (eventsToCheck || []).filter(e =>
         !existingIds.has(e.id) &&
         e.status !== 'archived' &&
@@ -864,23 +854,8 @@ setAppPositions(storedPositions);
         return Math.round(hours * 10) / 10;
       };
 
-      // Detect which market an event belongs to by checking distance from each market center
-      const detectMarket = async (eventAddress) => {
-        if (!activeMarkets || activeMarkets.length === 0) return null;
-        for (const market of activeMarkets) {
-          try {
-            const origin = market.center_zip;
-            const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(eventAddress)}`);
-            const data = await res.json();
-            if (data.miles != null && data.miles <= market.radius_miles) {
-              return market.id;
-            }
-          } catch (_) {}
-        }
-        return null; // defaults to base rates
-      };
-
       for (const event of needsSettings) {
+        // Travel distance uses warehouse (primary travel origin) → event
         let miles = 0;
         try {
           const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(warehouse)}&destination=${encodeURIComponent(event.address)}`);
@@ -890,12 +865,7 @@ setAppPositions(storedPositions);
 
         const hours = parseHours(event.time, event.end_time);
         const isLakeGeneva = isLakeGenevaZip(event.address);
-        const marketId = await detectMarket(event.address);
-
-        // Store market_id on the event itself
-        if (marketId) {
-          await supabase.from('events').update({ market_id: marketId }).eq('id', event.id);
-        }
+        const locationId = event.location_id || null;
 
         const { error } = await supabase.from('event_payment_settings').upsert({
           event_id: event.id,
@@ -909,7 +879,7 @@ setAppPositions(storedPositions);
         if (!error) {
           setEventPaymentSettings(prev => ({
             ...prev,
-            [event.id]: { hours, miles, isLakeGeneva, isHoliday: false, marketId }
+            [event.id]: { hours, miles, isLakeGeneva, isHoliday: false, locationId }
           }));
         }
       }
@@ -1001,7 +971,8 @@ setAppPositions(storedPositions);
           payRates={payRates}
           travelTiers={travelTiers}
           bonuses={bonuses}
-          marketPayRates={marketPayRates}
+          locationPayRates={locationPayRates}
+          locations={locations}
           getEffectiveRate={getEffectiveRate}
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
@@ -1267,6 +1238,7 @@ setAppPositions(storedPositions);
         open={showEditWorker}
         worker={selectedWorkerForEdit}
         positions={positions}
+        locations={locations}
         onClose={() => {
           setShowEditWorker(false);
           setSelectedWorkerForEdit(null);
@@ -1342,8 +1314,8 @@ setAppPositions(storedPositions);
         eventPaymentSettings={eventPaymentSettings}
         paymentTrackingEnabled={paymentTrackingEnabled}
         payRates={payRates}
-        markets={markets}
-        marketPayRates={marketPayRates}
+        locations={locations}
+        locationPayRates={locationPayRates}
         getEffectiveRate={getEffectiveRate}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}

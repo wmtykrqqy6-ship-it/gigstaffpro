@@ -110,163 +110,87 @@ function TravelTierRow({ tier, onSave }) {
 }
 
 
-// ── Markets Section Component ──
-function MarketsSection({ positions, onPayRatesChanged }) {
-  const [markets, setMarkets] = React.useState([]);
-  const [loading, setLoading] = React.useState(false);
-  const [expandedMarket, setExpandedMarket] = React.useState(null);
-  const [marketRates, setMarketRates] = React.useState({});
-  const [addingMarket, setAddingMarket] = React.useState(false);
-  const [newMarket, setNewMarket] = React.useState({ name: '', center_zip: '', radius_miles: 30 });
 
-  const loadMarkets = async () => {
+// ── Location Pay Rates Component (embedded in location card) ──
+// ── Location Pay Rates (reads/writes location_pay_rates directly) ──
+function LocationPayRates({ location, positions, onPayRatesChanged }) {
+  const [rates, setRates] = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+
+  const getPayRateKey = (position) => {
+    const p = String(position || '').toLowerCase().trim();
+    if (p.includes('blackjack')) return 'blackjack_dealer';
+    if (p.includes('roulette')) return 'roulette_dealer';
+    if (p.includes('poker')) return 'poker_dealer';
+    if (p.includes('craps')) return 'craps_dealer';
+    if (p.includes('baccarat')) return 'baccarat_dealer';
+    if (p.includes('event lead')) return 'event_lead';
+    if (p === 'dealer') return 'dealer';
+    if (p.includes('host')) return 'host';
+    if (p.includes('bartender')) return 'bartender';
+    if (p.includes('server')) return 'server';
+    if (p.includes('cashier')) return 'cashier';
+    return p.replace(/\s+/g, '_');
+  };
+
+  const loadRates = async () => {
     setLoading(true);
-    const { data: mData } = await supabase.from('markets').select('*').order('name');
-    const { data: rData } = await supabase.from('market_pay_rates').select('*');
-    setMarkets(mData || []);
+    const { data: rData } = await supabase
+      .from('location_pay_rates')
+      .select('*')
+      .eq('location_id', location.id);
     const rMap = {};
-    (rData || []).forEach(r => {
-      if (!rMap[r.market_id]) rMap[r.market_id] = {};
-      rMap[r.market_id][r.position] = { id: r.id, rate: r.hourly_rate };
-    });
-    setMarketRates(rMap);
+    (rData || []).forEach(r => { rMap[r.position] = r; });
+    setRates(rMap);
     setLoading(false);
   };
 
-  React.useEffect(() => { loadMarkets(); }, []);
+  React.useEffect(() => { loadRates(); }, [location.id]);
 
-  const saveNewMarket = async () => {
-    if (!newMarket.name || !newMarket.center_zip) { alert('Name and zip required'); return; }
-    await supabase.from('markets').insert({
-      name: newMarket.name,
-      center_zip: newMarket.center_zip,
-      radius_miles: Number(newMarket.radius_miles) || 30,
-      is_active: true
-    });
-    setNewMarket({ name: '', center_zip: '', radius_miles: 30 });
-    setAddingMarket(false);
-    loadMarkets();
-    if (onPayRatesChanged) onPayRatesChanged();
-  };
-
-  const deleteMarket = async (id) => {
-    if (!confirm('Delete this market? All its pay rate overrides will also be removed.')) return;
-    await supabase.from('markets').delete().eq('id', id);
-    loadMarkets();
-    if (onPayRatesChanged) onPayRatesChanged();
-  };
-
-  const saveMarketRate = async (marketId, position, rate, existingId) => {
+  const saveRate = async (positionLabel, rate, existingId) => {
+    const key = getPayRateKey(positionLabel);
     const numRate = parseFloat(rate);
     if (isNaN(numRate)) return;
     if (existingId) {
-      await supabase.from('market_pay_rates').update({ hourly_rate: numRate }).eq('id', existingId);
+      await supabase.from('location_pay_rates').update({ hourly_rate: numRate }).eq('id', existingId);
     } else {
-      await supabase.from('market_pay_rates').insert({ market_id: marketId, position, hourly_rate: numRate });
+      await supabase.from('location_pay_rates').insert({ location_id: location.id, position: key, hourly_rate: numRate });
     }
-    loadMarkets();
+    await loadRates();
     if (onPayRatesChanged) onPayRatesChanged();
   };
 
-  const clearMarketRate = async (existingId) => {
+  const clearRate = async (existingId) => {
     if (!existingId) return;
-    await supabase.from('market_pay_rates').delete().eq('id', existingId);
-    loadMarkets();
+    await supabase.from('location_pay_rates').delete().eq('id', existingId);
+    await loadRates();
     if (onPayRatesChanged) onPayRatesChanged();
   };
+
+  if (loading) return <p className="text-xs text-gray-400 mt-2">Loading...</p>;
 
   const positionLabels = positions.map(p => p.label || p);
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center space-x-2">
-          <span className="text-xl">🌎</span>
-          <h3 className="text-xl font-bold text-gray-900">Markets</h3>
-        </div>
-        <button onClick={() => setAddingMarket(true)}
-          className="flex items-center space-x-1 bg-red-900 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-800">
-          <Plus size={15} /><span>Add Market</span>
-        </button>
-      </div>
-      <p className="text-sm text-gray-500 mb-4">
-        Define geographic markets with their own pay rate overrides. Events are auto-assigned to a market based on zip code proximity. Leave a position blank to use the base rate.
-      </p>
-
-      {addingMarket && (
-        <div className="grid grid-cols-3 gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <input type="text" placeholder="Market name (e.g. Madison)" value={newMarket.name}
-            onChange={e => setNewMarket(p => ({...p, name: e.target.value}))}
-            className="px-3 py-2 border border-gray-300 rounded text-sm" />
-          <input type="text" placeholder="Center zip code" value={newMarket.center_zip}
-            onChange={e => setNewMarket(p => ({...p, center_zip: e.target.value}))}
-            className="px-3 py-2 border border-gray-300 rounded text-sm" />
-          <div className="flex space-x-2 items-center">
-            <input type="number" placeholder="Radius (mi)" value={newMarket.radius_miles}
-              onChange={e => setNewMarket(p => ({...p, radius_miles: e.target.value}))}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm" />
-            <button onClick={saveNewMarket} className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"><Save size={15} /></button>
-            <button onClick={() => setAddingMarket(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={18} /></button>
-          </div>
-        </div>
-      )}
-
-      {loading && <p className="text-sm text-gray-400">Loading...</p>}
-
-      <div className="space-y-3">
-        {markets.map(market => (
-          <div key={market.id} className="border border-gray-200 rounded-lg overflow-hidden">
-            {/* Market header */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
-              onClick={() => setExpandedMarket(expandedMarket === market.id ? null : market.id)}>
-              <div className="flex items-center space-x-3">
-                <span className="font-semibold text-gray-900">{market.name}</span>
-                <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                  zip {market.center_zip} · {market.radius_miles} mi radius
-                </span>
-                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                  {Object.keys(marketRates[market.id] || {}).length} rate overrides
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button onClick={e => { e.stopPropagation(); deleteMarket(market.id); }}
-                  className="text-red-400 hover:text-red-600 p-1"><Trash2 size={15} /></button>
-                {expandedMarket === market.id ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-              </div>
-            </div>
-
-            {/* Rate overrides grid */}
-            {expandedMarket === market.id && (
-              <div className="p-4">
-                <p className="text-xs text-gray-500 mb-3">Set per-position hourly rates for this market. Leave blank to use the base rate.</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {positionLabels.map(pos => {
-                    const existing = marketRates[market.id]?.[pos];
-                    return (
-                      <MarketRateRow
-                        key={pos}
-                        position={pos}
-                        existing={existing}
-                        marketId={market.id}
-                        onSave={saveMarketRate}
-                        onClear={clearMarketRate}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-        {markets.length === 0 && !loading && (
-          <p className="text-sm text-gray-400 py-2">No markets configured yet. Add a market to set location-based pay rates.</p>
-        )}
-      </div>
+    <div className="mt-2 grid grid-cols-2 gap-1.5">
+      {positionLabels.map(pos => {
+        const key = getPayRateKey(pos);
+        const existing = rates[key] || rates[pos];
+        return (
+          <LocationRateRow
+            key={pos}
+            position={pos}
+            existing={existing ? { id: existing.id, rate: existing.hourly_rate } : null}
+            onSave={(posLabel, rate, existingId) => saveRate(posLabel, rate, existingId)}
+            onClear={clearRate}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function MarketRateRow({ position, existing, marketId, onSave, onClear }) {
+function LocationRateRow({ position, existing, onSave, onClear }) {
   const [val, setVal] = React.useState(existing?.rate ?? '');
   const [dirty, setDirty] = React.useState(false);
 
@@ -289,7 +213,7 @@ function MarketRateRow({ position, existing, marketId, onSave, onClear }) {
         />
         <span className="text-gray-400 text-xs">/hr</span>
         {dirty && val && (
-          <button onClick={() => { onSave(marketId, position, val, existing?.id); setDirty(false); }}
+          <button onClick={() => { onSave(position, val, existing?.id); setDirty(false); }}
             className="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
             <Save size={11} />
           </button>
@@ -428,10 +352,12 @@ export default function SettingsView({
   const [editingLocation, setEditingLocation] = useState(null);
   const [locationForm, setLocationForm] = useState({
     name: '', city: '', state: '', timezone: 'America/Chicago',
+    center_zip: '', radius_miles: 30,
     rules: { default_dress_code: '', notes: '' },
     is_active: true
   });
   const [savingLocation, setSavingLocation] = useState(false);
+  const [expandedLocationRates, setExpandedLocationRates] = useState(null);
   // --- Venues state ---
   const [venues, setVenues] = useState([]);
   const [loadingVenues, setLoadingVenues] = useState(true);
@@ -722,6 +648,9 @@ export default function SettingsView({
   const resetLocationForm = () => {
     setLocationForm({
       name: '', city: '', state: '', timezone: 'America/Chicago',
+      address: '',
+      center_zip: '', radius_miles: 30,
+      service_radius_miles: 50,
       rules: { default_dress_code: '', notes: '' },
       is_active: true
     });
@@ -739,6 +668,10 @@ export default function SettingsView({
       city: loc.city || '',
       state: loc.state || '',
       timezone: loc.timezone || 'America/Chicago',
+      address: loc.address || '',
+      center_zip: loc.center_zip || '',
+      radius_miles: loc.radius_miles || 30,
+      service_radius_miles: loc.service_radius_miles || 50,
       rules: {
         default_dress_code: loc.rules?.default_dress_code || '',
         notes: loc.rules?.notes || ''
@@ -761,20 +694,19 @@ export default function SettingsView({
         city: locationForm.city.trim() || null,
         state: locationForm.state.trim() || null,
         timezone: locationForm.timezone,
+        address: locationForm.address.trim() || null,
+        center_zip: locationForm.center_zip.trim() || null,
+        radius_miles: Number(locationForm.radius_miles) || 30,
+        service_radius_miles: Number(locationForm.service_radius_miles) || 50,
         rules: locationForm.rules,
         is_active: locationForm.is_active
       };
 
       if (editingLocation) {
-        const { error } = await supabase
-          .from('locations')
-          .update(payload)
-          .eq('id', editingLocation.id);
+        const { error } = await supabase.from('locations').update(payload).eq('id', editingLocation.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('locations')
-          .insert([payload]);
+        const { error } = await supabase.from('locations').insert([payload]);
         if (error) throw error;
       }
 
@@ -782,6 +714,7 @@ export default function SettingsView({
       setShowAddLocation(false);
       setEditingLocation(null);
       resetLocationForm();
+      if (onPayRatesChanged) onPayRatesChanged();
     } catch (err) {
       alert('Error saving location: ' + err.message);
     } finally {
@@ -1741,6 +1674,40 @@ export default function SettingsView({
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Warehouse / Hub Address</label>
+                  <input
+                    type="text"
+                    value={locationForm.address}
+                    onChange={e => setLocationForm({ ...locationForm, address: e.target.value })}
+                    placeholder="e.g. 535 S 93rd St, Milwaukee, WI 53214"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Used as the travel origin when calculating worker travel pay for events in this location.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Center Zip Code</label>
+                  <input
+                    type="text"
+                    value={locationForm.center_zip}
+                    onChange={e => setLocationForm({ ...locationForm, center_zip: e.target.value })}
+                    placeholder="e.g. 53214"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Geographic center of this location's service area</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Service Radius (miles)</label>
+                  <input
+                    type="number"
+                    value={locationForm.service_radius_miles}
+                    onChange={e => setLocationForm({ ...locationForm, service_radius_miles: e.target.value })}
+                    placeholder="50"
+                    min="1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Events within this radius are considered part of this location</p>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Default Dress Code</label>
                   <input
@@ -1853,11 +1820,36 @@ export default function SettingsView({
                   </div>
                   <div className="ml-6 space-y-1 text-xs text-gray-500">
                     <p>🕐 {loc.timezone}</p>
+                    {loc.address && (
+                      <p>🏭 {loc.address}</p>
+                    )}
+                    {loc.center_zip && (
+                      <p>📍 Zip {loc.center_zip} · {loc.service_radius_miles || 50} mi service radius</p>
+                    )}
                     {loc.rules?.default_dress_code && (
                       <p>👔 {loc.rules.default_dress_code}</p>
                     )}
                     {loc.rules?.notes && (
                       <p className="text-gray-400 italic">"{loc.rules.notes}"</p>
+                    )}
+                  </div>
+
+                  {/* Pay Rate Overrides expansion */}
+                  <div className="mt-3 ml-6">
+                    <button
+                      onClick={() => setExpandedLocationRates(expandedLocationRates === loc.id ? null : loc.id)}
+                      className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      <DollarSign size={12} />
+                      <span>Pay Rate Overrides</span>
+                      {expandedLocationRates === loc.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                    {expandedLocationRates === loc.id && (
+                      <LocationPayRates
+                        location={loc}
+                        positions={positions}
+                        onPayRatesChanged={onPayRatesChanged}
+                      />
                     )}
                   </div>
                 </div>
@@ -2101,7 +2093,11 @@ export default function SettingsView({
       {activeTab === 'payrates' && (
         <div className="space-y-6">
 
-          {/* Position Hourly Rates */}
+          {/* Info banner */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start space-x-2">
+            <span className="text-blue-500 mt-0.5">💡</span>
+            <p className="text-sm text-blue-800">These are your <strong>base rates</strong> — used when no location-specific override applies. To set per-location rates, go to the <strong>Locations tab</strong> and expand any location's Pay Rate Overrides.</p>
+          </div>
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center space-x-2 mb-1">
               <DollarSign size={20} className="text-red-900" />
@@ -2130,7 +2126,7 @@ export default function SettingsView({
             )}
           </div>
 
-          {/* Travel Tiers */}
+          {/* Travel Pay Tiers */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center space-x-2 mb-1">
               <span className="text-xl">🚗</span>
@@ -2203,14 +2199,6 @@ export default function SettingsView({
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── MARKETS UI injected into payrates tab above positions ── */}
-      {activeTab === 'payrates' && (
-        <MarketsSection
-          positions={positions}
-          onPayRatesChanged={onPayRatesChanged}
-        />
       )}
 
       {activeTab === 'positions' && (

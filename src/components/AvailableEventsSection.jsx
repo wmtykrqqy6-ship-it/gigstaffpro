@@ -20,7 +20,7 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, marketPayRates = {}, getEffectiveRate, onReloadAssignments }) => {
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
     const [eventDistances, setEventDistances] = useState({}); // { eventId: miles | 'loading' | 'error' }
     const fetchedRef = useRef(false); // prevent re-fetching same worker/events
@@ -535,9 +535,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
 
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
-                      const marketId = settings.marketId || null;
+                      const locationId = settings.locationId || event.location_id || null;
                       const hourlyRate = getEffectiveRate
-                        ? getEffectiveRate(position, marketId)
+                        ? getEffectiveRate(position, locationId)
                         : (payRates[rateKey] || payRates[position] || 0);
                       if (!hourlyRate) return null;
 
