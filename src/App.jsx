@@ -52,7 +52,6 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
-  const [locations, setLocations] = useState([]);
   const [locationPayRates, setLocationPayRates] = useState({}); // { location_id: { position_key: rate } }
   const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
