@@ -5,6 +5,40 @@ import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 import AddressAutocomplete from '../AddressAutocomplete';
 
 
+// --- Position rate row (uses position label, saves by key) ---
+function PositionRateRow({ label, currentRate, onSave }) {
+  const [val, setVal] = React.useState(currentRate);
+  const [dirty, setDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    setVal(currentRate);
+    setDirty(false);
+  }, [currentRate]);
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <span className="font-medium text-gray-900">{label}</span>
+      <div className="flex items-center space-x-2">
+        <span className="text-gray-500 text-sm">$</span>
+        <input
+          type="number" min="0" step="0.5"
+          value={val}
+          placeholder="—"
+          onChange={e => { setVal(e.target.value); setDirty(true); }}
+          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-red-500"
+        />
+        <span className="text-gray-500 text-sm">/hr</span>
+        {dirty && (
+          <button onClick={() => { onSave(val); setDirty(false); }}
+            className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 flex items-center space-x-1">
+            <Save size={13} /><span>Save</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- Pay Rate inline-edit row ---
 function PayRateRow({ rate, saving, onSave }) {
   const [val, setVal] = React.useState(rate.hourly_rate);
@@ -303,10 +337,49 @@ export default function SettingsView({
       ]);
       setPayRatesList(rates || []);
       setTravelTiersList(tiers || []);
-      // Location bonuses are bonuses with a zip field or named like zip codes
       setLocationBonuses((bonusData || []).filter(b => b.zip_code));
     } catch (err) { console.error('loadPayRatesData:', err); }
     finally { setLoadingPayRates(false); }
+  };
+
+  // Helper: normalize position label to a pay_rates key (mirrors App.jsx getPayRateKey)
+  const getPayRateKey = (position) => {
+    const p = String(position || '').toLowerCase().trim();
+    if (p.includes('blackjack')) return 'blackjack_dealer';
+    if (p.includes('roulette')) return 'roulette_dealer';
+    if (p.includes('poker')) return 'poker_dealer';
+    if (p.includes('craps')) return 'craps_dealer';
+    if (p.includes('baccarat')) return 'baccarat_dealer';
+    if (p.includes('event lead')) return 'event_lead';
+    if (p === 'dealer') return 'dealer';
+    if (p.includes('host')) return 'host';
+    if (p.includes('bartender')) return 'bartender';
+    if (p.includes('server')) return 'server';
+    if (p.includes('cashier')) return 'cashier';
+    return p.replace(/\s+/g, '_');
+  };
+
+  // Build a map: normalizedKey → pay_rates row, for quick lookup
+  const payRatesMap = {};
+  payRatesList.forEach(r => {
+    payRatesMap[getPayRateKey(r.position)] = r;
+    payRatesMap[r.position] = r; // also allow direct match
+  });
+
+  // Save by position label — upsert if no matching row exists yet
+  const savePayRateByPosition = async (positionLabel, newRate) => {
+    const rate = parseFloat(newRate);
+    if (isNaN(rate) || rate < 0) { alert('Enter a valid rate'); return; }
+    const key = getPayRateKey(positionLabel);
+    const existing = payRatesMap[key] || payRatesMap[positionLabel];
+    if (existing) {
+      await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', existing.id);
+    } else {
+      // Create new row using the normalized key as position name
+      await supabase.from('pay_rates').insert({ position: key, hourly_rate: rate });
+    }
+    loadPayRatesData();
+    if (onPayRatesChanged) onPayRatesChanged();
   };
 
   useEffect(() => {
@@ -2039,10 +2112,20 @@ export default function SettingsView({
               <p className="text-sm text-gray-400">Loading...</p>
             ) : (
               <div className="space-y-2">
-                {payRatesList.map(rate => (
-                  <PayRateRow key={rate.id} rate={rate} saving={savingPayRate === rate.id} onSave={savePayRate} />
-                ))}
-                {payRatesList.length === 0 && <p className="text-sm text-gray-400">No pay rates configured.</p>}
+                {positions.map(pos => {
+                  const label = pos.label || pos;
+                  const key = getPayRateKey(label);
+                  const existing = payRatesMap[key] || payRatesMap[label];
+                  return (
+                    <PositionRateRow
+                      key={label}
+                      label={label}
+                      currentRate={existing?.hourly_rate ?? ''}
+                      onSave={(rate) => savePayRateByPosition(label, rate)}
+                    />
+                  );
+                })}
+                {positions.length === 0 && <p className="text-sm text-gray-400">No positions configured. Add positions in the Positions tab first.</p>}
               </div>
             )}
           </div>
