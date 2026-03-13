@@ -4,9 +4,275 @@ import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 import AddressAutocomplete from '../AddressAutocomplete';
 
+
+// --- Pay Rate inline-edit row ---
+function PayRateRow({ rate, saving, onSave }) {
+  const [val, setVal] = React.useState(rate.hourly_rate);
+  const [dirty, setDirty] = React.useState(false);
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <span className="font-medium text-gray-900">{rate.position}</span>
+      <div className="flex items-center space-x-2">
+        <span className="text-gray-500 text-sm">$</span>
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          value={val}
+          onChange={e => { setVal(e.target.value); setDirty(true); }}
+          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-red-500"
+        />
+        <span className="text-gray-500 text-sm">/hr</span>
+        {dirty && (
+          <button
+            onClick={() => { onSave(rate.id, val); setDirty(false); }}
+            disabled={saving}
+            className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50 flex items-center space-x-1"
+          >
+            <Save size={13} /><span>{saving ? 'Saving...' : 'Save'}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Travel Tier inline-edit row ---
+function TravelTierRow({ tier, onSave }) {
+  const [min, setMin] = React.useState(tier.min_miles);
+  const [max, setMax] = React.useState(tier.max_miles);
+  const [pay, setPay] = React.useState(tier.pay_amount);
+  const [dirty, setDirty] = React.useState(false);
+
+  const handleSave = () => {
+    onSave(tier.id, 'min_miles', min);
+    onSave(tier.id, 'max_miles', max);
+    onSave(tier.id, 'pay_amount', pay);
+    setDirty(false);
+  };
+
+  return (
+    <div className="grid grid-cols-3 gap-3 items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <input type="number" value={min} min="0"
+        onChange={e => { setMin(e.target.value); setDirty(true); }}
+        className="px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-red-500" />
+      <input type="number" value={max} min="0"
+        onChange={e => { setMax(e.target.value); setDirty(true); }}
+        className="px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-red-500" />
+      <div className="flex items-center space-x-2">
+        <span className="text-gray-500 text-sm">$</span>
+        <input type="number" value={pay} min="0"
+          onChange={e => { setPay(e.target.value); setDirty(true); }}
+          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-red-500" />
+        {dirty && (
+          <button onClick={handleSave}
+            className="bg-green-600 text-white px-2 py-1 rounded text-sm hover:bg-green-700">
+            <Save size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ── Markets Section Component ──
+function MarketsSection({ positions, onPayRatesChanged }) {
+  const [markets, setMarkets] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [expandedMarket, setExpandedMarket] = React.useState(null);
+  const [marketRates, setMarketRates] = React.useState({});
+  const [addingMarket, setAddingMarket] = React.useState(false);
+  const [newMarket, setNewMarket] = React.useState({ name: '', center_zip: '', radius_miles: 30 });
+
+  const loadMarkets = async () => {
+    setLoading(true);
+    const { data: mData } = await supabase.from('markets').select('*').order('name');
+    const { data: rData } = await supabase.from('market_pay_rates').select('*');
+    setMarkets(mData || []);
+    const rMap = {};
+    (rData || []).forEach(r => {
+      if (!rMap[r.market_id]) rMap[r.market_id] = {};
+      rMap[r.market_id][r.position] = { id: r.id, rate: r.hourly_rate };
+    });
+    setMarketRates(rMap);
+    setLoading(false);
+  };
+
+  React.useEffect(() => { loadMarkets(); }, []);
+
+  const saveNewMarket = async () => {
+    if (!newMarket.name || !newMarket.center_zip) { alert('Name and zip required'); return; }
+    await supabase.from('markets').insert({
+      name: newMarket.name,
+      center_zip: newMarket.center_zip,
+      radius_miles: Number(newMarket.radius_miles) || 30,
+      is_active: true
+    });
+    setNewMarket({ name: '', center_zip: '', radius_miles: 30 });
+    setAddingMarket(false);
+    loadMarkets();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const deleteMarket = async (id) => {
+    if (!confirm('Delete this market? All its pay rate overrides will also be removed.')) return;
+    await supabase.from('markets').delete().eq('id', id);
+    loadMarkets();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const saveMarketRate = async (marketId, position, rate, existingId) => {
+    const numRate = parseFloat(rate);
+    if (isNaN(numRate)) return;
+    if (existingId) {
+      await supabase.from('market_pay_rates').update({ hourly_rate: numRate }).eq('id', existingId);
+    } else {
+      await supabase.from('market_pay_rates').insert({ market_id: marketId, position, hourly_rate: numRate });
+    }
+    loadMarkets();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const clearMarketRate = async (existingId) => {
+    if (!existingId) return;
+    await supabase.from('market_pay_rates').delete().eq('id', existingId);
+    loadMarkets();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const positionLabels = positions.map(p => p.label || p);
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center space-x-2">
+          <span className="text-xl">🌎</span>
+          <h3 className="text-xl font-bold text-gray-900">Markets</h3>
+        </div>
+        <button onClick={() => setAddingMarket(true)}
+          className="flex items-center space-x-1 bg-red-900 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-800">
+          <Plus size={15} /><span>Add Market</span>
+        </button>
+      </div>
+      <p className="text-sm text-gray-500 mb-4">
+        Define geographic markets with their own pay rate overrides. Events are auto-assigned to a market based on zip code proximity. Leave a position blank to use the base rate.
+      </p>
+
+      {addingMarket && (
+        <div className="grid grid-cols-3 gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <input type="text" placeholder="Market name (e.g. Madison)" value={newMarket.name}
+            onChange={e => setNewMarket(p => ({...p, name: e.target.value}))}
+            className="px-3 py-2 border border-gray-300 rounded text-sm" />
+          <input type="text" placeholder="Center zip code" value={newMarket.center_zip}
+            onChange={e => setNewMarket(p => ({...p, center_zip: e.target.value}))}
+            className="px-3 py-2 border border-gray-300 rounded text-sm" />
+          <div className="flex space-x-2 items-center">
+            <input type="number" placeholder="Radius (mi)" value={newMarket.radius_miles}
+              onChange={e => setNewMarket(p => ({...p, radius_miles: e.target.value}))}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm" />
+            <button onClick={saveNewMarket} className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"><Save size={15} /></button>
+            <button onClick={() => setAddingMarket(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={18} /></button>
+          </div>
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-400">Loading...</p>}
+
+      <div className="space-y-3">
+        {markets.map(market => (
+          <div key={market.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Market header */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
+              onClick={() => setExpandedMarket(expandedMarket === market.id ? null : market.id)}>
+              <div className="flex items-center space-x-3">
+                <span className="font-semibold text-gray-900">{market.name}</span>
+                <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                  zip {market.center_zip} · {market.radius_miles} mi radius
+                </span>
+                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  {Object.keys(marketRates[market.id] || {}).length} rate overrides
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button onClick={e => { e.stopPropagation(); deleteMarket(market.id); }}
+                  className="text-red-400 hover:text-red-600 p-1"><Trash2 size={15} /></button>
+                {expandedMarket === market.id ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+              </div>
+            </div>
+
+            {/* Rate overrides grid */}
+            {expandedMarket === market.id && (
+              <div className="p-4">
+                <p className="text-xs text-gray-500 mb-3">Set per-position hourly rates for this market. Leave blank to use the base rate.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {positionLabels.map(pos => {
+                    const existing = marketRates[market.id]?.[pos];
+                    return (
+                      <MarketRateRow
+                        key={pos}
+                        position={pos}
+                        existing={existing}
+                        marketId={market.id}
+                        onSave={saveMarketRate}
+                        onClear={clearMarketRate}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {markets.length === 0 && !loading && (
+          <p className="text-sm text-gray-400 py-2">No markets configured yet. Add a market to set location-based pay rates.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MarketRateRow({ position, existing, marketId, onSave, onClear }) {
+  const [val, setVal] = React.useState(existing?.rate ?? '');
+  const [dirty, setDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    setVal(existing?.rate ?? '');
+    setDirty(false);
+  }, [existing]);
+
+  return (
+    <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-100">
+      <span className="text-sm text-gray-700 font-medium">{position}</span>
+      <div className="flex items-center space-x-1">
+        <span className="text-gray-400 text-xs">$</span>
+        <input
+          type="number" min="0" step="0.5"
+          placeholder="base"
+          value={val}
+          onChange={e => { setVal(e.target.value); setDirty(true); }}
+          className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-right focus:ring-1 focus:ring-red-500"
+        />
+        <span className="text-gray-400 text-xs">/hr</span>
+        {dirty && val && (
+          <button onClick={() => { onSave(marketId, position, val, existing?.id); setDirty(false); }}
+            className="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
+            <Save size={11} />
+          </button>
+        )}
+        {existing?.id && !dirty && (
+          <button onClick={() => { onClear(existing.id); setVal(''); }}
+            className="text-gray-300 hover:text-red-400 p-1"><XCircle size={13} /></button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsView({
   positions,
-  onUpdatePositions
+  onUpdatePositions,
+  onPayRatesChanged
 }) {
   const [activeTab, setActiveTab] = useState('venues');
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
@@ -16,6 +282,70 @@ export default function SettingsView({
     setHostLabel(hostLabelValue);
     setHostLabelSaved(true);
     setTimeout(() => setHostLabelSaved(false), 2000);
+  };
+
+  // --- Pay Rates state ---
+  const [payRatesList, setPayRatesList] = useState([]);
+  const [travelTiersList, setTravelTiersList] = useState([]);
+  const [locationBonuses, setLocationBonuses] = useState([]);
+  const [loadingPayRates, setLoadingPayRates] = useState(false);
+  const [savingPayRate, setSavingPayRate] = useState(null);
+  const [newLocationBonus, setNewLocationBonus] = useState({ name: '', zip: '', bonus_amount: '' });
+  const [addingLocationBonus, setAddingLocationBonus] = useState(false);
+
+  const loadPayRatesData = async () => {
+    setLoadingPayRates(true);
+    try {
+      const [{ data: rates }, { data: tiers }, { data: bonusData }] = await Promise.all([
+        supabase.from('pay_rates').select('*').order('position'),
+        supabase.from('travel_tiers').select('*').order('min_miles'),
+        supabase.from('bonuses').select('*'),
+      ]);
+      setPayRatesList(rates || []);
+      setTravelTiersList(tiers || []);
+      // Location bonuses are bonuses with a zip field or named like zip codes
+      setLocationBonuses((bonusData || []).filter(b => b.zip_code));
+    } catch (err) { console.error('loadPayRatesData:', err); }
+    finally { setLoadingPayRates(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'payrates') loadPayRatesData();
+  }, [activeTab]);
+
+  const savePayRate = async (id, newRate) => {
+    setSavingPayRate(id);
+    const rate = parseFloat(newRate);
+    if (isNaN(rate) || rate < 0) { alert('Enter a valid rate'); setSavingPayRate(null); return; }
+    await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', id);
+    setSavingPayRate(null);
+    loadPayRatesData();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const saveTravelTier = async (id, field, value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return;
+    await supabase.from('travel_tiers').update({ [field]: num }).eq('id', id);
+    loadPayRatesData();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const saveLocationBonus = async () => {
+    const { name, zip, bonus_amount } = newLocationBonus;
+    if (!name || !zip || !bonus_amount) { alert('Fill in all fields'); return; }
+    await supabase.from('bonuses').insert({ bonus_name: name, bonus_amount: parseFloat(bonus_amount), zip_code: zip });
+    setNewLocationBonus({ name: '', zip: '', bonus_amount: '' });
+    setAddingLocationBonus(false);
+    loadPayRatesData();
+    if (onPayRatesChanged) onPayRatesChanged();
+  };
+
+  const deleteLocationBonus = async (id) => {
+    if (!confirm('Delete this location bonus?')) return;
+    await supabase.from('bonuses').delete().eq('id', id);
+    loadPayRatesData();
+    if (onPayRatesChanged) onPayRatesChanged();
   };
 
   // --- Locations state ---
@@ -58,13 +388,8 @@ export default function SettingsView({
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
-  // --- Warehouses state ---
-  const [warehouses, setWarehouses] = useState([]);
-  const [loadingWarehouses, setLoadingWarehouses] = useState(true);
-  const [showAddWarehouse, setShowAddWarehouse] = useState(false);
-  const [editingWarehouse, setEditingWarehouse] = useState(null);
-  const [warehouseForm, setWarehouseForm] = useState({ name: '', address: '' });
-  const [savingWarehouse, setSavingWarehouse] = useState(false);
+  const [warehouseAddress, setWarehouseAddress] = useState('');
+  const [loadingWarehouse, setLoadingWarehouse] = useState(true);
   const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
   const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
   const [rankAccessDays, setRankAccessDays] = useState({
@@ -80,7 +405,7 @@ export default function SettingsView({
   const [loadingTimeSettings, setLoadingTimeSettings] = useState(true);
 
   useEffect(() => {
-    loadWarehouses();
+    loadWarehouseAddress();
     loadPaymentTrackingSetting();
     loadRankAccessSettings();
     loadTimeSettings();
@@ -422,72 +747,24 @@ export default function SettingsView({
     }
   };
 
-  const loadWarehouses = async () => {
-    setLoadingWarehouses(true);
+  const loadWarehouseAddress = async () => {
     try {
       const { data, error } = await supabase
-        .from('warehouses')
+        .from('settings')
         .select('*')
-        .order('is_primary', { ascending: false })
-        .order('name');
-      if (!error) setWarehouses(data || []);
-    } catch (err) {
-      console.error('Error loading warehouses:', err.message);
-    } finally {
-      setLoadingWarehouses(false);
-    }
-  };
-
-  const saveWarehouse = async () => {
-    if (!warehouseForm.name.trim()) { alert('Warehouse name is required.'); return; }
-    if (!warehouseForm.address.trim()) { alert('Warehouse address is required.'); return; }
-    setSavingWarehouse(true);
-    try {
-      if (editingWarehouse) {
-        const { error } = await supabase.from('warehouses').update({
-          name: warehouseForm.name.trim(),
-          address: warehouseForm.address.trim()
-        }).eq('id', editingWarehouse.id);
-        if (error) throw error;
+        .eq('setting_key', 'warehouse_address')
+        .single();
+      
+      if (!error && data) {
+        setWarehouseAddress(data.setting_value || '');
       } else {
-        const isPrimary = warehouses.length === 0;
-        const { error } = await supabase.from('warehouses').insert([{
-          name: warehouseForm.name.trim(),
-          address: warehouseForm.address.trim(),
-          is_primary: isPrimary
-        }]);
-        if (error) throw error;
+        // Set default for Vegas on Wheels
+        setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
       }
-      await loadWarehouses();
-      setShowAddWarehouse(false);
-      setEditingWarehouse(null);
-      setWarehouseForm({ name: '', address: '' });
-    } catch (err) {
-      alert('Error saving warehouse: ' + err.message);
+    } catch (error) {
+      setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
     } finally {
-      setSavingWarehouse(false);
-    }
-  };
-
-  const deleteWarehouse = async (wh) => {
-    if (wh.is_primary) { alert('Cannot delete the primary warehouse. Set another as primary first.'); return; }
-    if (!confirm(`Delete "${wh.name}"? Events assigned to it will lose their warehouse assignment.`)) return;
-    try {
-      const { error } = await supabase.from('warehouses').delete().eq('id', wh.id);
-      if (error) throw error;
-      await loadWarehouses();
-    } catch (err) {
-      alert('Error deleting warehouse: ' + err.message);
-    }
-  };
-
-  const setPrimaryWarehouse = async (wh) => {
-    try {
-      await supabase.from('warehouses').update({ is_primary: false }).neq('id', wh.id);
-      await supabase.from('warehouses').update({ is_primary: true }).eq('id', wh.id);
-      await loadWarehouses();
-    } catch (err) {
-      alert('Error updating primary warehouse: ' + err.message);
+      setLoadingWarehouse(false);
     }
   };
 
@@ -851,6 +1128,7 @@ export default function SettingsView({
           { id: 'clients', label: '👥 Clients' },
           { id: 'locations', label: '📍 Locations' },
           { id: 'positions', label: '🎰 Positions' },
+          { id: 'payrates', label: '💰 Pay Rates' },
           { id: 'general', label: '⚙️ System' },
         ].map(tab => (
           <button
@@ -1545,110 +1823,26 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Warehouses */}
+          {/* Warehouse Address */}
           <div className="px-6 py-5 border-b border-gray-100">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-start justify-between gap-6">
               <div>
-                <p className="font-semibold text-gray-900 text-sm">Warehouses / Staging Locations</p>
-                <p className="text-xs text-gray-500 mt-0.5">Events are auto-assigned to the nearest warehouse. Used for travel pay calculation.</p>
+                <p className="font-semibold text-gray-900 text-sm">Warehouse / Home Base Address</p>
+                <p className="text-xs text-gray-500 mt-0.5">Used for calculating miles traveled to events.</p>
               </div>
-              <button
-                onClick={() => { setWarehouseForm({ name: '', address: '' }); setEditingWarehouse(null); setShowAddWarehouse(true); }}
-                className="flex items-center space-x-1 text-sm bg-red-900 text-white px-3 py-1.5 rounded-lg hover:bg-red-800"
-              >
-                <Plus size={14} />
-                <span>Add</span>
-              </button>
+              {loadingWarehouse ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900 flex-shrink-0" />
+              ) : (
+                <input
+                  type="text"
+                  value={warehouseAddress}
+                  onChange={(e) => setWarehouseAddress(e.target.value)}
+                  className="w-72 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  placeholder="Enter address"
+                  disabled={saving}
+                />
+              )}
             </div>
-
-            {loadingWarehouses ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900" />
-            ) : (
-              <div className="space-y-2">
-                {warehouses.length === 0 && (
-                  <p className="text-sm text-gray-400 italic">No warehouses configured. Add one to enable travel pay calculations.</p>
-                )}
-                {warehouses.map(wh => (
-                  <div key={wh.id} className={`flex items-center justify-between p-3 rounded-lg border ${wh.is_primary ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-sm text-gray-900">{wh.name}</span>
-                        {wh.is_primary && <span className="text-xs bg-red-900 text-white px-2 py-0.5 rounded-full">Primary</span>}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{wh.address}</p>
-                    </div>
-                    <div className="flex items-center space-x-1 ml-3">
-                      {!wh.is_primary && (
-                        <button
-                          onClick={() => setPrimaryWarehouse(wh)}
-                          title="Set as primary"
-                          className="text-xs text-red-700 hover:text-red-900 px-2 py-1 rounded hover:bg-red-50 border border-red-200"
-                        >
-                          Set Primary
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setWarehouseForm({ name: wh.name, address: wh.address }); setEditingWarehouse(wh); setShowAddWarehouse(true); }}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                        title="Edit"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      {!wh.is_primary && (
-                        <button
-                          onClick={() => deleteWarehouse(wh)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showAddWarehouse && (
-              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                <p className="font-medium text-sm text-gray-900">{editingWarehouse ? 'Edit Warehouse' : 'New Warehouse'}</p>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Name *</label>
-                  <input
-                    type="text"
-                    value={warehouseForm.name}
-                    onChange={e => setWarehouseForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Main Warehouse, East Side Storage"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Address *</label>
-                  <input
-                    type="text"
-                    value={warehouseForm.address}
-                    onChange={e => setWarehouseForm(f => ({ ...f, address: e.target.value }))}
-                    placeholder="535 S 93rd St, Milwaukee, WI 53214"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={saveWarehouse}
-                    disabled={savingWarehouse}
-                    className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 text-sm disabled:bg-gray-400"
-                  >
-                    {savingWarehouse ? 'Saving...' : 'Save Warehouse'}
-                  </button>
-                  <button
-                    onClick={() => { setShowAddWarehouse(false); setEditingWarehouse(null); }}
-                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Payment Tracking */}
@@ -1801,6 +1995,7 @@ export default function SettingsView({
                 setSaving(true);
                 try {
                   setHostLabel(hostLabelValue);
+                  await saveWarehouseAddress();
                   await saveRankAccessSettings();
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();
@@ -1828,6 +2023,113 @@ export default function SettingsView({
 
 
       {/* ── POSITIONS TAB ── */}
+
+      {/* ── PAY RATES TAB ── */}
+      {activeTab === 'payrates' && (
+        <div className="space-y-6">
+
+          {/* Position Hourly Rates */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center space-x-2 mb-1">
+              <DollarSign size={20} className="text-red-900" />
+              <h3 className="text-xl font-bold text-gray-900">Position Hourly Rates</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Base pay per hour for each dealer/staff position.</p>
+            {loadingPayRates ? (
+              <p className="text-sm text-gray-400">Loading...</p>
+            ) : (
+              <div className="space-y-2">
+                {payRatesList.map(rate => (
+                  <PayRateRow key={rate.id} rate={rate} saving={savingPayRate === rate.id} onSave={savePayRate} />
+                ))}
+                {payRatesList.length === 0 && <p className="text-sm text-gray-400">No pay rates configured.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Travel Tiers */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center space-x-2 mb-1">
+              <span className="text-xl">🚗</span>
+              <h3 className="text-xl font-bold text-gray-900">Travel Pay Tiers</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Flat travel bonus based on one-way miles from warehouse to event.</p>
+            {loadingPayRates ? (
+              <p className="text-sm text-gray-400">Loading...</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-3 text-xs font-semibold text-gray-500 uppercase px-3 mb-1">
+                  <span>Min Miles</span><span>Max Miles</span><span>Flat Pay ($)</span>
+                </div>
+                {travelTiersList.map(tier => (
+                  <TravelTierRow key={tier.id} tier={tier} onSave={saveTravelTier} />
+                ))}
+                {travelTiersList.length === 0 && <p className="text-sm text-gray-400">No travel tiers configured.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Location Bonuses */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center space-x-2">
+                <MapPin size={20} className="text-red-900" />
+                <h3 className="text-xl font-bold text-gray-900">Location Bonuses</h3>
+              </div>
+              <button
+                onClick={() => setAddingLocationBonus(true)}
+                className="flex items-center space-x-1 bg-red-900 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-800"
+              >
+                <Plus size={15} /><span>Add</span>
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Extra flat bonus for events at specific zip codes (e.g. Lake Geneva 53147 = +$15).</p>
+            {addingLocationBonus && (
+              <div className="grid grid-cols-3 gap-2 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <input type="text" placeholder="Name (e.g. Lake Geneva)" value={newLocationBonus.name}
+                  onChange={e => setNewLocationBonus(p => ({...p, name: e.target.value}))}
+                  className="px-3 py-2 border border-gray-300 rounded text-sm" />
+                <input type="text" placeholder="Zip code (e.g. 53147)" value={newLocationBonus.zip}
+                  onChange={e => setNewLocationBonus(p => ({...p, zip: e.target.value}))}
+                  className="px-3 py-2 border border-gray-300 rounded text-sm" />
+                <div className="flex space-x-2">
+                  <input type="number" placeholder="Bonus $" value={newLocationBonus.bonus_amount}
+                    onChange={e => setNewLocationBonus(p => ({...p, bonus_amount: e.target.value}))}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm" />
+                  <button onClick={saveLocationBonus} className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"><Save size={15} /></button>
+                  <button onClick={() => setAddingLocationBonus(false)} className="text-gray-500 px-2 hover:text-gray-700"><XCircle size={18} /></button>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              {locationBonuses.map(bonus => (
+                <div key={bonus.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <span className="font-medium text-gray-900">{bonus.bonus_name}</span>
+                    <span className="ml-2 text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">zip {bonus.zip_code}</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="font-bold text-green-700">+${bonus.bonus_amount}</span>
+                    <button onClick={() => deleteLocationBonus(bonus.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              ))}
+              {locationBonuses.length === 0 && !addingLocationBonus && (
+                <p className="text-sm text-gray-400">No location bonuses configured. The Lake Geneva bonus is handled separately in the bonuses table.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MARKETS UI injected into payrates tab above positions ── */}
+      {activeTab === 'payrates' && (
+        <MarketsSection
+          positions={positions}
+          onPayRatesChanged={onPayRatesChanged}
+        />
+      )}
+
       {activeTab === 'positions' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-2">Position Types</h3>

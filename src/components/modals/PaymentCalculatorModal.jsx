@@ -10,6 +10,9 @@ export default function PaymentCalculatorModal({
   eventPaymentSettings,
   paymentTrackingEnabled,
   payRates,
+  markets = [],
+  marketPayRates = {},
+  getEffectiveRate,
   calculatePay,
   getPayRateKey,
   warehouseAddress,
@@ -22,6 +25,10 @@ export default function PaymentCalculatorModal({
   const [isHoliday, setIsHoliday] = useState(false);
   const [calculation, setCalculation] = useState(null);
   const [fetchingMiles, setFetchingMiles] = useState(false);
+
+  // Derive active market for this event
+  const eventMarketId = selectedEvent ? (eventPaymentSettings[selectedEvent.id]?.marketId || selectedEvent.market_id || null) : null;
+  const activeMarket = markets.find(m => m.id === eventMarketId) || null;
 
   // Don't show payment modal if payment tracking is disabled
   if (!paymentTrackingEnabled) {
@@ -114,11 +121,12 @@ export default function PaymentCalculatorModal({
         hours,
         miles,
         isLakeGeneva,
-        isHoliday
+        isHoliday,
+        eventMarketId
       );
       setCalculation(calc);
     }
-  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay]);
+  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay, eventMarketId]);
 
   const handleConfirm = async () => {
     if (!assignmentData || !calculation) return;
@@ -146,7 +154,11 @@ export default function PaymentCalculatorModal({
           subtotal: calculation.subtotal,
           holiday_multiplier: calculation.holidayMultiplier,
           total_pay: calculation.totalPay,
-          payment_status: 'pending'
+          payment_status: 'pending',
+          hourly_rate_snapshot: getEffectiveRate ? getEffectiveRate(assignmentData.position, eventMarketId) : null,
+          travel_pay_snapshot: calculation.travelPay,
+          distance_snapshot: miles,
+          market_id_snapshot: eventMarketId || null
         }]);
       
       if (error) throw error;
@@ -248,6 +260,16 @@ export default function PaymentCalculatorModal({
           </div>
 
           <div className="space-y-6">
+            {/* Market badge */}
+            {activeMarket && (
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center justify-between">
+                <p className="text-sm text-blue-800">
+                  📍 <strong>{activeMarket.name}</strong> market rates apply to this event
+                </p>
+                <span className="text-xs text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full">Auto-detected</span>
+              </div>
+            )}
+
             {/* Notice if using event settings */}
             {eventPaymentSettings[selectedEvent.id] && (
               <div className="bg-green-50 border border-green-200 p-3 rounded-lg">

@@ -52,6 +52,8 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
+  const [markets, setMarkets] = useState([]);
+  const [marketPayRates, setMarketPayRates] = useState({}); // { market_id: { position_key: rate } }
   const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -492,6 +494,26 @@ setPayRates(ratesMap);
         setTravelTiers(tiersData);
       }
 
+      // Load markets + market pay rates
+      const { data: marketsData } = await supabase
+        .from('markets')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      setMarkets(marketsData || []);
+
+      const { data: mprData } = await supabase
+        .from('market_pay_rates')
+        .select('*');
+      const mprMap = {};
+      (mprData || []).forEach(r => {
+        if (!mprMap[r.market_id]) mprMap[r.market_id] = {};
+        const key = getPayRateKey(r.position);
+        mprMap[r.market_id][key] = Number(r.hourly_rate) || 0;
+        mprMap[r.market_id][r.position] = Number(r.hourly_rate) || 0;
+      });
+      setMarketPayRates(mprMap);
+
       // Load persisted event payment settings
       const { data: epsData, error: epsError } = await supabase
         .from('event_payment_settings')
@@ -499,13 +521,19 @@ setPayRates(ratesMap);
 
       if (epsError) { console.error('Failed to load payment settings:', epsError); }
       else if (epsData && epsData.length > 0) {
+        // Also load events to get market_id
+        const { data: eventsForMarket } = await supabase.from('events').select('id, market_id');
+        const eventMarketMap = {};
+        (eventsForMarket || []).forEach(e => { eventMarketMap[e.id] = e.market_id; });
+
         const epsMap = {};
         epsData.forEach(row => {
           epsMap[row.event_id] = {
             hours: row.hours,
             miles: row.miles,
             isLakeGeneva: row.is_lake_geneva,
-            isHoliday: row.is_holiday
+            isHoliday: row.is_holiday,
+            marketId: eventMarketMap[row.event_id] || null
           };
         });
         setEventPaymentSettings(epsMap);
@@ -532,15 +560,21 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-  // Payment calculation function based on PRD
-  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday) => {
+  // Get effective hourly rate for a position, using market override if available
+  const getEffectiveRate = (position, marketId) => {
+    const rateKey = getPayRateKey(position);
+    if (marketId && marketPayRates[marketId]) {
+      const marketRate = marketPayRates[marketId][rateKey] || marketPayRates[marketId][position];
+      if (marketRate) return marketRate;
+    }
+    return payRates[rateKey] || payRates[position] || 0;
+  };
 
-  // 🔎 TEMP DEBUG — add this right here
-  if (travelTiers?.[0]) {
-  }
-    // Step 1: Calculate base pay
-   const rateKey = getPayRateKey(position);
-const hourlyRate = payRates[rateKey] || 0;
+  // Payment calculation function based on PRD
+  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday, marketId = null) => {
+
+    // Step 1: Calculate base pay using market rate if available
+    const hourlyRate = getEffectiveRate(position, marketId);
     const basePay = hours * hourlyRate;
 
     // Step 2: Calculate travel pay
@@ -800,14 +834,17 @@ setAppPositions(storedPositions);
 
   const autoCreatePaymentSettings = async (eventsToCheck) => {
     try {
-      // Get current warehouse address from state or default
       const warehouse = warehouseAddress || '535 S 93rd St, Milwaukee, WI 53214';
 
-      // Load existing payment settings to know which events already have them
       const { data: existing } = await supabase.from('event_payment_settings').select('event_id');
       const existingIds = new Set((existing || []).map(r => r.event_id));
 
-      // Only process future/confirmed events without settings
+      // Load fresh markets for detection
+      const { data: activeMarkets } = await supabase
+        .from('markets')
+        .select('*')
+        .eq('is_active', true);
+
       const needsSettings = (eventsToCheck || []).filter(e =>
         !existingIds.has(e.id) &&
         e.status !== 'archived' &&
@@ -816,7 +853,6 @@ setAppPositions(storedPositions);
 
       if (needsSettings.length === 0) return;
 
-      // Process each event — fetch distance, calculate hours, detect Lake Geneva
       const isLakeGenevaZip = (address) => address && address.includes('53147');
 
       const parseHours = (time, end_time) => {
@@ -826,6 +862,22 @@ setAppPositions(storedPositions);
         let hours = (eh + em / 60) - (sh + sm / 60);
         if (hours < 0) hours += 24;
         return Math.round(hours * 10) / 10;
+      };
+
+      // Detect which market an event belongs to by checking distance from each market center
+      const detectMarket = async (eventAddress) => {
+        if (!activeMarkets || activeMarkets.length === 0) return null;
+        for (const market of activeMarkets) {
+          try {
+            const origin = market.center_zip;
+            const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(eventAddress)}`);
+            const data = await res.json();
+            if (data.miles != null && data.miles <= market.radius_miles) {
+              return market.id;
+            }
+          } catch (_) {}
+        }
+        return null; // defaults to base rates
       };
 
       for (const event of needsSettings) {
@@ -838,6 +890,12 @@ setAppPositions(storedPositions);
 
         const hours = parseHours(event.time, event.end_time);
         const isLakeGeneva = isLakeGenevaZip(event.address);
+        const marketId = await detectMarket(event.address);
+
+        // Store market_id on the event itself
+        if (marketId) {
+          await supabase.from('events').update({ market_id: marketId }).eq('id', event.id);
+        }
 
         const { error } = await supabase.from('event_payment_settings').upsert({
           event_id: event.id,
@@ -851,7 +909,7 @@ setAppPositions(storedPositions);
         if (!error) {
           setEventPaymentSettings(prev => ({
             ...prev,
-            [event.id]: { hours, miles, isLakeGeneva, isHoliday: false }
+            [event.id]: { hours, miles, isLakeGeneva, isHoliday: false, marketId }
           }));
         }
       }
@@ -943,6 +1001,8 @@ setAppPositions(storedPositions);
           payRates={payRates}
           travelTiers={travelTiers}
           bonuses={bonuses}
+          marketPayRates={marketPayRates}
+          getEffectiveRate={getEffectiveRate}
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
@@ -1070,6 +1130,7 @@ setAppPositions(storedPositions);
         <SettingsView
           positions={positions}
           onUpdatePositions={setPositions}
+          onPayRatesChanged={loadPaymentConfig}
         />
       );
     }
@@ -1281,6 +1342,9 @@ setAppPositions(storedPositions);
         eventPaymentSettings={eventPaymentSettings}
         paymentTrackingEnabled={paymentTrackingEnabled}
         payRates={payRates}
+        markets={markets}
+        marketPayRates={marketPayRates}
+        getEffectiveRate={getEffectiveRate}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}
         warehouseAddress={warehouseAddress}
