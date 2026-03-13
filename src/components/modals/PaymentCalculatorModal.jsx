@@ -31,8 +31,8 @@ export default function PaymentCalculatorModal({
   const eventLocation = locations.find(l => l.id === eventLocationId) || null;
 
   // Worker home location drives travel origin
-  const worker = workers?.find(w => w.id === assignmentData?.workerId);
-  const workerHomeLocation = locations.find(l => l.id === worker?.home_location_id) || null;
+  const assignedWorker = workers?.find(w => w.id === assignmentData?.workerId);
+  const workerHomeLocation = locations.find(l => l.id === assignedWorker?.home_location_id) || null;
 
   // Don't show payment modal if payment tracking is disabled
   if (!paymentTrackingEnabled) {
