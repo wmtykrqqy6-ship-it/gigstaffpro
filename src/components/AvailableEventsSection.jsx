@@ -22,15 +22,16 @@ const getPayRateKey = (position) => {
 
 const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, onReloadAssignments }) => {
     const [applying, setApplying] = useState(false);
-    const [eventDistances, setEventDistances] = useState({}); // { eventId: miles | 'loading' | 'error' }
-    const fetchedRef = useRef(false); // prevent re-fetching same worker/events
-    
-    // Fetch distances from worker home to each available event
+    const [eventDistances, setEventDistances] = useState({}); // { eventId: miles } from worker address (for display)
+    const [travelPayDistances, setTravelPayDistances] = useState({}); // { eventId: miles } from worker home location (for pay calc)
+    const fetchedRef = useRef(false);
+    const travelFetchedRef = useRef(false);
+
+    // Fetch distances from worker's personal address → each event (for "X mi from you" display)
     useEffect(() => {
       const workerAddress = currentWorker?.address;
       if (!workerAddress || !events?.length) return;
 
-      // Build a key to detect when worker or events change
       const key = workerAddress + '|' + events.map(e => e.id).join(',');
       if (fetchedRef.current === key) return;
       fetchedRef.current = key;
@@ -38,14 +39,12 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       const eventsWithAddress = events.filter(e => e.address);
       if (eventsWithAddress.length === 0) return;
 
-      // Mark all as loading
       setEventDistances(prev => {
         const next = { ...prev };
         eventsWithAddress.forEach(e => { next[e.id] = 'loading'; });
         return next;
       });
 
-      // Fetch distances in parallel (one call per event)
       eventsWithAddress.forEach(event => {
         fetch(`/api/get-distance?origin=${encodeURIComponent(workerAddress)}&destination=${encodeURIComponent(event.address)}`)
           .then(r => r.json())
@@ -60,6 +59,43 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           });
       });
     }, [currentWorker?.address, events]);
+
+    // Fetch distances from worker's home location address → each event (for travel pay calculation)
+    useEffect(() => {
+      const workerHomeLocationId = currentWorker?.home_location_id;
+      if (!workerHomeLocationId || !events?.length) return;
+
+      const homeLocation = locations.find(l => l.id === workerHomeLocationId);
+      const homeAddress = homeLocation?.address;
+      if (!homeAddress) return;
+
+      const key = homeAddress + '|' + events.map(e => e.id).join(',');
+      if (travelFetchedRef.current === key) return;
+      travelFetchedRef.current = key;
+
+      const eventsWithAddress = events.filter(e => e.address);
+      if (eventsWithAddress.length === 0) return;
+
+      eventsWithAddress.forEach(event => {
+        // Same location = 0 miles, no need to call API
+        const eventLocationId = event.location_id || null;
+        if (workerHomeLocationId === eventLocationId) {
+          setTravelPayDistances(prev => ({ ...prev, [event.id]: 0 }));
+          return;
+        }
+        fetch(`/api/get-distance?origin=${encodeURIComponent(homeAddress)}&destination=${encodeURIComponent(event.address)}`)
+          .then(r => r.json())
+          .then(data => {
+            setTravelPayDistances(prev => ({
+              ...prev,
+              [event.id]: data.miles != null ? data.miles : null
+            }));
+          })
+          .catch(() => {
+            setTravelPayDistances(prev => ({ ...prev, [event.id]: null }));
+          });
+      });
+    }, [currentWorker?.home_location_id, events, locations]);
 
     // Calculate which events the worker can see based on rank
     const getAvailableEvents = () => {
@@ -532,13 +568,19 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                     const numHours = Number(hours) || 0;
                     if (!numHours) return null;
 
-                    // Determine travel miles from worker's perspective:
-                    // If worker's home location matches the event's location → 0 miles
-                    // Otherwise use stored miles (hub→event) as the estimate
-                    const eventLocationId = settings.locationId || event.location_id || null;
+                    // Travel miles from worker's home location → event
+                    // travelPayDistances is fetched async; fall back to settings.miles if not ready
                     const workerHomeLocationId = currentWorker?.home_location_id || null;
-                    const workerIsBased = workerHomeLocationId && eventLocationId && workerHomeLocationId === eventLocationId;
-                    const numMiles = workerIsBased ? 0 : (Number(settings.miles) || 0);
+                    const eventLocationId = settings.locationId || event.location_id || null;
+                    let numMiles;
+                    if (workerHomeLocationId) {
+                      // Use home-location-based distance if available, otherwise show pending
+                      const travelDist = travelPayDistances[event.id];
+                      numMiles = (travelDist != null && travelDist !== 'error') ? travelDist : (Number(settings.miles) || 0);
+                    } else {
+                      // No home location set — use stored hub→event distance
+                      numMiles = Number(settings.miles) || 0;
+                    }
 
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
