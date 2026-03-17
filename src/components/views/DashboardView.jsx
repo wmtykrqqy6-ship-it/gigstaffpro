@@ -294,7 +294,8 @@ export default function DashboardView({
           (a.position === posKey || a.position === pos.key || a.position === pos.name)
         ).length;
         const open = (pos.count || 1) - filled;
-        return open > 0 ? { label: pos.label || pos.name || posKey, open, needed: pos.count || 1 } : null;
+        const label = getPositionLabel(posKey) || pos.label || pos.name || posKey;
+        return open > 0 ? { label, open, needed: pos.count || 1 } : null;
       }).filter(Boolean);
 
       if (unfilledPositions.length === 0) return;
@@ -470,7 +471,7 @@ export default function DashboardView({
         </button>
       </div>
 
-      {/* Unfilled Position Alerts */}
+      {/* Staffing Alerts */}
       {unfilledAlerts.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-2 mb-4">
@@ -478,40 +479,62 @@ export default function DashboardView({
             <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
             <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => (
               <div
                 key={event.id}
                 onClick={() => onOpenAssignModal(event)}
-                className={`flex items-start justify-between p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${
+                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                   tier === '24h'
                     ? 'bg-red-50 border-red-200 hover:border-red-400'
-                    : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'
+                    : 'bg-amber-50 border-amber-200 hover:border-amber-400'
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      tier === '24h' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-yellow-900'
+                  {/* Event name + time badge */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                      tier === '24h'
+                        ? 'bg-red-500 text-white'
+                        : daysUntil === 0 ? 'bg-orange-500 text-white'
+                        : daysUntil === 1 ? 'bg-orange-400 text-white'
+                        : 'bg-amber-400 text-amber-900'
                     }`}>
                       {tier === '24h'
-                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h`
-                        : daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `${daysUntil}d`
+                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h away`
+                        : daysUntil === 0 ? 'TODAY'
+                        : daysUntil === 1 ? 'TOMORROW'
+                        : `${daysUntil} days`
                       }
                     </span>
-                    <span className="font-semibold text-gray-900 text-sm truncate">{event.name}</span>
+                    <span className="font-bold text-gray-900 text-sm truncate">{event.name}</span>
+                    {event.venue && (
+                      <span className="text-xs text-gray-400 truncate hidden sm:block">· {event.venue}</span>
+                    )}
                   </div>
+                  {/* Open position pills */}
                   <div className="flex flex-wrap gap-1.5">
-                    {unfilledPositions.map(({ label, open, needed }) => (
-                      <span key={label} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        tier === '24h' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                    {unfilledPositions.map(({ label, open }) => (
+                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${
+                        tier === '24h'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-amber-100 text-amber-800'
                       }`}>
-                        {label}: {open} open
+                        {label}
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
+                          tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
+                        }`}>{open}</span>
                       </span>
                     ))}
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 flex-shrink-0 ml-3 mt-1">Assign →</span>
+                <button className={`flex-shrink-0 ml-4 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  tier === '24h'
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-amber-500 text-white hover:bg-amber-600'
+                }`}>
+                  Assign
+                </button>
               </div>
             ))}
           </div>

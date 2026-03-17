@@ -236,7 +236,8 @@ const saveDismissedNotificationIds = (ids) => {
             (a.position === posKey || a.position === pos.key || a.position === pos.name)
           ).length;
           const open = (pos.count || 1) - filled;
-          return open > 0 ? `${pos.label || pos.name || posKey} ×${open}` : null;
+          const label = getPositionLabel(posKey) || pos.label || pos.name || posKey;
+          return open > 0 ? `${label} ×${open}` : null;
         }).filter(Boolean);
 
         if (unfilledPositions.length === 0) return;
