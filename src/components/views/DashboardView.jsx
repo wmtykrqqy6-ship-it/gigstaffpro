@@ -259,6 +259,51 @@ export default function DashboardView({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // ── Unfilled Position Alerts ──
+  const getUnfilledAlerts = () => {
+    const now = new Date();
+    const alerts = [];
+    scopedEvents.forEach(event => {
+      if (event.status === 'cancelled' || event.status === 'archived' || event.status === 'completed') return;
+      if (!event.positions || event.positions.length === 0) return;
+
+      // Parse date safely — treat YYYY-MM-DD as local, not UTC
+      const [y, m, d] = (event.date || '').split('-').map(Number);
+      if (!y) return;
+      const eventDate = new Date(y, m - 1, d);
+      eventDate.setHours(0, 0, 0, 0);
+      if (eventDate < today) return;
+
+      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      let hoursUntil = daysUntil * 24;
+      if (event.time) {
+        const [th, tm] = event.time.split(':').map(Number);
+        const eventDateTime = new Date(y, m - 1, d, th, tm || 0);
+        hoursUntil = (eventDateTime - now) / (1000 * 60 * 60);
+      }
+
+      const is24h = hoursUntil >= 0 && hoursUntil <= 24;
+      const is7day = daysUntil <= 7;
+      if (!is24h && !is7day) return;
+
+      const unfilledPositions = event.positions.map(pos => {
+        const posKey = pos.key || pos.name;
+        const filled = assignments.filter(a =>
+          a.event_id === event.id &&
+          !['standby', 'rejected', 'cancelled', 'pending'].includes(a.status) &&
+          (a.position === posKey || a.position === pos.key || a.position === pos.name)
+        ).length;
+        const open = (pos.count || 1) - filled;
+        return open > 0 ? { label: pos.label || pos.name || posKey, open, needed: pos.count || 1 } : null;
+      }).filter(Boolean);
+
+      if (unfilledPositions.length === 0) return;
+      alerts.push({ event, unfilledPositions, daysUntil, hoursUntil, tier: is24h ? '24h' : '7day' });
+    });
+    return alerts.sort((a, b) => a.tier === b.tier ? a.daysUntil - b.daysUntil : a.tier === '24h' ? -1 : 1);
+  };
+  const unfilledAlerts = getUnfilledAlerts();
+
   const upcomingEvents = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
     const eventDate = new Date(e.date);
@@ -424,6 +469,54 @@ export default function DashboardView({
           </div>
         </button>
       </div>
+
+      {/* Unfilled Position Alerts */}
+      {unfilledAlerts.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+            <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
+            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
+          </div>
+          <div className="space-y-3">
+            {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => (
+              <div
+                key={event.id}
+                onClick={() => onOpenAssignModal(event)}
+                className={`flex items-start justify-between p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${
+                  tier === '24h'
+                    ? 'bg-red-50 border-red-200 hover:border-red-400'
+                    : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                      tier === '24h' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-yellow-900'
+                    }`}>
+                      {tier === '24h'
+                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h`
+                        : daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `${daysUntil}d`
+                      }
+                    </span>
+                    <span className="font-semibold text-gray-900 text-sm truncate">{event.name}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {unfilledPositions.map(({ label, open, needed }) => (
+                      <span key={label} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        tier === '24h' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {label}: {open} open
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0 ml-3 mt-1">Assign →</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Next 7 Days - high priority, right after stat cards */}
       {(() => {

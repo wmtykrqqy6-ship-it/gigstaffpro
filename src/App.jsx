@@ -209,31 +209,55 @@ const saveDismissedNotificationIds = (ids) => {
         }
       });
 
-      // 3. Events within 48 hours that aren't fully staffed
-      const soonEvents = events.filter(e => {
-        const eventDate = parseDateSafe(e.date);
-        const hoursUntil = (eventDate - now) / (1000 * 60 * 60);
-        return hoursUntil > 0 && hoursUntil <= 48;
-      });
-
-      soonEvents.forEach(event => {
-        const eventAssignments = assignments.filter(a => a.event_id === event.id && a.status === 'approved');
-        const totalNeeded = (event.positions || []).reduce((sum, pos) => sum + (pos.count || 0), 0);
-        const totalAssigned = eventAssignments.length;
-        
-        if (totalAssigned < totalNeeded) {
-          newNotifications.push({
-            id: `understaffed-${event.id}`,
-            type: 'warning',
-            title: 'Understaffed Event',
-            message: `${event.name} needs ${totalNeeded - totalAssigned} more worker(s)`,
-            timestamp: new Date().toISOString(),
-            action: () => {
-              setSelectedEvent(event);
-              setShowAssignModal(true);
-            }
-          });
+      // 3. Understaffed events — 7 days out and 24 hours out, with per-position detail
+      events.forEach(event => {
+        if (event.status === 'cancelled' || event.status === 'archived' || event.status === 'completed') return;
+        if (!event.positions || event.positions.length === 0) return;
+        const [ey, em, ed] = (event.date || '').split('-').map(Number);
+        if (!ey) return;
+        const eventDate = new Date(ey, em - 1, ed);
+        let hoursUntil = (eventDate - now) / (1000 * 60 * 60);
+        if (event.time) {
+          const [th, tm] = event.time.split(':').map(Number);
+          hoursUntil = (new Date(ey, em - 1, ed, th, tm || 0) - now) / (1000 * 60 * 60);
         }
+        if (hoursUntil < 0) return;
+
+        const is24h = hoursUntil <= 24;
+        const is7day = hoursUntil <= 7 * 24;
+        if (!is24h && !is7day) return;
+
+        // Compute unfilled per position
+        const unfilledPositions = event.positions.map(pos => {
+          const posKey = pos.key || pos.name;
+          const filled = assignments.filter(a =>
+            a.event_id === event.id &&
+            !['standby', 'rejected', 'cancelled', 'pending'].includes(a.status) &&
+            (a.position === posKey || a.position === pos.key || a.position === pos.name)
+          ).length;
+          const open = (pos.count || 1) - filled;
+          return open > 0 ? `${pos.label || pos.name || posKey} ×${open}` : null;
+        }).filter(Boolean);
+
+        if (unfilledPositions.length === 0) return;
+
+        const tier = is24h ? '24h' : '7day';
+        const daysUntil = Math.ceil(hoursUntil / 24);
+        const timeLabel = is24h
+          ? (hoursUntil < 1 ? 'in under 1 hour' : `in ${Math.round(hoursUntil)}h`)
+          : `in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
+
+        newNotifications.push({
+          id: `understaffed-${tier}-${event.id}`,
+          type: 'warning',
+          title: is24h ? '🚨 Understaffed — Under 24h' : '⚠️ Understaffed — 7 Days',
+          message: `${event.name} (${timeLabel}): ${unfilledPositions.join(', ')} open`,
+          timestamp: new Date().toISOString(),
+          action: () => {
+            setSelectedEvent(event);
+            setShowAssignModal(true);
+          }
+        });
       });
 
     } else if (userRole === 'worker' && loggedInWorker) {
