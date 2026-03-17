@@ -528,10 +528,17 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   )}
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
                     const settings = eventPaymentSettings[event.id];
-                    const { hours, miles, isLakeGeneva, isHoliday } = settings;
+                    const { hours, isLakeGeneva, isHoliday } = settings;
                     const numHours = Number(hours) || 0;
-                    const numMiles = Number(miles) || 0;
                     if (!numHours) return null;
+
+                    // Determine travel miles from worker's perspective:
+                    // If worker's home location matches the event's location → 0 miles
+                    // Otherwise use stored miles (hub→event) as the estimate
+                    const eventLocationId = settings.locationId || event.location_id || null;
+                    const workerHomeLocationId = currentWorker?.home_location_id || null;
+                    const workerIsBased = workerHomeLocationId && eventLocationId && workerHomeLocationId === eventLocationId;
+                    const numMiles = workerIsBased ? 0 : (Number(settings.miles) || 0);
 
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
