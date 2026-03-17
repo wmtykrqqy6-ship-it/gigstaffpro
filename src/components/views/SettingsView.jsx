@@ -387,8 +387,6 @@ export default function SettingsView({
   const [editingPosition, setEditingPosition] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
-  const [warehouseAddress, setWarehouseAddress] = useState('');
-  const [loadingWarehouse, setLoadingWarehouse] = useState(true);
   const [paymentTrackingEnabled, setPaymentTrackingEnabled] = useState(true);
   const [loadingPaymentSetting, setLoadingPaymentSetting] = useState(true);
   const [rankAccessDays, setRankAccessDays] = useState({
@@ -404,7 +402,6 @@ export default function SettingsView({
   const [loadingTimeSettings, setLoadingTimeSettings] = useState(true);
 
   useEffect(() => {
-    loadWarehouseAddress();
     loadPaymentTrackingSetting();
     loadRankAccessSettings();
     loadTimeSettings();
@@ -753,26 +750,7 @@ export default function SettingsView({
     }
   };
 
-  const loadWarehouseAddress = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('setting_key', 'warehouse_address')
-        .single();
-      
-      if (!error && data) {
-        setWarehouseAddress(data.setting_value || '');
-      } else {
-        // Set default for Vegas on Wheels
-        setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
-      }
-    } catch (error) {
-      setWarehouseAddress('535 S 93rd St, Milwaukee, WI 53214');
-    } finally {
-      setLoadingWarehouse(false);
-    }
-  };
+
 
 
   const loadPaymentTrackingSetting = async () => {
@@ -877,43 +855,6 @@ export default function SettingsView({
           .insert([{
             setting_key: 'rank_access_days',
             setting_value: JSON.stringify(rankAccessDays)
-          }]);
-        
-        if (error) throw error;
-      }
-
-    } catch (error) {
-      throw error;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveWarehouseAddress = async () => {
-    setSaving(true);
-    try {
-      const { data: existing } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('setting_key', 'warehouse_address')
-        .single();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('settings')
-          .update({ 
-            setting_value: warehouseAddress,
-            updated_at: new Date().toISOString()
-          })
-          .eq('setting_key', 'warehouse_address');
-        
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('settings')
-          .insert([{
-            setting_key: 'warehouse_address',
-            setting_value: warehouseAddress
           }]);
         
         if (error) throw error;
@@ -1888,28 +1829,6 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Warehouse Address */}
-          <div className="px-6 py-5 border-b border-gray-100">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <p className="font-semibold text-gray-900 text-sm">Warehouse / Home Base Address</p>
-                <p className="text-xs text-gray-500 mt-0.5">Used for calculating miles traveled to events.</p>
-              </div>
-              {loadingWarehouse ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900 flex-shrink-0" />
-              ) : (
-                <input
-                  type="text"
-                  value={warehouseAddress}
-                  onChange={(e) => setWarehouseAddress(e.target.value)}
-                  className="w-72 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
-                  placeholder="Enter address"
-                  disabled={saving}
-                />
-              )}
-            </div>
-          </div>
-
           {/* Payment Tracking */}
           <div className="px-6 py-5 border-b border-gray-100">
             <div className="flex items-center justify-between">
@@ -2060,7 +1979,6 @@ export default function SettingsView({
                 setSaving(true);
                 try {
                   setHostLabel(hostLabelValue);
-                  await saveWarehouseAddress();
                   await saveRankAccessSettings();
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();

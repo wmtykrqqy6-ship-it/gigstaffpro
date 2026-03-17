@@ -15,7 +15,6 @@ export default function PaymentCalculatorModal({
   getEffectiveRate,
   calculatePay,
   getPayRateKey,
-  warehouseAddress,
   onClose,
   onSuccess
 }) {
@@ -95,7 +94,8 @@ export default function PaymentCalculatorModal({
     if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
     const eventAddress = selectedEvent.address;
     if (!eventAddress) return;
-    const travelOrigin = workerHomeLocation?.address || warehouseAddress;
+    // Travel origin: worker home location → event location → no auto-calc
+    const travelOrigin = workerHomeLocation?.address || eventLocation?.address || null;
     if (!travelOrigin) return;
 
     const fetchMiles = async () => {
@@ -113,7 +113,7 @@ export default function PaymentCalculatorModal({
       }
     };
     fetchMiles();
-  }, [open, assignmentData, selectedEvent, warehouseAddress, workerHomeLocation]);
+  }, [open, assignmentData, selectedEvent, workerHomeLocation, eventLocation]);
 
   useEffect(() => {
     if (assignmentData && hours > 0) {

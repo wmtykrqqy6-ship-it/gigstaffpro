@@ -53,7 +53,6 @@ const GigStaffPro = () => {
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
   const [locationPayRates, setLocationPayRates] = useState({}); // { location_id: { position_key: rate } }
-  const [warehouseAddress, setWarehouseAddress] = useState('535 S 93rd St, Milwaukee, WI 53214');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddWorker, setShowAddWorker] = useState(false);
@@ -657,16 +656,6 @@ setAppPositions(storedPositions);
         }
       }
 
-      // Load warehouse address
-      const { data: warehouseData, error: warehouseError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('setting_key', 'warehouse_address')
-        .single();
-      
-      if (!warehouseError && warehouseData?.setting_value) {
-        setWarehouseAddress(warehouseData.setting_value);
-      }
     } catch (error) {
       const defaultPositions = ['Dealer', 'Poker Dealer', 'Blackjack Dealer', 'Roulette Dealer', 'Craps Dealer', 'Host', 'Bartender'].sort();
       setPositions(defaultPositions);
@@ -829,8 +818,6 @@ setAppPositions(storedPositions);
 
   const autoCreatePaymentSettings = async (eventsToCheck) => {
     try {
-      const warehouse = warehouseAddress || '535 S 93rd St, Milwaukee, WI 53214';
-
       const { data: existing } = await supabase.from('event_payment_settings').select('event_id');
       const existingIds = new Set((existing || []).map(r => r.event_id));
 
@@ -854,17 +841,22 @@ setAppPositions(storedPositions);
       };
 
       for (const event of needsSettings) {
-        // Travel distance uses warehouse (primary travel origin) → event
+        // Use the event's location address as travel origin; skip distance calc if unavailable
+        const locationId = event.location_id || null;
+        const eventLocation = locationId ? locations.find(l => l.id === locationId) : null;
+        const travelOrigin = eventLocation?.address || null;
+
         let miles = 0;
-        try {
-          const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(warehouse)}&destination=${encodeURIComponent(event.address)}`);
-          const data = await res.json();
-          if (data.miles != null) miles = data.miles;
-        } catch (_) {}
+        if (travelOrigin && event.address) {
+          try {
+            const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(travelOrigin)}&destination=${encodeURIComponent(event.address)}`);
+            const data = await res.json();
+            if (data.miles != null) miles = data.miles;
+          } catch (_) {}
+        }
 
         const hours = parseHours(event.time, event.end_time);
         const isLakeGeneva = isLakeGenevaZip(event.address);
-        const locationId = event.location_id || null;
 
         const { error } = await supabase.from('event_payment_settings').upsert({
           event_id: event.id,
@@ -1270,7 +1262,6 @@ setAppPositions(storedPositions);
         assignments={assignments}
         positions={positions}
         eventPaymentSettings={eventPaymentSettings}
-        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowAssignModal(false);
           setSelectedEvent(null);
@@ -1318,7 +1309,6 @@ setAppPositions(storedPositions);
         getEffectiveRate={getEffectiveRate}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}
-        warehouseAddress={warehouseAddress}
         onClose={() => {
           setShowPaymentModal(false);
           setAssignmentPaymentData(null);
