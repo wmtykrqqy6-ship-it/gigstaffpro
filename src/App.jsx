@@ -1237,6 +1237,8 @@ setAppPositions(storedPositions);
         eventPaymentSettings={eventPaymentSettings}
         travelTiers={travelTiers}
         bonuses={bonuses}
+        locations={locations}
+        getEffectiveRate={getEffectiveRate}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={loadAssignments}
       />

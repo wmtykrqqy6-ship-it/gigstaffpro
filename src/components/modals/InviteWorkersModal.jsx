@@ -36,7 +36,7 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, onClose, onReloadAssignments }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -76,18 +76,31 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     return () => clearInterval(tick);
   }, [lastRefreshed]);
 
-  // Calculate estimated pay for a position using event payment settings
-  const calcEstimatedPay = (positionLabel, eventId) => {
+  // Calculate estimated pay for a worker at a position using their home location for travel miles
+  const calcEstimatedPay = (positionLabel, eventId, worker = null) => {
     const settings = eventPaymentSettings[eventId];
     if (!settings || !positionLabel) return null;
-    const { hours, miles, isLakeGeneva, isHoliday } = settings;
+    const { hours, isLakeGeneva, isHoliday } = settings;
     const numHours = Number(hours) || 0;
-    const numMiles = Number(miles) || 0;
     if (!numHours) return null;
 
+    // Hourly rate: use location override if available
     const rateKey = getPayRateKey(positionLabel);
-    const hourlyRate = payRates[rateKey] || payRates[positionLabel] || 0;
+    const eventLocationId = settings.locationId || event?.location_id || null;
+    const hourlyRate = getEffectiveRate
+      ? getEffectiveRate(positionLabel, eventLocationId)
+      : (payRates[rateKey] || payRates[positionLabel] || 0);
     if (!hourlyRate) return null;
+
+    // Travel miles: if worker has a home location and it differs from event location, use stored miles
+    // If same location → 0 miles. If no home location → use stored hub→event miles.
+    let numMiles = Number(settings.miles) || 0;
+    if (worker?.home_location_id) {
+      if (worker.home_location_id === eventLocationId) {
+        numMiles = 0; // worker is local to this event's location
+      }
+      // else: keep settings.miles as the estimate (worker-specific distance not pre-computed here)
+    }
 
     const basePay = numHours * hourlyRate;
 
@@ -108,9 +121,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       total: total.toFixed(0),
       breakdown: [
         `${numHours} hrs × $${hourlyRate}/hr = $${basePay.toFixed(0)}`,
-        travelPay > 0 ? `Travel: $${travelPay}` : null,
-        lakeGenevaBonus > 0 ? `Lake Geneva bonus: $${lakeGenevaBonus}` : null,
-        isHoliday ? `Holiday multiplier: ${holidayMult}×` : null,
+        travelPay > 0 ? `+ $${travelPay} travel` : null,
+        lakeGenevaBonus > 0 ? `+ $${lakeGenevaBonus} Lake Geneva` : null,
+        isHoliday ? `× ${holidayMult} holiday` : null,
       ].filter(Boolean).join(' • ')
     };
   };
@@ -234,7 +247,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
 
-        const invitePay = calcEstimatedPay(positionLabel, event.id);
+        const invitePay = calcEstimatedPay(positionLabel, event.id, worker);
         const invitePayHtml = invitePay
           ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
                <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p>
@@ -325,7 +338,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const token = inviteRows?.[0]?.token || '';
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
-        const reInvitePay = calcEstimatedPay(inv.position_key, event.id);
+        const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker);
         const reInvitePayHtml = reInvitePay
           ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
                <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p>
