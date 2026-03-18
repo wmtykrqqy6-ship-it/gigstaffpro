@@ -76,8 +76,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     return () => clearInterval(tick);
   }, [lastRefreshed]);
 
-  // Calculate estimated pay for a worker at a position using their home location for travel miles
-  const calcEstimatedPay = (positionLabel, eventId, worker = null) => {
+  // Calculate estimated pay for a worker at a position
+  // workerMiles: pre-computed home→event miles (pass null to use settings.miles fallback)
+  const calcEstimatedPay = (positionLabel, eventId, worker = null, workerMiles = null) => {
     const settings = eventPaymentSettings[eventId];
     if (!settings || !positionLabel) return null;
     const { hours, isLakeGeneva, isHoliday } = settings;
@@ -92,14 +93,14 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       : (payRates[rateKey] || payRates[positionLabel] || 0);
     if (!hourlyRate) return null;
 
-    // Travel miles: if worker has a home location and it differs from event location, use stored miles
-    // If same location → 0 miles. If no home location → use stored hub→event miles.
-    let numMiles = Number(settings.miles) || 0;
-    if (worker?.home_location_id) {
-      if (worker.home_location_id === eventLocationId) {
-        numMiles = 0; // worker is local to this event's location
-      }
-      // else: keep settings.miles as the estimate (worker-specific distance not pre-computed here)
+    // Travel miles priority: explicit workerMiles > same-location=0 > settings.miles
+    let numMiles;
+    if (workerMiles !== null) {
+      numMiles = workerMiles;
+    } else if (worker?.home_location_id && worker.home_location_id === eventLocationId) {
+      numMiles = 0;
+    } else {
+      numMiles = Number(settings.miles) || 0;
     }
 
     const basePay = numHours * hourlyRate;
@@ -247,7 +248,24 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
 
-        const invitePay = calcEstimatedPay(positionLabel, event.id, worker);
+        // Fetch live distance from worker's home location → event address
+        let workerMiles = null;
+        const eventLocationId = eventPaymentSettings[event.id]?.locationId || event?.location_id || null;
+        const workerHomeLocationId = worker.home_location_id || null;
+        if (workerHomeLocationId && workerHomeLocationId === eventLocationId) {
+          workerMiles = 0; // same location, no travel
+        } else if (workerHomeLocationId && locations.length > 0 && event.address) {
+          const homeLocation = locations.find(l => l.id === workerHomeLocationId);
+          if (homeLocation?.address) {
+            try {
+              const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(homeLocation.address)}&destination=${encodeURIComponent(event.address)}`);
+              const distData = await res.json();
+              if (distData.miles != null) workerMiles = distData.miles;
+            } catch (_) {}
+          }
+        }
+
+        const invitePay = calcEstimatedPay(positionLabel, event.id, worker, workerMiles);
         const invitePayHtml = invitePay
           ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
                <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p>
@@ -338,7 +356,23 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const token = inviteRows?.[0]?.token || '';
         const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=accepted`;
         const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${token}&action=declined`;
-        const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker);
+
+        // Live distance fetch for re-invite
+        let reInviteWorkerMiles = null;
+        const riEventLocationId = eventPaymentSettings[event.id]?.locationId || event?.location_id || null;
+        if (worker.home_location_id && worker.home_location_id === riEventLocationId) {
+          reInviteWorkerMiles = 0;
+        } else if (worker.home_location_id && locations.length > 0 && event.address) {
+          const homeLocation = locations.find(l => l.id === worker.home_location_id);
+          if (homeLocation?.address) {
+            try {
+              const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(homeLocation.address)}&destination=${encodeURIComponent(event.address)}`);
+              const distData = await res.json();
+              if (distData.miles != null) reInviteWorkerMiles = distData.miles;
+            } catch (_) {}
+          }
+        }
+        const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker, reInviteWorkerMiles);
         const reInvitePayHtml = reInvitePay
           ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
                <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p>
