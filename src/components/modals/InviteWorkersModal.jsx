@@ -6,10 +6,10 @@ import { getHostLabel } from '../../utils/hostLabelHelper';
 
 const fmtDate = (d) => {
   if (!d) return d;
-  // Convert YYYY-MM-DD to M-D-YYYY
-  const parts = d.split('-');
-  if (parts.length === 3) return `${parseInt(parts[1])}-${parseInt(parts[2])}-${parts[0]}`;
-  return d;
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+  });
 };
 
 const fmtTime = (t) => {
@@ -226,7 +226,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       await supabase.from('invitations').insert(buildInviteRecords(confirmSend.workerIds));
 
       // Send email to workers who have an email address
-      const positionLabel = selectedPosition || 'a position';
+      // Resolve to human-readable label immediately
+      const positionLabel = getPositionLabel(selectedPosition) || selectedPosition || 'a position';
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + windowHours);
       const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -279,7 +280,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         const detailRows = [
           `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${getPositionLabel(positionLabel) || positionLabel}</td></tr>`,
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${positionLabel}</td></tr>`,
           event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
           event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
           timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
@@ -294,11 +295,11 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
               <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
-              <p style="color:#fca5a5;margin:6px 0 0">Staff Portal Invitation</p>
+              <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> as <strong>${getPositionLabel(positionLabel) || positionLabel}</strong>.</p>
+              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
               ${detailsHtml}
               ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
@@ -407,7 +408,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
               <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
-              <p style="color:#fca5a5;margin:6px 0 0">Staff Portal Invitation</p>
+              <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
