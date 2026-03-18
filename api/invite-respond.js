@@ -72,7 +72,6 @@ export default async function handler(req, res) {
     });
 
     // 3. Expire any other pending invites for this same event+position slot if now full
-    // (best-effort, not critical)
     const posRes = await fetch(
       `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${invite.event_id}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
       { headers }
@@ -84,6 +83,90 @@ export default async function handler(req, res) {
         method: 'PATCH', headers,
         body: JSON.stringify({ status: 'expired' })
       });
+    }
+
+    // 4. Send confirmation email with calendar link
+    try {
+      const [eventRes, workerRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/workers?id=eq.${invite.worker_id}&select=name,email&limit=1`, { headers })
+      ]);
+      const [events, workers] = await Promise.all([eventRes.json(), workerRes.json()]);
+      const event = events?.[0];
+      const worker = workers?.[0];
+
+      if (event && worker?.email) {
+        const fmtDate = (d) => {
+          if (!d) return d;
+          const [y, m, day] = d.split('-');
+          const dt = new Date(Number(y), Number(m) - 1, Number(day));
+          return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        };
+        const fmtTime = (t) => {
+          if (!t) return '';
+          const [h, m] = t.split(':').map(Number);
+          return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+        };
+        const timeStr = event.time
+          ? (event.end_time ? `${fmtTime(event.time)} – ${fmtTime(event.end_time)}` : fmtTime(event.time))
+          : '';
+        const positionLabel = invite.position_key
+          ? invite.position_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+          : 'your position';
+        const calUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${invite.event_id}&position=${encodeURIComponent(positionLabel)}`;
+
+        const detailRows = [
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${positionLabel}</td></tr>`,
+          event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}</td></tr>` : '',
+          event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
+          timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
+          event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
+          event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
+        ].filter(Boolean).join('');
+
+        const confirmHtml = `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+            <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+              <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
+              <p style="color:#fca5a5;margin:6px 0 0">Booking Confirmed</p>
+            </div>
+            <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+              <div style="text-align:center;margin-bottom:20px">
+                <div style="font-size:48px">🎉</div>
+                <h2 style="margin:8px 0 4px;color:#111">You're confirmed!</h2>
+                <p style="color:#6b7280;margin:0">You've been booked for <strong>${event.name}</strong></p>
+              </div>
+              <table style="border-collapse:collapse;width:100%;margin:0 0 16px">${detailRows}</table>
+              <div style="text-align:center;margin:16px 0">
+                <a href="${calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
+                  📅 Add to Calendar
+                </a>
+              </div>
+              <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
+              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">
+                Questions? Log in to the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a> to view your schedule.<br>
+                <strong style="color:#7c0a02">The Vegas on Wheels Team</strong>
+              </p>
+            </div>
+          </div>`;
+
+        const resendKey = process.env.RESEND_API_KEY;
+        if (resendKey) {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
+            body: JSON.stringify({
+              from: 'Vegas on Wheels <noreply@vegasonwheels.com>',
+              to: worker.email,
+              subject: `✅ Confirmed: ${event.name}`,
+              html: confirmHtml
+            })
+          });
+        }
+      }
+    } catch (_) {
+      // Confirmation email failure is non-critical — worker is still confirmed
     }
 
     return res.status(200).send(successPage(

@@ -277,17 +277,6 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
           : '';
 
-        // Build universal calendar link (ICS — works with Apple, Google, Outlook, etc.)
-        const icsDescription = [
-          `Position: ${getPositionLabel(positionLabel) || positionLabel}`,
-          event.dress_code ? `Dress Code: ${event.dress_code}` : null,
-          event.parking ? `Parking: ${event.parking}` : null,
-          invitePay ? `Est. Pay: $${invitePay.total}` : null,
-        ].filter(Boolean).join('\\n');
-        const icsUrl = event.date
-          ? `https://gigstaffpro.vercel.app/api/calendar-event?name=${encodeURIComponent(event.name)}&date=${event.date}${event.time ? `&start=${event.time}` : ''}${event.end_time ? `&end=${event.end_time}` : ''}&location=${encodeURIComponent(event.address || event.venue || '')}&description=${encodeURIComponent(icsDescription)}`
-          : null;
-
         const detailRows = [
           `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
           `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${getPositionLabel(positionLabel) || positionLabel}</td></tr>`,
@@ -301,14 +290,6 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${detailRows}</table>`
           : '';
 
-        const calHtml = icsUrl
-          ? `<div style="text-align:center;margin:8px 0 16px">
-               <a href="${icsUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
-                 📅 Add to Calendar
-               </a>
-             </div>`
-          : '';
-
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -319,7 +300,6 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> as <strong>${getPositionLabel(positionLabel) || positionLabel}</strong>.</p>
               ${detailsHtml}
-              ${calHtml}
               ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
@@ -408,23 +388,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           : '';
         const riPositionLabel = getPositionLabel(inv.position_key) || inv.position_key;
 
-        const riIcsDescription = [
-          `Position: ${riPositionLabel}`,
-          event.dress_code ? `Dress Code: ${event.dress_code}` : null,
-          event.parking ? `Parking: ${event.parking}` : null,
-          reInvitePay ? `Est. Pay: $${reInvitePay.total}` : null,
-        ].filter(Boolean).join('\\n');
-        const riIcsUrl = event.date
-          ? `https://gigstaffpro.vercel.app/api/calendar-event?name=${encodeURIComponent(event.name)}&date=${event.date}${event.time ? `&start=${event.time}` : ''}${event.end_time ? `&end=${event.end_time}` : ''}&location=${encodeURIComponent(event.address || event.venue || '')}&description=${encodeURIComponent(riIcsDescription)}`
-          : null;
-        const riCalHtml = riIcsUrl
-          ? `<div style="text-align:center;margin:8px 0 16px">
-               <a href="${riIcsUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
-                 📅 Add to Calendar
-               </a>
-             </div>`
-          : '';
-
+        // Dynamic ICS link for re-invite
+        const riIcsUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${event.id}&position=${encodeURIComponent(riPositionLabel)}`;
         const riDetailRows = [
           `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
           `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${riPositionLabel}</td></tr>`,
@@ -448,7 +413,6 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
               <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
               ${riDetailsHtml}
-              ${riCalHtml}
               ${reInvitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
