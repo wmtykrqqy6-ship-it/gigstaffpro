@@ -298,18 +298,17 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-              <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
+              <p style="font-size:16px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
+              <p style="color:#374151;margin:0 0 20px">You've been invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
+              <div style="text-align:center;margin:0 0 24px">
+                <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✅ Accept</a>
+                <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✕ Decline</a>
+              </div>
+              <p style="color:#6b7280;font-size:13px;text-align:center;margin:0 0 20px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               ${detailsHtml}
               ${invitePayHtml}
-              <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
-                <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
-                <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
-              </div>
-              <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
               <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
-              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Thanks,<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
+              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
             </div>
           </div>`;
 
@@ -411,18 +410,17 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
               <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-              <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
+              <p style="font-size:16px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
+              <p style="color:#374151;margin:0 0 20px">You've been re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
+              <div style="text-align:center;margin:0 0 24px">
+                <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✅ Accept</a>
+                <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✕ Decline</a>
+              </div>
+              <p style="color:#6b7280;font-size:13px;text-align:center;margin:0 0 20px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               ${riDetailsHtml}
               ${reInvitePayHtml}
-              <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
-                <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✅ Accept</a>
-                <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px">✕ Decline</a>
-              </div>
-              <p style="color:#9ca3af;font-size:12px;text-align:center">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.</p>
               <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
-              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Thanks,<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
+              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
             </div>
           </div>`;
         await fetch('/api/send-email', {
