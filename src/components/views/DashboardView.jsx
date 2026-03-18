@@ -294,7 +294,9 @@ export default function DashboardView({
           (a.position === posKey || a.position === pos.key || a.position === pos.name)
         ).length;
         const open = (pos.count || 1) - filled;
-        const label = getPositionLabel(posKey) || pos.label || pos.name || posKey;
+        const label = getPositionLabel(posKey) !== posKey
+          ? getPositionLabel(posKey)
+          : (pos.label || posKey);
         return open > 0 ? { label, open, needed: pos.count || 1 } : null;
       }).filter(Boolean);
 

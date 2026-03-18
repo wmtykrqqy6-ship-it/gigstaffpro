@@ -173,25 +173,28 @@ const saveDismissedNotificationIds = (ids) => {
 
     if (userRole === 'admin') {
       // Admin notifications
-      
-      // 1. Pending applications
-      const pendingApps = assignments.filter(a => a.status === 'pending');
-      if (pendingApps.length > 0) {
-        pendingApps.forEach(app => {
-          const worker = workers.find(w => w.id === app.worker_id);
-          const event = events.find(e => e.id === app.event_id);
-          if (worker && event) {
-            newNotifications.push({
-              id: `pending-${app.id}`,
-              type: 'application',
-              title: 'New Application',
-              message: `${worker.name} applied for ${event.name}`,
-              timestamp: app.applied_at || app.created_at,
-              action: () => setCurrentView('applications')
-            });
-          }
-        });
-      }
+
+      // 1. Pending applications — only show if less than 3 days old
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const pendingApps = assignments.filter(a => {
+        if (a.status !== 'pending') return false;
+        const appliedAt = new Date(a.applied_at || a.created_at);
+        return appliedAt >= threeDaysAgo;
+      });
+      pendingApps.forEach(app => {
+        const worker = workers.find(w => w.id === app.worker_id);
+        const event = events.find(e => e.id === app.event_id);
+        if (worker && event) {
+          newNotifications.push({
+            id: `pending-${app.id}`,
+            type: 'application',
+            title: 'New Application',
+            message: `${worker.name} applied for ${event.name}`,
+            timestamp: app.applied_at || app.created_at,
+            action: () => setCurrentView('applications')
+          });
+        }
+      });
 
       // 2. New worker signups (last 7 days)
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -236,7 +239,10 @@ const saveDismissedNotificationIds = (ids) => {
             (a.position === posKey || a.position === pos.key || a.position === pos.name)
           ).length;
           const open = (pos.count || 1) - filled;
-          const label = getPositionLabel(posKey) || pos.label || pos.name || posKey;
+          // getPositionLabel handles key lookup; pos.label is the stored label from event creation
+          const label = getPositionLabel(posKey) !== posKey
+            ? getPositionLabel(posKey)
+            : (pos.label || posKey);
           return open > 0 ? `${label} ×${open}` : null;
         }).filter(Boolean);
 
@@ -251,7 +257,7 @@ const saveDismissedNotificationIds = (ids) => {
         newNotifications.push({
           id: `understaffed-${tier}-${event.id}`,
           type: 'warning',
-          title: is24h ? '🚨 Understaffed — Under 24h' : '⚠️ Understaffed — 7 Days',
+          title: is24h ? 'Understaffed · Under 24h' : 'Understaffed · 7 Days',
           message: `${event.name} (${timeLabel}): ${unfilledPositions.join(', ')} open`,
           timestamp: new Date().toISOString(),
           action: () => {
@@ -331,6 +337,12 @@ const visibleNotifications = newNotifications.filter(n => !dismissedIds.has(n.id
 setNotifications(visibleNotifications.slice(0, 20));
 
   };
+
+const handleDismissNotification = (id) => {
+  const existing = loadDismissedNotificationIds();
+  saveDismissedNotificationIds(Array.from(new Set([...existing, id])));
+  setNotifications(prev => prev.filter(n => n.id !== id));
+};
 
 const handleClearAllNotifications = () => {
   if (!confirm('Clear all notifications?')) return;
@@ -1213,6 +1225,7 @@ setAppPositions(storedPositions);
   notifications={notifications}
   onClose={() => setShowNotifications(false)}
   onClearAll={handleClearAllNotifications}
+  onDismiss={handleDismissNotification}
 />
       <InviteWorkersModal
         open={showInviteModal}
