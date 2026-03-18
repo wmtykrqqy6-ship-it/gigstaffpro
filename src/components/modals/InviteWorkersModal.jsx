@@ -276,7 +276,32 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const timeStr = event.time
           ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
           : '';
+
+        // Build Google Calendar link
+        const gcalDate = (() => {
+          if (!event.date) return null;
+          const [y, m, d] = event.date.split('-');
+          if (!event.time) return `${y}${m}${d}`;
+          const [sh, sm] = event.time.split(':').map(Number);
+          const startDt = `${y}${m}${d}T${String(sh).padStart(2,'0')}${String(sm||0).padStart(2,'0')}00`;
+          let endDt = startDt;
+          if (event.end_time) {
+            const [eh, em] = event.end_time.split(':').map(Number);
+            endDt = `${y}${m}${d}T${String(eh).padStart(2,'0')}${String(em||0).padStart(2,'0')}00`;
+          }
+          return `${startDt}/${endDt}`;
+        })();
+        const gcalDetails = [
+          `Position: ${getPositionLabel(positionLabel) || positionLabel}`,
+          event.dress_code ? `Dress Code: ${event.dress_code}` : null,
+          event.parking ? `Parking: ${event.parking}` : null,
+          invitePay ? `Est. Pay: $${invitePay.total}` : null,
+        ].filter(Boolean).join('%0A');
+        const gcalUrl = gcalDate ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.name)}&dates=${gcalDate}&location=${encodeURIComponent(event.address || event.venue || '')}&details=${gcalDetails}` : null;
+
         const detailRows = [
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px;font-weight:600">${fmtDate(event.date)}</td></tr>`,
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px;font-weight:600">${getPositionLabel(positionLabel) || positionLabel}</td></tr>`,
           event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
           event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
           timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
@@ -287,6 +312,14 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${detailRows}</table>`
           : '';
 
+        const gcalHtml = gcalUrl
+          ? `<div style="text-align:center;margin:8px 0 16px">
+               <a href="${gcalUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#f8f9fa;border:1px solid #dadce0;color:#1a73e8;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
+                 📅 Add to Google Calendar
+               </a>
+             </div>`
+          : '';
+
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
@@ -295,8 +328,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> on <strong>${fmtDate(event.date)}</strong> as <strong>${positionLabel}</strong>.</p>
+              <p style="color:#374151">You've been invited to work <strong>${event.name}</strong> as <strong>${getPositionLabel(positionLabel) || positionLabel}</strong>.</p>
               ${detailsHtml}
+              ${gcalHtml}
               ${invitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
@@ -383,7 +417,39 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         const riTimeStr = event.time
           ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
           : '';
+        const riPositionLabel = getPositionLabel(inv.position_key) || inv.position_key;
+
+        const riGcalDate = (() => {
+          if (!event.date) return null;
+          const [y, m, d] = event.date.split('-');
+          if (!event.time) return `${y}${m}${d}`;
+          const [sh, sm] = event.time.split(':').map(Number);
+          const startDt = `${y}${m}${d}T${String(sh).padStart(2,'0')}${String(sm||0).padStart(2,'0')}00`;
+          let endDt = startDt;
+          if (event.end_time) {
+            const [eh, em] = event.end_time.split(':').map(Number);
+            endDt = `${y}${m}${d}T${String(eh).padStart(2,'0')}${String(em||0).padStart(2,'0')}00`;
+          }
+          return `${startDt}/${endDt}`;
+        })();
+        const riGcalDetails = [
+          `Position: ${riPositionLabel}`,
+          event.dress_code ? `Dress Code: ${event.dress_code}` : null,
+          event.parking ? `Parking: ${event.parking}` : null,
+          reInvitePay ? `Est. Pay: $${reInvitePay.total}` : null,
+        ].filter(Boolean).join('%0A');
+        const riGcalUrl = riGcalDate ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.name)}&dates=${riGcalDate}&location=${encodeURIComponent(event.address || event.venue || '')}&details=${riGcalDetails}` : null;
+        const riGcalHtml = riGcalUrl
+          ? `<div style="text-align:center;margin:8px 0 16px">
+               <a href="${riGcalUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#f8f9fa;border:1px solid #dadce0;color:#1a73e8;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
+                 📅 Add to Google Calendar
+               </a>
+             </div>`
+          : '';
+
         const riDetailRows = [
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px;font-weight:600">${fmtDate(event.date)}</td></tr>`,
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px;font-weight:600">${riPositionLabel}</td></tr>`,
           event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
           event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
           riTimeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${riTimeStr}</td></tr>` : '',
@@ -402,8 +468,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
             </div>
             <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
               <p style="font-size:16px;color:#111">Hi ${worker.name},</p>
-              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> on <strong>${fmtDate(event.date)}</strong> as <strong>${getPositionLabel(inv.position_key)}</strong>.</p>
+              <p style="color:#374151">You've been re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
               ${riDetailsHtml}
+              ${riGcalHtml}
               ${reInvitePayHtml}
               <p style="color:#6b7280;font-size:14px">⏰ Please respond by <strong>${expiresStr}</strong></p>
               <div style="text-align:center;margin:28px 0;display:flex;gap:12px;justify-content:center">
