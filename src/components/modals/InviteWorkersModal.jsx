@@ -268,49 +268,56 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         const invitePay = calcEstimatedPay(positionLabel, event.id, worker, workerMiles);
         const invitePayHtml = invitePay
-          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
-               <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p>
-               <p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p>
-             </div>`
+          ? `<div class="pay"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p></div>`
           : '';
 
         const timeStr = event.time
           ? (event.end_time ? `${fmtTime(event.time)} - ${fmtTime(event.end_time)}` : fmtTime(event.time))
           : '';
 
-        const detailRows = [
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${positionLabel}</td></tr>`,
-          event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
-          event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
-          timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
-          event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
-          event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
-        ].filter(Boolean).join('');
-        const detailsHtml = detailRows
-          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${detailRows}</table>`
+        const rows = [
+          ['📅', fmtDate(event.date)],
+          ['🎴', positionLabel],
+          event.venue ? ['📍', event.venue + (event.room ? `, ${event.room}` : '')] : null,
+          event.address ? ['🗺', event.address] : null,
+          timeStr ? ['🕐', timeStr] : null,
+          event.dress_code ? ['👔', event.dress_code] : null,
+          event.parking ? ['🅿', event.parking] : null,
+        ].filter(Boolean).map(([icon, val]) =>
+          `<tr><td class="lbl">${icon}</td><td class="val">${val}</td></tr>`
+        ).join('');
+
+        const detailsHtml = rows
+          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${rows}</table>`
           : '';
 
-        const html = `
-          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
-            <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
-              <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
-              <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
-            </div>
-            <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-              <p style="font-size:16px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
-              <p style="color:#374151;margin:0 0 20px">You've been invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
-              <div style="text-align:center;margin:0 0 24px">
-                <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✅ Accept</a>
-                <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✕ Decline</a>
-              </div>
-              <p style="color:#6b7280;font-size:13px;text-align:center;margin:0 0 20px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              ${detailsHtml}
-              ${invitePayHtml}
-              <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
-              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
-            </div>
-          </div>`;
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;margin:0;padding:0}
+.wrap{max-width:500px;margin:0 auto}
+.hdr{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
+.hdr h1{color:#fff;margin:0;font-size:20px}
+.hdr p{color:#fca5a5;margin:4px 0 0;font-size:13px}
+.body{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
+.btn-wrap{text-align:center;margin:16px 0}
+.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
+.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
+.val{padding:4px 0;color:#111;font-size:13px}
+.pay{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0}
+.footer{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
+</style></head><body><div class="wrap">
+<div class="hdr"><h1>🎰 Vegas on Wheels</h1><p>You've been invited — please respond</p></div>
+<div class="body">
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
+<p style="color:#374151;margin:0 0 16px">Invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
+<div class="btn-wrap">
+  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 16px">⏰ Respond by <strong>${expiresStr}</strong></p>
+${detailsHtml}
+${invitePayHtml}
+<p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
+</div></div></body></html>`;
 
         return fetch('/api/send-email', {
           method: 'POST',
@@ -377,10 +384,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         }
         const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker, reInviteWorkerMiles);
         const reInvitePayHtml = reInvitePay
-          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:12px 0">
-               <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p>
-               <p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p>
-             </div>`
+          ? `<div class="pay"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p></div>`
           : '';
 
         const riTimeStr = event.time
@@ -388,41 +392,48 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           : '';
         const riPositionLabel = getPositionLabel(inv.position_key) || inv.position_key;
 
-        // Dynamic ICS link for re-invite
-        const riIcsUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${event.id}&position=${encodeURIComponent(riPositionLabel)}`;
-        const riDetailRows = [
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${riPositionLabel}</td></tr>`,
-          event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}${event.room ? `, ${event.room}` : ''}</td></tr>` : '',
-          event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
-          riTimeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${riTimeStr}</td></tr>` : '',
-          event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
-          event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
-        ].filter(Boolean).join('');
-        const riDetailsHtml = riDetailRows
-          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0 4px">${riDetailRows}</table>`
+        const riRows = [
+          ['📅', fmtDate(event.date)],
+          ['🎴', riPositionLabel],
+          event.venue ? ['📍', event.venue + (event.room ? `, ${event.room}` : '')] : null,
+          event.address ? ['🗺', event.address] : null,
+          riTimeStr ? ['🕐', riTimeStr] : null,
+          event.dress_code ? ['👔', event.dress_code] : null,
+          event.parking ? ['🅿', event.parking] : null,
+        ].filter(Boolean).map(([icon, val]) =>
+          `<tr><td class="lbl">${icon}</td><td class="val">${val}</td></tr>`
+        ).join('');
+        const riDetailsHtml = riRows
+          ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${riRows}</table>`
           : '';
 
-        const html = `
-          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
-            <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
-              <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
-              <p style="color:#fca5a5;margin:6px 0 0">You've been invited — please respond</p>
-            </div>
-            <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-              <p style="font-size:16px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
-              <p style="color:#374151;margin:0 0 20px">You've been re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
-              <div style="text-align:center;margin:0 0 24px">
-                <a href="${acceptUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✅ Accept</a>
-                <a href="${declineUrl}" style="display:inline-block;background:#dc2626;color:white;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:16px;margin:0 6px">✕ Decline</a>
-              </div>
-              <p style="color:#6b7280;font-size:13px;text-align:center;margin:0 0 20px">⏰ Please respond by <strong>${expiresStr}</strong></p>
-              ${riDetailsHtml}
-              ${reInvitePayHtml}
-              <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
-              <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">The Vegas on Wheels Team</strong></p>
-            </div>
-          </div>`;
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;margin:0;padding:0}
+.wrap{max-width:500px;margin:0 auto}
+.hdr{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
+.hdr h1{color:#fff;margin:0;font-size:20px}
+.hdr p{color:#fca5a5;margin:4px 0 0;font-size:13px}
+.body{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
+.btn-wrap{text-align:center;margin:16px 0}
+.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
+.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
+.val{padding:4px 0;color:#111;font-size:13px}
+.pay{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0}
+.footer{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
+</style></head><body><div class="wrap">
+<div class="hdr"><h1>🎰 Vegas on Wheels</h1><p>You've been invited — please respond</p></div>
+<div class="body">
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
+<p style="color:#374151;margin:0 0 16px">Re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
+<div class="btn-wrap">
+  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 16px">⏰ Respond by <strong>${expiresStr}</strong></p>
+${riDetailsHtml}
+${reInvitePayHtml}
+<p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
+</div></div></body></html>`;
         await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

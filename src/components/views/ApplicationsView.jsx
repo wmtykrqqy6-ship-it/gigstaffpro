@@ -28,7 +28,7 @@ export default function ApplicationsView({
       const fmtDate = (d) => {
         if (!d) return '';
         const [y, m, day] = d.split('-').map(Number);
-        return new Date(y, m - 1, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        return new Date(y, m - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
       };
       const fmtT = (t) => {
         if (!t) return '';
@@ -39,41 +39,40 @@ export default function ApplicationsView({
         ? (event.end_time ? `${fmtT(event.time)} – ${fmtT(event.end_time)}` : fmtT(event.time))
         : '';
 
-      const detailRows = [
-        `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📅 Date</td><td style="padding:4px 0;color:#111;font-size:13px">${fmtDate(event.date)}</td></tr>`,
-        `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🎴 Position</td><td style="padding:4px 0;color:#111;font-size:13px">${positionLabel}</td></tr>`,
-        event.venue ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">📍 Venue</td><td style="padding:4px 0;color:#111;font-size:13px">${event.venue}</td></tr>` : '',
-        event.address ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🗺 Address</td><td style="padding:4px 0;color:#111;font-size:13px">${event.address}</td></tr>` : '',
-        timeStr ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🕐 Time</td><td style="padding:4px 0;color:#111;font-size:13px">${timeStr}</td></tr>` : '',
-        event.dress_code ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">👔 Dress Code</td><td style="padding:4px 0;color:#111;font-size:13px">${event.dress_code}</td></tr>` : '',
-        event.parking ? `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">🅿 Parking</td><td style="padding:4px 0;color:#111;font-size:13px">${event.parking}</td></tr>` : '',
-      ].filter(Boolean).join('');
+      const rows = [
+        ['📅', 'Date',      fmtDate(event.date)],
+        ['🎴', 'Position',  positionLabel],
+        event.venue      ? ['📍', 'Venue',      event.venue]      : null,
+        event.address    ? ['🗺', 'Address',    event.address]    : null,
+        timeStr          ? ['🕐', 'Time',       timeStr]          : null,
+        event.dress_code ? ['👔', 'Dress Code', event.dress_code] : null,
+        event.parking    ? ['🅿', 'Parking',    event.parking]    : null,
+      ].filter(Boolean).map(([icon, label, val]) =>
+        `<tr><td class="lbl">${icon} ${label}</td><td class="val">${val}</td></tr>`
+      ).join('');
 
-      const html = `
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
-          <div style="background:#7c0a02;padding:24px;text-align:center;border-radius:8px 8px 0 0">
-            <h1 style="color:white;margin:0;font-size:22px">🎰 Vegas on Wheels</h1>
-            <p style="color:#fca5a5;margin:6px 0 0">Booking Confirmed</p>
-          </div>
-          <div style="background:#fff;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-            <div style="text-align:center;margin-bottom:20px">
-              <div style="font-size:48px">🎉</div>
-              <h2 style="margin:8px 0 4px;color:#111">You're confirmed!</h2>
-              <p style="color:#6b7280;margin:0">You've been booked for <strong>${event.name}</strong></p>
-            </div>
-            <table style="border-collapse:collapse;width:100%;margin:0 0 16px">${detailRows}</table>
-            <div style="text-align:center;margin:16px 0">
-              <a href="${calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
-                📅 Add to Calendar
-              </a>
-            </div>
-            <hr style="border:none;border-top:1px solid #f3f4f6;margin:16px 0 12px">
-            <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">
-              Questions? Log in to the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a> to view your schedule.<br>
-              <strong style="color:#7c0a02">The Vegas on Wheels Team</strong>
-            </p>
-          </div>
-        </div>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;margin:0;padding:0}
+.w{max-width:500px;margin:0 auto}
+.h{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
+.h h1{color:#fff;margin:0;font-size:20px}
+.h p{color:#fca5a5;margin:4px 0 0;font-size:13px}
+.b{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
+.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
+.val{padding:4px 0;color:#111;font-size:13px}
+.cal{display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500}
+.ft{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
+</style></head><body><div class="w">
+<div class="h"><h1>🎰 Vegas on Wheels</h1><p>Booking Confirmed</p></div>
+<div class="b">
+<div style="text-align:center;margin:0 0 16px"><div style="font-size:44px">🎉</div>
+<h2 style="margin:6px 0 2px;color:#111">You're confirmed!</h2>
+<p style="color:#6b7280;margin:0">Booked for <strong>${event.name}</strong></p></div>
+<table style="border-collapse:collapse;width:100%;margin:0 0 14px">${rows}</table>
+<div style="text-align:center;margin:14px 0"><a href="${calUrl}" class="cal">📅 Add to Calendar</a></div>
+<hr style="border:none;border-top:1px solid #f3f4f6;margin:14px 0 10px">
+<p class="ft">View your schedule in the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
+</div></div></body></html>`;
 
       await fetch('/api/send-email', {
         method: 'POST',
