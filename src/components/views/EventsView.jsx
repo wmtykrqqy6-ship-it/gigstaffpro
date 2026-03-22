@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown, AlertCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -415,6 +415,59 @@ export default function EventsView({
 
                 {event.positions && event.positions.length > 0 && (
                   <div className="mb-4">
+                    {/* Staffing alert badge */}
+                    {(() => {
+                      const now = new Date();
+                      const [ey, em, ed] = (event.date || '').split('-').map(Number);
+                      if (!ey) return null;
+                      const eventDate = new Date(ey, em - 1, ed);
+                      const daysUntil = Math.ceil((eventDate - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+                      let hoursUntil = daysUntil * 24;
+                      if (event.time) {
+                        const [th, tm] = event.time.split(':').map(Number);
+                        hoursUntil = (new Date(ey, em-1, ed, th, tm||0) - now) / (1000*60*60);
+                      }
+                      const is24h = hoursUntil >= 0 && hoursUntil <= 24;
+                      const is7day = daysUntil <= 7 && daysUntil >= 0;
+                      if (!is24h && !is7day) return null;
+
+                      const unfilled = event.positions.filter(pos => {
+                        const posKey = pos.key || pos.name;
+                        const filled = assignments.filter(a =>
+                          a.event_id === event.id &&
+                          !['standby','rejected','cancelled','pending'].includes(a.status) &&
+                          (a.position === posKey || a.position === pos.key || a.position === pos.name)
+                        ).length;
+                        return (pos.count || 1) - filled > 0;
+                      });
+                      if (unfilled.length === 0) return null;
+
+                      return (
+                        <div className={`flex items-start gap-2 px-3 py-2 rounded-lg mb-3 text-sm border ${
+                          is24h
+                            ? 'bg-red-50 border-red-200 text-red-800'
+                            : 'bg-amber-50 border-amber-200 text-amber-800'
+                        }`}>
+                          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                          <span>
+                            <strong>{is24h ? 'Under 24h' : `${daysUntil}d away`}</strong>
+                            {' — '}
+                            {unfilled.map((p, i) => {
+                              const posKey = p.key || p.name;
+                              const filled = assignments.filter(a =>
+                                a.event_id === event.id &&
+                                !['standby','rejected','cancelled','pending'].includes(a.status) &&
+                                (a.position === posKey || a.position === p.key || a.position === p.name)
+                              ).length;
+                              const open = (p.count || 1) - filled;
+                              return `${getPositionLabel(posKey)} ×${open}${i < unfilled.length - 1 ? ', ' : ''}`;
+                            })}
+                            {' open'}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
                     <p className="text-xs text-gray-500 mb-2">Staff Needed:</p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       {event.positions.map((pos, idx) => {
