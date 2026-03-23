@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw } from 'lucide-react';
+import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw, Bell } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
@@ -50,6 +50,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const [secondsSinceRefresh, setSecondsSinceRefresh] = useState(0);
   const [confirmSend, setConfirmSend] = useState(null); // holds {workerIds, rank} when awaiting confirmation
   const [reInviting, setReInviting] = useState(null);
+  const [nudging, setNudging] = useState(null); // invite id being nudged
 
   useEffect(() => {
     if (open && event) {
@@ -446,6 +447,70 @@ ${reInvitePayHtml}
     finally { setReInviting(null); }
   };
 
+  const handleNudge = async (inv) => {
+    setNudging(inv.id);
+    try {
+      const worker = workers.find(w => w.id === inv.worker_id);
+      if (!worker?.email) { alert('Worker has no email address.'); return; }
+
+      const positionLabel = getPositionLabel(inv.position_key) || inv.position_key;
+      const expiresAt = new Date(inv.expires_at);
+      const expiresStr = expiresAt.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      });
+      const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${inv.token}&action=accepted`;
+      const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${inv.token}&action=declined`;
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;margin:0;padding:0}
+.w{max-width:500px;margin:0 auto}
+.h{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
+.h h1{color:#fff;margin:0;font-size:20px}
+.h p{color:#fca5a5;margin:4px 0 0;font-size:13px}
+.b{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
+.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
+.ft{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
+</style></head><body><div class="w">
+<div class="h"><h1>🎰 Vegas on Wheels</h1><p>⏰ Reminder — please respond</p></div>
+<div class="b">
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
+<p style="color:#374151;margin:0 0 16px">You haven't responded to your invite for <strong>${event.name}</strong> as <strong>${positionLabel}</strong>. Please respond before your window closes.</p>
+<div style="text-align:center;margin:0 0 16px">
+  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 8px">⏰ Respond by <strong>${expiresStr}</strong></p>
+<hr style="border:none;border-top:1px solid #f3f4f6;margin:12px 0 10px">
+<p class="ft">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
+</div></div></body></html>`;
+
+      const emailRes = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: worker.email,
+          subject: `⏰ Reminder: Please respond to your ${event.name} invite`,
+          html
+        })
+      });
+
+      if (emailRes.ok) {
+        // Stamp reminder_sent_at so auto-cron won't double-send
+        await supabase
+          .from('invitations')
+          .update({ reminder_sent_at: new Date().toISOString() })
+          .eq('id', inv.id);
+        await loadInvitations();
+      } else {
+        alert('Failed to send reminder. Please try again.');
+      }
+    } catch (err) {
+      alert('Error sending reminder: ' + err.message);
+    } finally {
+      setNudging(null);
+    }
+  };
+
   const handleConfirmWorker = async (invitation) => {
     setConfirming(invitation.id);
     try {
@@ -754,7 +819,7 @@ ${reInvitePayHtml}
                     </div>
                   )}
 
-                  {pendingInvites.length > 0 && (
+                      {pendingInvites.length > 0 && (
                     <div>
                       <h4 className="text-sm font-bold text-yellow-800 mb-2 flex items-center space-x-1.5">
                         <Clock size={15} className="text-yellow-600" />
@@ -765,11 +830,32 @@ ${reInvitePayHtml}
                           <div key={inv.id} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <div>
                               <p className="font-semibold text-gray-900 text-sm">{getWorkerName(inv.worker_id)}</p>
-                              <p className="text-xs text-gray-500">Rank {inv.rank_tier} · Invited {new Date(inv.invited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                              <p className="text-xs text-gray-500">
+                                Rank {inv.rank_tier} · Invited {new Date(inv.invited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              </p>
+                              {inv.reminder_sent_at && (
+                                <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                                  <Bell size={10} />
+                                  Reminded {new Date(inv.reminder_sent_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                </p>
+                              )}
                             </div>
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${isExpired(inv) ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {formatExpiry(inv)}
-                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${isExpired(inv) ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {formatExpiry(inv)}
+                              </span>
+                              {!isExpired(inv) && (
+                                <button
+                                  onClick={() => handleNudge(inv)}
+                                  disabled={nudging === inv.id}
+                                  className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                                  title="Send reminder email"
+                                >
+                                  <Bell size={11} />
+                                  {nudging === inv.id ? 'Sending...' : 'Nudge'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
