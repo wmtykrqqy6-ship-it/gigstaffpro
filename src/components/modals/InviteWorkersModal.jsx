@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw, Bell } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
