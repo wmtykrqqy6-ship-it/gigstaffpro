@@ -143,7 +143,7 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = assignments.filter(a => a.event_id === event.id);
+  const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
   
   const getPositionAssignments = (position) => {
     // Count approved/assigned (legacy) assignments only - exclude standby, pending, rejected, cancelled
