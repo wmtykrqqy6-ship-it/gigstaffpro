@@ -1,5 +1,5 @@
 // ============================================
-// GIGSTAFFPRO - APPLICATION CONSTANTS
+// GIGSTAFFPRO - APPLICATION CONSTANTSTest
 // ============================================
 // All magic numbers and hardcoded values in one place
 // Makes it easy to adjust business rules without hunting through code
