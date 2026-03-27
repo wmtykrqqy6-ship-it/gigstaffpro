@@ -143,13 +143,23 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
+  const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Count approved/assigned (legacy) assignments only - exclude standby, pending, rejected, cancelled
-    const filtered = eventAssignments.filter(a => 
-      a.position === position && 
-      (a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined)
+    // Build a set of all values that could match this position
+    // e.g. 'craps_dealer', 'Craps Dealer', 'Craps', 'craps' should all match each other
+    const normalize = (s) => s?.toLowerCase().replace(/[^a-z]/g, '') || '';
+    const posNorm = normalize(position);
+    const filtered = eventAssignments.filter(a => {
+      if (!a.position) return false;
+      if (a.position === position) return true; // exact match first
+      // fuzzy: strip non-alpha and compare
+      if (normalize(a.position) === posNorm) return true;
+      // prefix match: 'craps' matches 'craps_dealer', 'roulette' matches 'roulette_dealer'
+      if (posNorm.startsWith(normalize(a.position)) || normalize(a.position).startsWith(posNorm)) return true;
+      return false;
+    }).filter(a =>
+      a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined
     );
     return filtered;
   };
