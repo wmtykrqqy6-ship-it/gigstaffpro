@@ -818,12 +818,32 @@ export default function AssignWorkersModal({
                                       <span className="text-xs text-gray-600 flex items-center">
                                         ⭐ {worker.reliability.toFixed(1)}
                                       </span>
-                                      {workerDistances[worker.id] != null && (
-                                        <span className="text-xs text-gray-500 flex items-center space-x-0.5">
-                                          <Navigation size={11} className="text-gray-400" />
-                                          <span>{workerDistances[worker.id]} mi</span>
-                                        </span>
-                                      )}
+                                      {sortByDistance && (() => {
+                                        const d = workerDistances[worker.id];
+                                        if (d != null) {
+                                          const color = d <= 20 ? 'text-green-600' : d <= 40 ? 'text-yellow-600' : 'text-red-600';
+                                          return (
+                                            <span className={`text-xs font-medium flex items-center space-x-0.5 ${color}`}>
+                                              <Navigation size={11} />
+                                              <span>{d} mi</span>
+                                            </span>
+                                          );
+                                        }
+                                        if (!worker.address) {
+                                          return (
+                                            <span className="text-xs text-gray-400 flex items-center space-x-0.5">
+                                              <Navigation size={11} />
+                                              <span>no addr</span>
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <span className="text-xs text-gray-400 flex items-center space-x-0.5">
+                                            <Navigation size={11} />
+                                            <span>...</span>
+                                          </span>
+                                        );
+                                      })()}
                                       {hasTimeConflict && (
                                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
                                           TIME CONFLICT
