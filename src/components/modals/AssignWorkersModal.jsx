@@ -146,21 +146,26 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
   
   const getPositionAssignments = (position) => {
-    // Normalize: strip non-alpha, lowercase — handles 'roulette' vs 'roulette_dealer', etc.
-    const normalize = (s) => s?.toLowerCase().replace(/[^a-z]/g, '') || '';
-    const posNorm = normalize(position);
-    const filtered = eventAssignments.filter(a => {
+    // Normalize helper: lowercase, strip spaces/underscores/special chars
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+    const posNorm = norm(position);
+    
+    const validStatuses = ['approved', 'assigned', null, undefined];
+    
+    return eventAssignments.filter(a => {
+      if (!validStatuses.includes(a.status)) return false;
       if (!a.position) return false;
+      // Exact match
       if (a.position === position) return true;
-      const aNorm = normalize(a.position);
+      // Case-insensitive exact
+      if (a.position.toLowerCase() === position.toLowerCase()) return true;
+      // Normalized match (strips underscores, spaces, special chars)
+      const aNorm = norm(a.position);
       if (aNorm === posNorm) return true;
-      // prefix match: 'roulette' matches 'roulettedealer' and vice versa
-      if (posNorm.startsWith(aNorm) || aNorm.startsWith(posNorm)) return true;
+      // Prefix: 'roulette' matches 'roulettedealer' and vice versa
+      if (posNorm.length >= 4 && (posNorm.startsWith(aNorm) || aNorm.startsWith(posNorm))) return true;
       return false;
-    }).filter(a =>
-      a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined
-    );
-    return filtered;
+    });
   };
 
   const getPositionCount = (positionKey) => {
