@@ -123,6 +123,42 @@ export default function AssignWorkersModal({
     }
   }, [event, eventPaymentSettings, warehouseAddress]);
 
+
+  // Fetch worker home→event distances when sort by proximity is enabled
+  useEffect(() => {
+    if (!sortByDistance || !event?.address || !workers?.length) return;
+    const workersNeedingDistance = workers.filter(w => w.address && workerDistances[w.id] == null);
+    if (!workersNeedingDistance.length) return;
+
+    setDistancesLoading(true);
+    const batchSize = 5;
+    let completed = 0;
+
+    const fetchBatch = async (batch) => {
+      await Promise.all(batch.map(async (worker) => {
+        try {
+          const res = await fetch(
+            `/api/get-distance?origin=${encodeURIComponent(worker.address)}&destination=${encodeURIComponent(event.address)}`
+          );
+          const data = await res.json();
+          if (data.miles != null) {
+            setWorkerDistances(prev => ({ ...prev, [worker.id]: data.miles }));
+          }
+        } catch {}
+        completed++;
+      }));
+    };
+
+    const runBatches = async () => {
+      for (let i = 0; i < workersNeedingDistance.length; i += batchSize) {
+        await fetchBatch(workersNeedingDistance.slice(i, i + batchSize));
+      }
+      setDistancesLoading(false);
+    };
+
+    runBatches();
+  }, [sortByDistance, event?.address, workers]);
+
   // Early return AFTER all hooks
   if (!open || !event) return null;
 
@@ -146,19 +182,16 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
   
   const getPositionAssignments = (position) => {
-    // Count approved/assigned/pending — exclude only standby, rejected, cancelled
     const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
     const posNorm = norm(position);
     return eventAssignments.filter(a => {
       if (!a.position) return false;
-      // Position match: exact, case-insensitive, or normalized prefix
       const aNorm = norm(a.position);
       const posMatch = a.position === position ||
         a.position.toLowerCase() === position.toLowerCase() ||
         aNorm === posNorm ||
         (posNorm.length >= 4 && (posNorm.startsWith(aNorm) || aNorm.startsWith(posNorm)));
       if (!posMatch) return false;
-      // Status: count pending/approved/assigned as filled; exclude standby/rejected/cancelled
       return !['standby', 'rejected', 'cancelled'].includes(a.status);
     });
   };
@@ -493,8 +526,10 @@ export default function AssignWorkersModal({
                   })
                   .sort((a, b) => {
                     if (sortByDistance) {
-                      const distA = workerDistances[a.id] ?? Infinity;
-                      const distB = workerDistances[b.id] ?? Infinity;
+                      // Workers with known distance sort by miles asc
+                      // Workers with no address or pending distance go to bottom
+                      const distA = workerDistances[a.id] ?? (a.address ? 9999 : 99999);
+                      const distB = workerDistances[b.id] ?? (b.address ? 9999 : 99999);
                       if (distA !== distB) return distA - distB;
                     }
                     // Default: rank first (lower is better), then reliability
