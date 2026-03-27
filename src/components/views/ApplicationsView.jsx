@@ -159,10 +159,9 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
 
     const isStandbyPromotion = app.status === 'standby';
 
-    // ✅ Check if position is already full - SKIP this check for standby promotions
-    // (admin is intentionally promoting someone from the standby list)
+    // Check capacity for ALL approvals — including standby promotions
     const event = events.find(e => e.id === app.event_id);
-    if (!isStandbyPromotion && event && event.positions && Array.isArray(event.positions)) {
+    if (event && event.positions && Array.isArray(event.positions)) {
       const positionDef = event.positions.find(p => {
         const pKey = p.key || p.name;
         return pKey === app.position ||
@@ -176,13 +175,9 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       if (positionDef) {
         const maxCount = positionDef.count || 1;
         const currentApproved = assignments.filter(a => {
-          if (a.event_id !== app.event_id) return false;
+          if (String(a.event_id) !== String(app.event_id)) return false;
           if (a.id === applicationId) return false;
-          // Exclude standby workers from count
-          if (a.status === 'standby') return false;
-          // Admin-assigned directly = null/undefined status. Count anything NOT pending/rejected/cancelled.
-          const s = a.status;
-          if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
+          if (['standby', 'pending', 'rejected', 'cancelled'].includes(a.status)) return false;
           return a.position === app.position ||
                  a.position === positionDef.key ||
                  a.position === positionDef.name ||
@@ -190,11 +185,17 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
                  getPositionLabel(a.position) === getPositionLabel(app.position);
         }).length;
 
-        console.log(`Approve check: "${app.position}" | approved: ${currentApproved} | max: ${maxCount}`);
-
         if (currentApproved >= maxCount) {
-          // Position is full — caller should have used handleApproveToStandby instead
-          return;
+          if (isStandbyPromotion) {
+            // Warn but let admin override — they may be swapping someone out
+            const proceed = confirm(
+              `⚠️ ${app.position} is already full (${currentApproved}/${maxCount}).\n\nApproving this standby worker will overstaff the position.\n\nProceed anyway?`
+            );
+            if (!proceed) return;
+          } else {
+            // Non-standby: block silently (UI shouldn't reach here)
+            return;
+          }
         }
       }
     }
