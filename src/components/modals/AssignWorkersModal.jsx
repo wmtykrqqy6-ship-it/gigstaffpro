@@ -124,6 +124,11 @@ export default function AssignWorkersModal({
   }, [event, eventPaymentSettings, warehouseAddress]);
 
 
+  // Clear cached distances when event changes so they recalculate for the new address
+  useEffect(() => {
+    setWorkerDistances({});
+  }, [event?.id]);
+
   // Fetch worker home→event distances when sort by proximity is enabled
   useEffect(() => {
     if (!sortByDistance || !event?.address || !workers?.length) return;
