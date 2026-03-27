@@ -143,20 +143,19 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = assignments.filter(a => a.event_id === event.id);
+  const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
   
   const getPositionAssignments = (position) => {
-    // Build a set of all values that could match this position
-    // e.g. 'craps_dealer', 'Craps Dealer', 'Craps', 'craps' should all match each other
+    // Normalize: strip non-alpha, lowercase — handles 'roulette' vs 'roulette_dealer', etc.
     const normalize = (s) => s?.toLowerCase().replace(/[^a-z]/g, '') || '';
     const posNorm = normalize(position);
     const filtered = eventAssignments.filter(a => {
       if (!a.position) return false;
-      if (a.position === position) return true; // exact match first
-      // fuzzy: strip non-alpha and compare
-      if (normalize(a.position) === posNorm) return true;
-      // prefix match: 'craps' matches 'craps_dealer', 'roulette' matches 'roulette_dealer'
-      if (posNorm.startsWith(normalize(a.position)) || normalize(a.position).startsWith(posNorm)) return true;
+      if (a.position === position) return true;
+      const aNorm = normalize(a.position);
+      if (aNorm === posNorm) return true;
+      // prefix match: 'roulette' matches 'roulettedealer' and vice versa
+      if (posNorm.startsWith(aNorm) || aNorm.startsWith(posNorm)) return true;
       return false;
     }).filter(a =>
       a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined
