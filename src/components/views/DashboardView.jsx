@@ -309,14 +309,16 @@ export default function DashboardView({
 
   const upcomingEvents = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const eventDate = new Date(e.date);
-    eventDate.setHours(0, 0, 0, 0);
+    const [ey, em, ed] = (e.date || '').split('-').map(Number);
+    if (!ey) return false;
+    const eventDate = new Date(ey, em - 1, ed);
     return eventDate >= today;
   }).length;
   const needStaffing = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const eventDate = new Date(e.date);
-    eventDate.setHours(0, 0, 0, 0);
+    const [ey, em, ed] = (e.date || '').split('-').map(Number);
+    if (!ey) return false;
+    const eventDate = new Date(ey, em - 1, ed);
     if (eventDate < today) return false;
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
     const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
@@ -554,7 +556,10 @@ export default function DashboardView({
         const weekEvents = scopedEvents
           .filter(event => {
             if (event.status === 'cancelled' || event.status === 'archived') return false;
-            const eventDate = new Date(event.date);
+            // Parse as local date to avoid UTC offset shifting the day
+            const [ey, em, ed] = (event.date || '').split('-').map(Number);
+            if (!ey) return false;
+            const eventDate = new Date(ey, em - 1, ed);
             return eventDate >= now && eventDate <= sevenDaysOut;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
