@@ -525,9 +525,9 @@ export default function DashboardView({
                           : 'bg-amber-100 text-amber-800'
                       }`}>
                         {label}
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded text-xs font-bold ${
+                        <span className={`inline-flex items-center justify-center rounded text-xs font-bold px-1 ${
                           tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
-                        }`}>{open}</span>
+                        }`}>{open} open</span>
                       </span>
                     ))}
                   </div>
@@ -584,8 +584,9 @@ export default function DashboardView({
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
                   const filled = eventAssignments.length;
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
-                  const eventDate = new Date(event.date);
-                  const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
+                  const [_ey, _em, _ed] = (event.date || '').split('-').map(Number);
+                  const eventDate = new Date(_ey, _em - 1, _ed);
+                  const daysUntil = Math.round((eventDate - now) / (1000 * 60 * 60 * 24));
                   const urgencyBorder = daysUntil === 0 ? 'border-l-red-500'
                     : daysUntil === 1 ? 'border-l-orange-400'
                     : !isFullyStaffed ? 'border-l-yellow-400'
@@ -607,7 +608,9 @@ export default function DashboardView({
                           </div>
                         </div>
                         <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ml-2 ${
-                          isFullyStaffed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          isFullyStaffed ? 'bg-green-100 text-green-700'
+                          : (daysUntil === 0 || filled === 0) ? 'bg-red-100 text-red-700'
+                          : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {filled}/{totalNeeded}
                         </span>
@@ -615,7 +618,7 @@ export default function DashboardView({
                       <div className="space-y-1 text-xs text-gray-500">
                         <div className="flex items-center space-x-1">
                           <Calendar size={11} className="flex-shrink-0" />
-                          <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                          <span>{new Date(_ey, _em - 1, _ed).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                           <span className="text-gray-300">·</span>
                           <Clock size={11} className="flex-shrink-0" />
                           <span>{formatTime(event.time, timeFormat)}</span>
@@ -627,6 +630,14 @@ export default function DashboardView({
                           </div>
                         )}
                       </div>
+                      {!isFullyStaffed && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
+                          style={{marginTop:'8px',width:'100%',fontSize:'11px',fontWeight:'500',padding:'5px 0',borderRadius:'6px',border:'0.5px solid #bfdbfe',background:'#eff6ff',color:'#1e40af',cursor:'pointer'}}
+                        >
+                          Assign Staff
+                        </button>
+                      )}
                     </div>
                   );
                 })}
