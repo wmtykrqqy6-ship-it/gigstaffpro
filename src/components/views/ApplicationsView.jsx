@@ -593,34 +593,33 @@ Proceed anyway?`
                   );
                 })()}
                 {app.status === 'standby' && (() => {
-                  const full = isPositionFull(app);
+                  const standbyFull = isPositionFull(app);
                   return (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => handleApprove(app.id)}
-                      disabled={processingId === app.id}
-                      className={`${full ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto`}
-                    >
-                      <CheckCircle size={18} />
-                      <span>{full ? 'Approve to Standby' : 'Approve to Event'}</span>
-                    </button>
-                    {full && (
-                      <span className="self-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-lg">
-                        Position full
-                      </span>
-                    )}
-                    <button
-                      onClick={() => handleReject(app.id)}
-                      disabled={processingId === app.id}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
-                    >
-                      <XCircle size={18} />
-                      <span>Remove</span>
-                    </button>
-                  </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => handleApprove(app.id)}
+                        disabled={processingId === app.id}
+                        className={`${standbyFull ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto`}
+                      >
+                        <CheckCircle size={18} />
+                        <span>{standbyFull ? 'Approve to Standby' : 'Approve to Event'}</span>
+                      </button>
+                      {standbyFull && (
+                        <span className="self-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-lg">
+                          Position full
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleReject(app.id)}
+                        disabled={processingId === app.id}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                      >
+                        <XCircle size={18} />
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   );
-                })()
-                )}
+                })()}
               </div>
             ))}
           </div>
