@@ -190,7 +190,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                           <span className="flex items-center space-x-1"><MapPin size={12} /><span>{event.venue}</span></span>
                         </div>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
+                      <span className={`text-xs px-2 py-1 rounded font-medium flex-shrink-0 ${
                         filled >= total && total > 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                       }`}>{filled}/{total}</span>
                     </div>
@@ -479,7 +479,7 @@ export default function DashboardView({
           <div className="flex items-center space-x-2 mb-4">
             <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
             <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
-            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
+            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded">{unfilledAlerts.length}</span>
           </div>
           <div className="space-y-2">
             {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => (
@@ -495,7 +495,7 @@ export default function DashboardView({
                 <div className="min-w-0 flex-1">
                   {/* Event name + time badge */}
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded flex-shrink-0 ${
                       tier === '24h'
                         ? 'bg-red-500 text-white'
                         : daysUntil === 0 ? 'bg-orange-500 text-white'
@@ -517,13 +517,13 @@ export default function DashboardView({
                   {/* Open position pills */}
                   <div className="flex flex-wrap gap-1.5">
                     {unfilledPositions.map(({ label, open }) => (
-                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${
+                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-semibold ${
                         tier === '24h'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-amber-100 text-amber-800'
                       }`}>
                         {label}
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded text-xs font-bold ${
                           tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
                         }`}>{open}</span>
                       </span>
@@ -601,7 +601,7 @@ export default function DashboardView({
                             {daysUntil > 1 && <span className="text-xs text-gray-400">in {daysUntil} days</span>}
                           </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ml-2 ${
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ml-2 ${
                           isFullyStaffed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {filled}/{totalNeeded}
@@ -645,7 +645,7 @@ export default function DashboardView({
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Last 7 days</span>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Last 7 days</span>
         </div>
         {recentActivity.length === 0 ? (
           <div className="text-center py-10">
