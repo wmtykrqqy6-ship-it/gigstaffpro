@@ -14,6 +14,7 @@ const formatPhone = (p) => {
 };
 export default function EventsView({
   events,
+  workers = [],
   assignments,
   timeFormat,
   onShowAddEvent,
@@ -32,6 +33,11 @@ export default function EventsView({
   const [sortBy, setSortBy] = useState('date');
   const [locations, setLocations] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+
+  const getWorkerName = (workerId) => {
+    const w = workers.find(w => String(w.id) === String(workerId));
+    return w ? w.name : 'Unknown';
+  };
   const [expandedTiles, setExpandedTiles] = useState({});
   const [processingApproval, setProcessingApproval] = useState(null);
 
@@ -582,14 +588,14 @@ export default function EventsView({
                               {filledAssignments.map(a => (
                                 <div key={a.id} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',color:'#166534'}}>
                                   <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'#22c55e',flexShrink:0,display:'inline-block'}}/>
-                                  {a.worker_name || a.worker_id}
+                                  {getWorkerName(a.worker_id)}
                                 </div>
                               ))}
 
                               {/* Pending — approve/reject inline */}
                               {pendingAssignments.map(a => (
                                 <div key={a.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'6px',padding:'4px 6px',borderRadius:'6px',background:'#fefce8',border:'0.5px solid #fde68a'}}>
-                                  <span style={{fontSize:'12px',color:'#854d0e',fontWeight:'500'}}>{a.worker_name || a.worker_id}</span>
+                                  <span style={{fontSize:'12px',color:'#854d0e',fontWeight:'500'}}>{getWorkerName(a.worker_id)}</span>
                                   <div style={{display:'flex',gap:'4px',flexShrink:0}}>
                                     <button
                                       disabled={processingApproval === a.id}

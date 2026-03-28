@@ -1073,6 +1073,7 @@ setAppPositions(storedPositions);
             setSelectedEvent(event);
             setShowEditEvent(true);
           }}
+          workers={workers}
           onDeleteEvent={deleteEvent}
           onReloadAssignments={loadAssignments}
         />
