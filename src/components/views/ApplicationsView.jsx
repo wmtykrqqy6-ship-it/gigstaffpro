@@ -157,9 +157,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     const app = applications.find(a => a.id === applicationId);
     if (!app) return;
 
-    const isStandbyPromotion = app.status === 'standby';
-
-    // Check capacity for ALL approvals — including standby promotions
+    // Check capacity — block if position is full (for both pending and standby promotions)
     const event = events.find(e => e.id === app.event_id);
     if (event && event.positions && Array.isArray(event.positions)) {
       const positionDef = event.positions.find(p => {
@@ -186,18 +184,8 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
         }).length;
 
         if (currentApproved >= maxCount) {
-          if (isStandbyPromotion) {
-            const proceed = confirm(
-              `⚠️ ${app.position} is already full (${currentApproved}/${maxCount}).
-
-Approving this standby worker will overstaff the position.
-
-Proceed anyway?`
-            );
-            if (!proceed) return;
-          } else {
-            return;
-          }
+          // Position full — button should be disabled in UI, this is a safety net
+          return;
         }
       }
     }
@@ -595,19 +583,24 @@ Proceed anyway?`
                 {app.status === 'standby' && (() => {
                   const standbyFull = isPositionFull(app);
                   return (
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        onClick={() => handleApprove(app.id)}
-                        disabled={processingId === app.id}
-                        className={`${standbyFull ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto`}
-                      >
-                        <CheckCircle size={18} />
-                        <span>{standbyFull ? 'Approve to Standby' : 'Approve to Event'}</span>
-                      </button>
-                      {standbyFull && (
-                        <span className="self-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-lg">
-                          Position full
-                        </span>
+                    <div className="flex flex-col sm:flex-row gap-2 items-center">
+                      {standbyFull ? (
+                        <button
+                          disabled
+                          className="bg-gray-300 text-gray-500 cursor-not-allowed px-4 py-2 rounded-lg flex items-center justify-center space-x-2 w-full sm:w-auto"
+                        >
+                          <CheckCircle size={18} />
+                          <span>Position Full</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleApprove(app.id)}
+                          disabled={processingId === app.id}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors w-full sm:w-auto"
+                        >
+                          <CheckCircle size={18} />
+                          <span>Approve to Event</span>
+                        </button>
                       )}
                       <button
                         onClick={() => handleReject(app.id)}
