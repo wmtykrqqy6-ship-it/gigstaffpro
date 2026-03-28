@@ -436,17 +436,17 @@ export default function StaffView({
                             const rank = worker.rank||1;
                             const rb = {1:{bg:'#FAEEDA',c:'#854F0B'},2:{bg:'#E6F1FB',c:'#185FA5'},3:{bg:'#EEEDFE',c:'#534AB7'},4:{bg:'#F1EFE8',c:'#5F5E5A'},5:{bg:'#F1EFE8',c:'#888780'}};
                             const r = rb[rank]||rb[5];
-                            return <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'20px',background:r.bg,color:r.c,whiteSpace:'nowrap'}}>Rank {rank}</span>;
+                            return <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:r.bg,color:r.c,whiteSpace:'nowrap'}}>Rank {rank}</span>;
                           })()}
                           {/* Host badge */}
-                          {worker.is_host && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'20px',background:'#FAECE7',color:'#993C1D',display:'inline-flex',alignItems:'center',gap:'2px',whiteSpace:'nowrap'}}><Shield size={10}/>{getHostLabel()}</span>}
+                          {worker.is_host && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#FAECE7',color:'#993C1D',display:'inline-flex',alignItems:'center',gap:'2px',whiteSpace:'nowrap'}}><Shield size={10}/>{getHostLabel()}</span>}
                           {/* New badge */}
-                          {worker.created_at && (new Date()-new Date(worker.created_at))<7*24*60*60*1000 && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'20px',background:'#EAF3DE',color:'#3B6D11',whiteSpace:'nowrap'}}>✦ New</span>}
+                          {worker.created_at && (new Date()-new Date(worker.created_at))<7*24*60*60*1000 && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#EAF3DE',color:'#3B6D11',whiteSpace:'nowrap'}}>✦ New</span>}
                           {/* Rating badge: ≥4.5 green, ≥4.0 amber, ≥3.0 orange, <3.0 red */}
                           {(()=>{
                             const rating = worker.reliability??5.0;
                             const s = rating>=4.5?{bg:'#EAF3DE',c:'#3B6D11'}:rating>=4.0?{bg:'#FAEEDA',c:'#854F0B'}:rating>=3.0?{bg:'#FAECE7',c:'#993C1D'}:{bg:'#FCEBEB',c:'#A32D2D'};
-                            return <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'20px',background:s.bg,color:s.c,whiteSpace:'nowrap'}}>★ {rating.toFixed(1)}</span>;
+                            return <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:s.bg,color:s.c,whiteSpace:'nowrap'}}>★ {rating.toFixed(1)}</span>;
                           })()}
                         </div>
                       </div>
@@ -490,7 +490,7 @@ export default function StaffView({
                           <p style={{fontSize:'11px',fontWeight:'500',color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em',margin:'0 0 5px'}}>Skills</p>
                           <div style={{display:'flex',flexWrap:'wrap',gap:'4px'}}>
                             {worker.skills.map((skill,idx) => (
-                              <span key={idx} style={{fontSize:'11px',padding:'2px 7px',borderRadius:'20px',background:'#FEF2F2',color:'#991B1B',border:'0.5px solid #FECACA'}}>
+                              <span key={idx} style={{fontSize:'11px',padding:'2px 7px',borderRadius:'6px',background:'#FEF2F2',color:'#991B1B',border:'0.5px solid #FECACA'}}>
                                 {getPositionLabel(skill)}
                               </span>
                             ))}
@@ -518,7 +518,7 @@ export default function StaffView({
                                       setWorkerLocationMap(prev=>({...prev,[worker.id]:[...(prev[worker.id]||[]),loc.id]}));
                                     }
                                   }}
-                                  style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'20px',border:'none',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',background:approved?'#DCFCE7':' #F3F4F6',color:approved?'#166534':'#6b7280'}}
+                                  style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',border:'none',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',background:approved?'#DCFCE7':' #F3F4F6',color:approved?'#166534':'#6b7280'}}
                                 >
                                   <MapPin size={9}/>{loc.name}{approved && ' ✓'}
                                 </button>
