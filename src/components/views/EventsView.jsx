@@ -22,7 +22,8 @@ export default function EventsView({
   onOpenEditEvent,
   onDeleteEvent,
   onAutoArchive,
-  activeLocation = 'all'
+  activeLocation = 'all',
+  onReloadAssignments
 }) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [dateRangeFilter, setDateRangeFilter] = useState('all');
@@ -31,6 +32,26 @@ export default function EventsView({
   const [sortBy, setSortBy] = useState('date');
   const [locations, setLocations] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [expandedTiles, setExpandedTiles] = useState({});
+  const [processingApproval, setProcessingApproval] = useState(null);
+
+  const toggleTile = (eventId, posKey) => {
+    const key = `${eventId}:${posKey}`;
+    setExpandedTiles(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleQuickApprove = async (assignmentId, action) => {
+    setProcessingApproval(assignmentId);
+    try {
+      const newStatus = action === 'approve' ? 'approved' : 'rejected';
+      await supabase.from('assignments').update({ status: newStatus }).eq('id', assignmentId);
+      if (onReloadAssignments) onReloadAssignments();
+    } catch(e) {
+      alert('Error updating assignment');
+    } finally {
+      setProcessingApproval(null);
+    }
+  };
 
   // Scope events by global location context first
   const scopedEvents = activeLocation === 'all'
@@ -511,23 +532,90 @@ export default function EventsView({
                         ).length;
                         const openCount = Math.max(0, count - filledCount - pendingCount);
                         const isFull = filledCount >= count;
+                        const tileKey = `${event.id}:${posKey}`;
+                        const isTileExpanded = expandedTiles[tileKey];
+                        const isActionable = pendingCount > 0 || openCount > 0;
+
+                        // Get actual assignment records for expanded view
+                        const pendingAssignments = assignments.filter(a =>
+                          a.event_id === event.id && a.status === 'pending' &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        );
+                        const filledAssignments = assignments.filter(a =>
+                          a.event_id === event.id && ['approved','assigned'].includes(a.status) &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        );
+
                         return (
                         <div key={idx} style={{
                           background: isFull ? '#f0fdf4' : filledCount === 0 && pendingCount === 0 ? '#fff1f2' : '#fffbeb',
                           border: `0.5px solid ${isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a'}`,
-                          borderRadius: '8px', padding: '8px 10px'
+                          borderRadius: '8px',
+                          overflow: 'hidden'
                         }}>
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
-                            <span style={{fontSize:'13px',fontWeight:'500',color: isFull ? '#166534' : filledCount === 0 && pendingCount === 0 ? '#9f1239' : '#92400e'}}>{posLabel}</span>
-                            <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'6px',background: isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a',color: isFull ? '#14532d' : filledCount === 0 && pendingCount === 0 ? '#881337' : '#78350f'}}>{filledCount}/{count}</span>
+                          {/* Tile header — always visible, clickable if actionable */}
+                          <div
+                            style={{padding:'8px 10px', cursor: isActionable ? 'pointer' : 'default'}}
+                            onClick={() => isActionable && toggleTile(event.id, posKey)}
+                          >
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
+                              <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                                <span style={{fontSize:'13px',fontWeight:'500',color: isFull ? '#166534' : filledCount === 0 && pendingCount === 0 ? '#9f1239' : '#92400e'}}>{posLabel}</span>
+                                {isActionable && <span style={{fontSize:'10px',color: isTileExpanded ? '#6b7280' : '#3b82f6'}}>{isTileExpanded ? '▲' : '▼'}</span>}
+                              </div>
+                              <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'6px',background: isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a',color: isFull ? '#14532d' : filledCount === 0 && pendingCount === 0 ? '#881337' : '#78350f'}}>{filledCount}/{count}</span>
+                            </div>
+                            <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+                              {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
+                              {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
+                              {standbyCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#ffedd5',color:'#9a3412'}}>{standbyCount} standby</span>}
+                              {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
+                              {isFull && openCount === 0 && pendingCount === 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
+                            </div>
                           </div>
-                          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                            {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
-                            {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
-                            {standbyCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#ffedd5',color:'#9a3412'}}>{standbyCount} standby</span>}
-                            {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
-                            {isFull && openCount === 0 && pendingCount === 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
-                          </div>
+
+                          {/* Expanded panel */}
+                          {isTileExpanded && (
+                            <div style={{borderTop:`0.5px solid ${isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a'}`,padding:'8px 10px',display:'flex',flexDirection:'column',gap:'6px',background:'rgba(255,255,255,0.6)'}}>
+
+                              {/* Filled workers */}
+                              {filledAssignments.map(a => (
+                                <div key={a.id} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',color:'#166534'}}>
+                                  <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'#22c55e',flexShrink:0,display:'inline-block'}}/>
+                                  {a.worker_name || a.worker_id}
+                                </div>
+                              ))}
+
+                              {/* Pending — approve/reject inline */}
+                              {pendingAssignments.map(a => (
+                                <div key={a.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'6px',padding:'4px 6px',borderRadius:'6px',background:'#fefce8',border:'0.5px solid #fde68a'}}>
+                                  <span style={{fontSize:'12px',color:'#854d0e',fontWeight:'500'}}>{a.worker_name || a.worker_id}</span>
+                                  <div style={{display:'flex',gap:'4px',flexShrink:0}}>
+                                    <button
+                                      disabled={processingApproval === a.id}
+                                      onClick={(e) => { e.stopPropagation(); handleQuickApprove(a.id, 'approve'); }}
+                                      style={{fontSize:'11px',fontWeight:'500',padding:'2px 8px',borderRadius:'6px',border:'none',cursor:'pointer',background:'#dcfce7',color:'#166534'}}
+                                    >✓ Approve</button>
+                                    <button
+                                      disabled={processingApproval === a.id}
+                                      onClick={(e) => { e.stopPropagation(); handleQuickApprove(a.id, 'reject'); }}
+                                      style={{fontSize:'11px',fontWeight:'500',padding:'2px 8px',borderRadius:'6px',border:'none',cursor:'pointer',background:'#fee2e2',color:'#9f1239'}}
+                                    >✗ Reject</button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* Open slots — invite button */}
+                              {openCount > 0 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onOpenInviteModal && onOpenInviteModal(event, posKey); }}
+                                  style={{fontSize:'12px',fontWeight:'500',padding:'4px 10px',borderRadius:'6px',border:'0.5px solid #bfdbfe',background:'#eff6ff',color:'#1e40af',cursor:'pointer',textAlign:'center'}}
+                                >
+                                  + Invite workers to {posLabel} ({openCount} open)
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         );
                       })}

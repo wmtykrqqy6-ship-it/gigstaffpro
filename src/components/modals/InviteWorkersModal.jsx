@@ -36,12 +36,17 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments, defaultPosition = null }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(null);
   const [selectedPosition, setSelectedPosition] = useState(null);
+  // Apply defaultPosition when modal opens
+  useEffect(() => {
+    if (open && defaultPosition) setSelectedPosition(defaultPosition);
+    if (!open) setSelectedPosition(null);
+  }, [open, defaultPosition]);
   const [selectedRank, setSelectedRank] = useState(1);
   const [windowHours, setWindowHours] = useState(2);
   const [selectedWorkers, setSelectedWorkers] = useState(new Set());
