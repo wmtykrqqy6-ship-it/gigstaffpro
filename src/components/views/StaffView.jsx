@@ -412,7 +412,7 @@ export default function StaffView({
                     onClick={() => toggleCard(worker.id)}
                   >
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                      {/* Avatar */}
+                      {/* Avatar — photo if available, initials fallback */}
                       {(() => {
                         const rank = worker.rank || 1;
                         const initials = (worker.name || '?').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
@@ -424,7 +424,13 @@ export default function StaffView({
                           5: { background: '#F1EFE8', color: '#888780' },
                         };
                         const s = styles[rank] || styles[5];
-                        return (
+                        return worker.photo_url ? (
+                          <img
+                            src={worker.photo_url}
+                            alt={worker.name}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '0.5px solid #e5e7eb' }}
+                          />
+                        ) : (
                           <div style={{ width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '500', flexShrink: 0, background: s.background, color: s.color }}>
                             {initials}
                           </div>
