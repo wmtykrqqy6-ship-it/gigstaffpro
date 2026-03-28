@@ -4,6 +4,14 @@ import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
 
+
+const formatPhone = (p) => {
+  if (!p) return '';
+  const d = p.replace(/[^0-9]/g, '');
+  if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+  if (d.length === 11 && d[0] === '1') return '(' + d.slice(1,4) + ') ' + d.slice(4,7) + '-' + d.slice(7);
+  return p;
+};
 export default function EventsView({
   events,
   assignments,
@@ -358,7 +366,11 @@ export default function EventsView({
                     )}
                     {staffingStatus.total > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        isFullyStaffed ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                        isFullyStaffed
+                          ? 'bg-green-100 text-green-800'
+                          : staffingStatus.filled === 0
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
                       }`}>
                         {staffingStatus.filled}/{staffingStatus.total} staffed
                       </span>
@@ -408,7 +420,7 @@ export default function EventsView({
                   {event.client_contact && (
                     <div className="flex items-center space-x-1">
                       <Phone size={16} />
-                      <span>{event.client_contact}</span>
+                      <span>{formatPhone(event.client_contact)}</span>
                     </div>
                   )}
                 </div>
@@ -449,21 +461,24 @@ export default function EventsView({
                             : 'bg-amber-50 border-amber-200 text-amber-800'
                         }`}>
                           <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                          <span>
+                          <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'6px'}}>
                             <strong>{is24h ? 'Under 24h' : `${daysUntil}d away`}</strong>
-                            {' — '}
+                            <span style={{color:'inherit',opacity:0.7}}>—</span>
                             {unfilled.map((p, i) => {
                               const posKey = p.key || p.name;
-                              const filled = assignments.filter(a =>
+                              const filledC = assignments.filter(a =>
                                 a.event_id === event.id &&
                                 !['standby','rejected','cancelled','pending'].includes(a.status) &&
                                 (a.position === posKey || a.position === p.key || a.position === p.name)
                               ).length;
-                              const open = (p.count || 1) - filled;
-                              return `${getPositionLabel(posKey)} ×${open}${i < unfilled.length - 1 ? ', ' : ''}`;
+                              const open = (p.count || 1) - filledC;
+                              return (
+                                <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'1px 7px',borderRadius:'20px',fontSize:'11px',fontWeight:'500',background: is24h ? 'rgba(185,28,28,0.12)' : 'rgba(146,64,14,0.12)'}}>
+                                  {getPositionLabel(posKey)} <span style={{fontWeight:'700'}}>×{open}</span>
+                                </span>
+                              );
                             })}
-                            {' open'}
-                          </span>
+                          </div>
                         </div>
                       );
                     })()}
@@ -488,19 +503,31 @@ export default function EventsView({
                           (a.position === posKey || a.position === pos.name || a.position === pos.key)
                         ).length;
                         
+                        // Count truly filled (approved/assigned) for this position
+                        const filledCount = assignments.filter(a =>
+                          a.event_id === event.id &&
+                          ['approved','assigned'].includes(a.status) &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        ).length;
+                        const openCount = Math.max(0, count - filledCount - pendingCount);
+                        const isFull = filledCount >= count;
                         return (
-                        <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-medium">{posLabel}</span>
-                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
+                        <div key={idx} style={{
+                          background: isFull ? '#f0fdf4' : filledCount === 0 && pendingCount === 0 ? '#fff1f2' : '#fffbeb',
+                          border: `0.5px solid ${isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a'}`,
+                          borderRadius: '8px', padding: '8px 10px'
+                        }}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
+                            <span style={{fontSize:'13px',fontWeight:'500',color: isFull ? '#166534' : filledCount === 0 && pendingCount === 0 ? '#9f1239' : '#92400e'}}>{posLabel}</span>
+                            <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'20px',background: isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a',color: isFull ? '#14532d' : filledCount === 0 && pendingCount === 0 ? '#881337' : '#78350f'}}>{filledCount}/{count}</span>
                           </div>
-                          {(pendingCount > 0 || standbyCount > 0) && (
-                            <div className="text-xs text-gray-600 mt-1">
-                              {pendingCount > 0 && <span>{pendingCount} pending</span>}
-                              {pendingCount > 0 && standbyCount > 0 && <span>, </span>}
-                              {standbyCount > 0 && <span className="text-orange-700">{standbyCount} standby</span>}
-                            </div>
-                          )}
+                          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+                            {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
+                            {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
+                            {standbyCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#ffedd5',color:'#9a3412'}}>{standbyCount} standby</span>}
+                            {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
+                            {isFull && openCount === 0 && pendingCount === 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
+                          </div>
                         </div>
                         );
                       })}
