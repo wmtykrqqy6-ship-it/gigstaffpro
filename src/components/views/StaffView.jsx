@@ -400,6 +400,7 @@ export default function StaffView({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sortedWorkers.map(worker => {
             const isExpanded = expandedCards[worker.id];
+            return (
               <div
                 key={worker.id}
                 style={{display:'flex',background:'white',border:'0.5px solid #e5e7eb',borderRadius:'12px',overflow:'hidden',transition:'border-color 0.15s'}}
