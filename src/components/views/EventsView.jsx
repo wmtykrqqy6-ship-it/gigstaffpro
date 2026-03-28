@@ -356,16 +356,16 @@ export default function EventsView({
                   </div>
                   {/* Row 2: Status badges */}
                   <div className="flex flex-wrap gap-2 mb-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(event.status)}`}>
                       {event.status === 'needs-staff' ? 'Needs Staff' : event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
                     {event.invite_only && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
                         🔒 Invite Only
                       </span>
                     )}
                     {staffingStatus.total > 0 && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                         isFullyStaffed
                           ? 'bg-green-100 text-green-800'
                           : staffingStatus.filled === 0
@@ -376,7 +376,7 @@ export default function EventsView({
                       </span>
                     )}
                     {standbyCount > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
                         {standbyCount} on standby
                       </span>
                     )}
@@ -473,7 +473,7 @@ export default function EventsView({
                               ).length;
                               const open = (p.count || 1) - filledC;
                               return (
-                                <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'1px 7px',borderRadius:'20px',fontSize:'11px',fontWeight:'500',background: is24h ? 'rgba(185,28,28,0.12)' : 'rgba(146,64,14,0.12)'}}>
+                                <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'1px 7px',borderRadius:'6px',fontSize:'11px',fontWeight:'500',background: is24h ? 'rgba(185,28,28,0.12)' : 'rgba(146,64,14,0.12)'}}>
                                   {getPositionLabel(posKey)} <span style={{fontWeight:'700'}}>×{open}</span>
                                 </span>
                               );
@@ -519,14 +519,14 @@ export default function EventsView({
                         }}>
                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
                             <span style={{fontSize:'13px',fontWeight:'500',color: isFull ? '#166534' : filledCount === 0 && pendingCount === 0 ? '#9f1239' : '#92400e'}}>{posLabel}</span>
-                            <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'20px',background: isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a',color: isFull ? '#14532d' : filledCount === 0 && pendingCount === 0 ? '#881337' : '#78350f'}}>{filledCount}/{count}</span>
+                            <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'6px',background: isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a',color: isFull ? '#14532d' : filledCount === 0 && pendingCount === 0 ? '#881337' : '#78350f'}}>{filledCount}/{count}</span>
                           </div>
                           <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                            {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
-                            {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
-                            {standbyCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#ffedd5',color:'#9a3412'}}>{standbyCount} standby</span>}
-                            {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
-                            {isFull && openCount === 0 && pendingCount === 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'20px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
+                            {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
+                            {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
+                            {standbyCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#ffedd5',color:'#9a3412'}}>{standbyCount} standby</span>}
+                            {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
+                            {isFull && openCount === 0 && pendingCount === 0 && <span style={{fontSize:'10px',padding:'1px 5px',borderRadius:'6px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
                           </div>
                         </div>
                         );
