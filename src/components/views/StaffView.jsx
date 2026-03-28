@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Star, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { supabase } from '../../supabaseClient';
@@ -392,64 +392,110 @@ export default function StaffView({
           {sortedWorkers.map(worker => {
             const isExpanded = expandedCards[worker.id];
             return (
-              <div 
-                key={worker.id} 
-                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 overflow-hidden"
+              <div
+                key={worker.id}
+                className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:border-gray-300 transition-colors"
+                style={{ display: 'flex' }}
               >
-                {/* Compact Header - Always Visible */}
-                <div 
-                  className="p-4 cursor-pointer hover:bg-gray-50"
-                  onClick={() => toggleCard(worker.id)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="text-base font-bold text-gray-900 truncate">{worker.name}</h3>
-                        {worker.is_host && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 flex-shrink-0">
-                            <Shield size={10} className="mr-0.5" />
-                            {getHostLabel()}
-                          </span>
-                        )}
-                        {worker.created_at && (new Date() - new Date(worker.created_at)) < 7 * 24 * 60 * 60 * 1000 && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 border border-green-200 flex-shrink-0">
-                            ✦ New
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          Rank {worker.rank || 1}
-                        </span>
-                        {/* Color-coded reliability badge */}
-                        {(() => {
-                          const rating = worker.reliability ?? 5.0;
-                          const color = rating >= 4.5 ? 'bg-green-100 text-green-800 border-green-200' :
-                                        rating >= 3.5 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                        rating >= 2.0 ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                                        'bg-red-100 text-red-800 border-red-200';
-                          return (
-                            <span className={`inline-flex items-center space-x-0.5 px-2 py-0.5 rounded text-xs font-medium border ${color}`}>
-                              <Star size={10} className="fill-current flex-shrink-0" />
-                              <span>{rating.toFixed(1)}</span>
+                {/* Rank accent bar */}
+                {(() => {
+                  const rank = worker.rank || 1;
+                  const barColor = rank === 1 ? '#EF9F27' : rank === 2 ? '#378ADD' : rank === 3 ? '#7F77DD' : rank === 4 ? '#888780' : '#B4B2A9';
+                  return <div style={{ width: '3px', flexShrink: 0, background: barColor }} />;
+                })()}
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Compact Header - Always Visible */}
+                  <div
+                    className="cursor-pointer hover:bg-gray-50"
+                    style={{ padding: '14px 14px 12px' }}
+                    onClick={() => toggleCard(worker.id)}
+                  >
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      {/* Avatar */}
+                      {(() => {
+                        const rank = worker.rank || 1;
+                        const initials = (worker.name || '?').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+                        const styles = {
+                          1: { background: '#FAEEDA', color: '#854F0B' },
+                          2: { background: '#E6F1FB', color: '#185FA5' },
+                          3: { background: '#EEEDFE', color: '#534AB7' },
+                          4: { background: '#D3D1C7', color: '#444441' },
+                          5: { background: '#F1EFE8', color: '#888780' },
+                        };
+                        const s = styles[rank] || styles[5];
+                        return (
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '500', flexShrink: 0, background: s.background, color: s.color }}>
+                            {initials}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Name + badges */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '14px', fontWeight: '500', margin: '0 0 5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} className="text-gray-900">
+                          {worker.name}
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                          {/* Rank badge */}
+                          {(() => {
+                            const rank = worker.rank || 1;
+                            const styles = {
+                              1: 'background:#FAEEDA;color:#854F0B',
+                              2: 'background:#E6F1FB;color:#185FA5',
+                              3: 'background:#EEEDFE;color:#534AB7',
+                              4: 'background:#F1EFE8;color:#5F5E5A',
+                              5: 'background:#F1EFE8;color:#888780',
+                            };
+                            return (
+                              <span style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '20px', whiteSpace: 'nowrap', ...(Object.fromEntries((styles[rank]||styles[5]).split(';').map(s=>s.split(':')))) }}>
+                                Rank {rank}
+                              </span>
+                            );
+                          })()}
+                          {/* Host badge */}
+                          {worker.is_host && (
+                            <span style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '20px', background: '#FAECE7', color: '#993C1D', display: 'inline-flex', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap' }}>
+                              <Shield size={10} />
+                              {getHostLabel()}
                             </span>
-                          );
-                        })()}
+                          )}
+                          {/* New badge */}
+                          {worker.created_at && (new Date() - new Date(worker.created_at)) < 7 * 24 * 60 * 60 * 1000 && (
+                            <span style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '20px', background: '#EAF3DE', color: '#3B6D11', whiteSpace: 'nowrap' }}>
+                              ✦ New
+                            </span>
+                          )}
+                          {/* Rating badge — color encodes quality */}
+                          {(() => {
+                            const rating = worker.reliability ?? 5.0;
+                            const s = rating >= 4.5 ? 'background:#EAF3DE;color:#3B6D11'
+                                    : rating >= 4.0 ? 'background:#FAEEDA;color:#854F0B'
+                                    : rating >= 3.0 ? 'background:#FAECE7;color:#993C1D'
+                                    :                 'background:#FCEBEB;color:#A32D2D';
+                            return (
+                              <span style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '20px', whiteSpace: 'nowrap', ...(Object.fromEntries(s.split(';').map(x=>x.split(':')))) }}>
+                                ★ {rating.toFixed(1)}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Gig count */}
+                      <div style={{ fontSize: '11px', fontWeight: '500', color: '#888780', flexShrink: 0, paddingTop: '2px' }}>
+                        {getGigCount(worker.id)} gigs
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                      {getGigCount(worker.id)} gigs
-                    </div>
+
+                    {/* Phone */}
+                    {worker.phone && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px', borderTop: '0.5px solid #f0f0f0', paddingTop: '10px' }}>
+                        <Phone size={12} className="text-gray-400" />
+                        <span style={{ fontSize: '12px' }} className="text-gray-500">{worker.phone}</span>
+                      </div>
+                    )}
                   </div>
-                  
-                  {/* Phone Number - Always Visible */}
-                  {worker.phone && (
-                    <div className="flex items-center space-x-1.5 text-sm text-gray-600">
-                      <Phone size={13} className="text-gray-400 flex-shrink-0" />
-                      <span>{worker.phone}</span>
-                    </div>
-                  )}
-                </div>
 
                 {/* Expanded Details */}
                 {isExpanded && (
@@ -561,6 +607,7 @@ export default function StaffView({
                     </div>
                   </div>
                 )}
+              </div>
               </div>
             );
           })}
