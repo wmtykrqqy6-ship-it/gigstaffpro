@@ -488,57 +488,74 @@ export default function DashboardView({
               <div
                 key={event.id}
                 onClick={() => onOpenAssignModal(event)}
-                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                  tier === '24h'
-                    ? 'bg-red-50 border-red-200 hover:border-red-400'
-                    : 'bg-amber-50 border-amber-200 hover:border-amber-400'
-                }`}
+                style={{
+                  background: 'white',
+                  border: '0.5px solid #e5e7eb',
+                  borderLeft: `3px solid ${tier === '24h' ? '#E24B4A' : '#EF9F27'}`,
+                  borderRadius: '8px',
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = tier === '24h' ? '#E24B4A' : '#EF9F27'}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.borderLeftColor = tier === '24h' ? '#E24B4A' : '#EF9F27'; }}
               >
-                <div className="min-w-0 flex-1">
-                  {/* Event name + time badge */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded flex-shrink-0 ${
-                      tier === '24h'
-                        ? 'bg-red-500 text-white'
-                        : daysUntil === 0 ? 'bg-orange-500 text-white'
-                        : daysUntil === 1 ? 'bg-orange-400 text-white'
-                        : 'bg-amber-400 text-amber-900'
-                    }`}>
+                {/* Top row: time badge + name/venue + assign button */}
+                <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px', marginBottom:'10px'}}>
+                  <div style={{display:'flex', alignItems:'flex-start', gap:'8px', minWidth:0, flex:1}}>
+                    <span style={{
+                      fontSize:'11px', fontWeight:'500', padding:'3px 8px', borderRadius:'6px',
+                      whiteSpace:'nowrap', flexShrink:0, marginTop:'1px',
+                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
+                      color: tier === '24h' ? '#A32D2D' : '#854F0B'
+                    }}>
                       {tier === '24h'
-                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h away`
-                        : daysUntil === 0 ? 'TODAY'
-                        : daysUntil === 1 ? 'TOMORROW'
+                        ? hoursUntil < 1 ? 'Now' : `${Math.round(hoursUntil)}h away`
+                        : daysUntil === 0 ? 'Today'
+                        : daysUntil === 1 ? 'Tomorrow'
                         : `${daysUntil} days`
                       }
                     </span>
-                    <span className="font-bold text-gray-900 text-sm truncate">{event.name}</span>
-                    {event.venue && (
-                      <span className="text-xs text-gray-400 truncate hidden sm:block">· {event.venue}</span>
-                    )}
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:'14px', fontWeight:'500', color:'#111827', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{event.name}</div>
+                      {(event.venue || event.time) && (
+                        <div style={{fontSize:'12px', color:'#9ca3af', marginTop:'1px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                          {[event.venue, event.time ? formatTime(event.time, timeFormat) : null].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {/* Open position pills */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {unfilledPositions.map(({ label, open }) => (
-                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded font-semibold ${
-                        tier === '24h'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {label}
-                        <span className={`inline-flex items-center justify-center rounded text-xs font-bold px-1 ${
-                          tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
-                        }`}>{open} open</span>
-                      </span>
-                    ))}
-                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); onOpenAssignModal(event); }}
+                    style={{
+                      flexShrink:0, fontSize:'12px', fontWeight:'500', padding:'5px 12px', borderRadius:'6px', cursor:'pointer',
+                      border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
+                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
+                      color: tier === '24h' ? '#A32D2D' : '#854F0B'
+                    }}
+                  >
+                    Assign Staff
+                  </button>
                 </div>
-                <button className={`flex-shrink-0 ml-4 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  tier === '24h'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-amber-500 text-white hover:bg-amber-600'
-                }`}>
-                  Assign
-                </button>
+                {/* Position tags */}
+                <div style={{display:'flex', flexWrap:'wrap', gap:'6px'}}>
+                  {unfilledPositions.map(({ label, open }) => (
+                    <span key={label} style={{
+                      display:'inline-flex', alignItems:'center', gap:'5px',
+                      fontSize:'12px', fontWeight:'500', padding:'4px 8px', borderRadius:'6px',
+                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
+                      border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
+                      color: tier === '24h' ? '#791F1F' : '#633806'
+                    }}>
+                      {label}
+                      <span style={{
+                        fontSize:'11px', fontWeight:'500', padding:'1px 5px', borderRadius:'4px',
+                        background: tier === '24h' ? '#F09595' : '#EF9F27',
+                        color: tier === '24h' ? '#501313' : '#412402'
+                      }}>{open} open</span>
+                    </span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
