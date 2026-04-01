@@ -88,15 +88,21 @@ export default function PaymentCalculatorModal({
     }
   }, [assignmentData, eventPaymentSettings, selectedEvent]);
 
-  // Auto-fetch miles: worker home location address → event address (fallback to warehouse)
+  // Auto-fetch miles: worker home location → event address
+  // Always fetches fresh — worker home→event overrides warehouse→event saved in event settings
   useEffect(() => {
     if (!open || !assignmentData || !selectedEvent) return;
-    if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
     const eventAddress = selectedEvent.address;
     if (!eventAddress) return;
     // Travel origin: worker home location → event location → no auto-calc
     const travelOrigin = workerHomeLocation?.address || eventLocation?.address || null;
-    if (!travelOrigin) return;
+    if (!travelOrigin) {
+      // No worker home location — fall back to event payment settings miles
+      if (eventPaymentSettings[selectedEvent.id]?.miles > 0) {
+        setMiles(eventPaymentSettings[selectedEvent.id].miles);
+      }
+      return;
+    }
 
     const fetchMiles = async () => {
       setFetchingMiles(true);
