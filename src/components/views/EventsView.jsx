@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown, AlertCircle, Shirt, FileText, ParkingCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -486,8 +486,9 @@ export default function EventsView({
                           {/* Expanded panel */}
                           {isExpanded && (
                             <div style={{borderTop:'0.5px solid #f3f4f6',padding:'12px 14px 14px 27px',background:'#f9fafb'}}>
-                              {/* Meta row */}
-                              <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'10px'}}>
+
+                              {/* Meta row — proper lucide icons */}
+                              <div style={{display:'flex',gap:'14px',flexWrap:'wrap',marginBottom:'10px'}}>
                                 {event.time && (
                                   <span style={{fontSize:'12px',color:'#6b7280',display:'flex',alignItems:'center',gap:'4px'}}>
                                     <Clock size={12}/>{formatTime(event.time, timeFormat)}{event.end_time ? ` – ${formatTime(event.end_time, timeFormat)}` : ''}
@@ -509,16 +510,49 @@ export default function EventsView({
                                   </span>
                                 )}
                                 {event.dress_code && (
-                                  <span style={{fontSize:'12px',color:'#6b7280'}}>👔 {event.dress_code}</span>
+                                  <span style={{fontSize:'12px',color:'#6b7280',display:'flex',alignItems:'center',gap:'4px'}}>
+                                    <Shirt size={12}/>{event.dress_code}
+                                  </span>
+                                )}
+                                {event.parking && (
+                                  <span style={{fontSize:'12px',color:'#6b7280',display:'flex',alignItems:'center',gap:'4px'}}>
+                                    <ParkingCircle size={12}/>{event.parking}
+                                  </span>
                                 )}
                                 {event.notes && (
-                                  <span style={{fontSize:'12px',color:'#6b7280'}}>📝 {event.notes}</span>
+                                  <span style={{fontSize:'12px',color:'#6b7280',display:'flex',alignItems:'center',gap:'4px'}}>
+                                    <FileText size={12}/>{event.notes}
+                                  </span>
                                 )}
                               </div>
 
-                              {/* Position tiles */}
+                              {/* Staffing progress bar */}
+                              {staffingStatus.total > 0 && (
+                                <div style={{marginBottom:'10px'}}>
+                                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
+                                    <span style={{fontSize:'11px',fontWeight:'500',color:'#6b7280'}}>Staffing</span>
+                                    <span style={{fontSize:'11px',fontWeight:'500',color: isFullyStaffed ? '#3B6D11' : '#854F0B'}}>
+                                      {staffingStatus.filled}/{staffingStatus.total} filled
+                                    </span>
+                                  </div>
+                                  <div style={{height:'4px',background:'#e5e7eb',borderRadius:'2px',overflow:'hidden'}}>
+                                    <div style={{
+                                      height:'100%',
+                                      width:`${Math.min(100, (staffingStatus.filled/staffingStatus.total)*100)}%`,
+                                      background: isFullyStaffed ? '#639922' : staffingStatus.filled === 0 ? '#E24B4A' : '#EF9F27',
+                                      borderRadius:'2px',
+                                      transition:'width 0.3s'
+                                    }}/>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Divider */}
+                              <div style={{height:'0.5px',background:'#e5e7eb',margin:'10px 0'}}/>
+
+                              {/* Position tiles — compact */}
                               {event.positions && event.positions.length > 0 && (
-                                <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'12px'}}>
+                                <div style={{display:'flex',gap:'5px',flexWrap:'wrap',marginBottom:'12px'}}>
                                   {event.positions.map((pos, idx) => {
                                     const posKey = pos.key || getPositionKey(pos.name || pos);
                                     const posLabel = getPositionLabel(posKey);
@@ -536,7 +570,6 @@ export default function EventsView({
                                     const tileKey = `${event.id}:${posKey}`;
                                     const isTileExpanded = expandedTiles[tileKey];
                                     const isActionable = pendingCount > 0 || openCount > 0;
-
                                     const pendingAssignments = assignments.filter(a =>
                                       a.event_id === event.id && a.status === 'pending' &&
                                       (a.position === posKey || a.position === pos.name || a.position === pos.key)
@@ -545,29 +578,27 @@ export default function EventsView({
                                       a.event_id === event.id && ['approved','assigned'].includes(a.status) &&
                                       (a.position === posKey || a.position === pos.name || a.position === pos.key)
                                     );
+                                    const tileBg = isFull ? '#f0fdf4' : filledCount===0&&pendingCount===0 ? '#fff1f2' : '#fffbeb';
+                                    const tileBorder = isFull ? '#bbf7d0' : filledCount===0&&pendingCount===0 ? '#fecdd3' : '#fde68a';
+                                    const tileColor = isFull ? '#166534' : filledCount===0&&pendingCount===0 ? '#9f1239' : '#92400e';
 
                                     return (
-                                      <div key={idx} style={{
-                                        background: isFull ? '#f0fdf4' : filledCount === 0 && pendingCount === 0 ? '#fff1f2' : '#fffbeb',
-                                        border: `0.5px solid ${isFull ? '#bbf7d0' : filledCount === 0 && pendingCount === 0 ? '#fecdd3' : '#fde68a'}`,
-                                        borderRadius: '8px', overflow:'hidden', minWidth:'120px'
-                                      }}>
-                                        <div style={{padding:'6px 10px',cursor:isActionable?'pointer':'default'}} onClick={() => isActionable && toggleTile(event.id, posKey)}>
-                                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'3px'}}>
-                                            <span style={{fontSize:'12px',fontWeight:'500',color:isFull?'#166534':filledCount===0&&pendingCount===0?'#9f1239':'#92400e',display:'flex',alignItems:'center',gap:'4px'}}>
-                                              {posLabel}{isActionable && <span style={{fontSize:'9px',color:isTileExpanded?'#9ca3af':'#3b82f6'}}>{isTileExpanded?'▲':'▼'}</span>}
-                                            </span>
-                                            <span style={{fontSize:'11px',fontWeight:'700',padding:'1px 5px',borderRadius:'4px',background:isFull?'#bbf7d0':filledCount===0&&pendingCount===0?'#fecdd3':'#fde68a',color:isFull?'#14532d':filledCount===0&&pendingCount===0?'#881337':'#78350f'}}>{filledCount}/{count}</span>
-                                          </div>
-                                          <div style={{display:'flex',gap:'3px',flexWrap:'wrap'}}>
-                                            {filledCount > 0 && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#dcfce7',color:'#166534'}}>{filledCount} filled</span>}
-                                            {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
-                                            {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
-                                            {isFull && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#dcfce7',color:'#166534'}}>✓ Full</span>}
-                                          </div>
+                                      <div key={idx} style={{background:tileBg,border:`0.5px solid ${tileBorder}`,borderRadius:'6px',overflow:'hidden'}}>
+                                        {/* Compact tile header */}
+                                        <div
+                                          style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 8px',cursor:isActionable?'pointer':'default'}}
+                                          onClick={() => isActionable && toggleTile(event.id, posKey)}
+                                        >
+                                          <span style={{fontSize:'12px',fontWeight:'500',color:tileColor}}>{posLabel}</span>
+                                          <span style={{fontSize:'11px',fontWeight:'600',padding:'1px 5px',borderRadius:'4px',background:tileBorder,color:tileColor}}>{filledCount}/{count}</span>
+                                          {pendingCount > 0 && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#fef9c3',color:'#854d0e'}}>{pendingCount} pending</span>}
+                                          {openCount > 0 && <span style={{fontSize:'10px',padding:'1px 4px',borderRadius:'4px',background:'#fee2e2',color:'#9f1239'}}>{openCount} open</span>}
+                                          {isFull && !isActionable && <span style={{fontSize:'10px',color:'#166534'}}>✓</span>}
+                                          {isActionable && <span style={{fontSize:'9px',color:'#9ca3af'}}>{isTileExpanded?'▲':'▼'}</span>}
                                         </div>
+                                        {/* Expanded tile detail */}
                                         {isTileExpanded && (
-                                          <div style={{borderTop:`0.5px solid ${isFull?'#bbf7d0':filledCount===0&&pendingCount===0?'#fecdd3':'#fde68a'}`,padding:'6px 10px',background:'rgba(255,255,255,0.6)',display:'flex',flexDirection:'column',gap:'4px'}}>
+                                          <div style={{borderTop:`0.5px solid ${tileBorder}`,padding:'6px 8px',background:'rgba(255,255,255,0.7)',display:'flex',flexDirection:'column',gap:'4px'}}>
                                             {filledAssignments.map(a => (
                                               <div key={a.id} style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'11px',color:'#166534'}}>
                                                 <span style={{width:'5px',height:'5px',borderRadius:'50%',background:'#22c55e',flexShrink:0,display:'inline-block'}}/>
@@ -578,8 +609,8 @@ export default function EventsView({
                                               <div key={a.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'4px',padding:'3px 5px',borderRadius:'4px',background:'#fefce8',border:'0.5px solid #fde68a'}}>
                                                 <span style={{fontSize:'11px',color:'#854d0e',fontWeight:'500'}}>{getWorkerName(a.worker_id)}</span>
                                                 <div style={{display:'flex',gap:'3px',flexShrink:0}}>
-                                                  <button disabled={processingApproval===a.id} onClick={e=>{e.stopPropagation();handleQuickApprove(a.id,'approve');}} style={{fontSize:'10px',fontWeight:'500',padding:'1px 6px',borderRadius:'4px',border:'none',cursor:'pointer',background:'#dcfce7',color:'#166534'}}>✓</button>
-                                                  <button disabled={processingApproval===a.id} onClick={e=>{e.stopPropagation();handleQuickApprove(a.id,'reject');}} style={{fontSize:'10px',fontWeight:'500',padding:'1px 6px',borderRadius:'4px',border:'none',cursor:'pointer',background:'#fee2e2',color:'#9f1239'}}>✗</button>
+                                                  <button disabled={processingApproval===a.id} onClick={e=>{e.stopPropagation();handleQuickApprove(a.id,'approve');}} style={{fontSize:'10px',fontWeight:'500',padding:'1px 6px',borderRadius:'4px',border:'none',cursor:'pointer',background:'#dcfce7',color:'#166534'}}>✓ Approve</button>
+                                                  <button disabled={processingApproval===a.id} onClick={e=>{e.stopPropagation();handleQuickApprove(a.id,'reject');}} style={{fontSize:'10px',fontWeight:'500',padding:'1px 6px',borderRadius:'4px',border:'none',cursor:'pointer',background:'#fee2e2',color:'#9f1239'}}>✗ Reject</button>
                                                 </div>
                                               </div>
                                             ))}
@@ -596,13 +627,17 @@ export default function EventsView({
                                 </div>
                               )}
 
-                              {/* Action buttons */}
-                              <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                                <button onClick={e=>{e.stopPropagation();onOpenAssignModal(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'none',background:'#7c1d1d',color:'white',cursor:'pointer'}}>Assign Staff</button>
-                                <button onClick={e=>{e.stopPropagation();onOpenInviteModal&&onOpenInviteModal(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'0.5px solid #bfdbfe',background:'#eff6ff',color:'#1e40af',cursor:'pointer'}}>Invite Workers</button>
-                                <button onClick={e=>{e.stopPropagation();onOpenEditEvent(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'0.5px solid #e5e7eb',background:'white',color:'#374151',cursor:'pointer'}}>Edit</button>
-                                <button onClick={e=>{e.stopPropagation();onDeleteEvent(event.id);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'0.5px solid #fecdd3',background:'#fff1f2',color:'#9f1239',cursor:'pointer'}}>Delete</button>
+                              {/* Action buttons — delete separated and less prominent */}
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                                <div style={{display:'flex',gap:'6px'}}>
+                                  <button onClick={e=>{e.stopPropagation();onOpenAssignModal(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'none',background:'#7c1d1d',color:'white',cursor:'pointer'}}>Assign Staff</button>
+                                  <button onClick={e=>{e.stopPropagation();onOpenInviteModal&&onOpenInviteModal(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'0.5px solid #bfdbfe',background:'#eff6ff',color:'#1e40af',cursor:'pointer'}}>Invite Workers</button>
+                                  <button onClick={e=>{e.stopPropagation();onOpenEditEvent(event);}} style={{fontSize:'12px',fontWeight:'500',padding:'5px 12px',borderRadius:'6px',border:'0.5px solid #e5e7eb',background:'white',color:'#374151',cursor:'pointer'}}>Edit</button>
+                                </div>
+                                {/* Delete — isolated right, muted styling */}
+                                <button onClick={e=>{e.stopPropagation();onDeleteEvent(event.id);}} style={{fontSize:'11px',fontWeight:'400',padding:'4px 10px',borderRadius:'6px',border:'0.5px solid #e5e7eb',background:'transparent',color:'#9ca3af',cursor:'pointer'}}>Delete</button>
                               </div>
+
                             </div>
                           )}
                         </div>
