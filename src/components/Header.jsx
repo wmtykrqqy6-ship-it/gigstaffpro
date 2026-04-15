@@ -46,10 +46,8 @@ export default function Header({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
-
-            {/* Location Switcher - admin only, 2+ locations */}
+          {/* Market Switcher - next to logo */}
+{/* Location Switcher - admin only, 2+ locations */}
             {userRole === 'admin' && locations.length > 1 && (
               <div className="relative">
                 <button
@@ -66,7 +64,7 @@ export default function Header({
                 </button>
 
                 {showLocationMenu && (
-                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-100">
+                  <div className="absolute left-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-100">
                     <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b">
                       Switch Market
                     </div>
@@ -101,6 +99,9 @@ export default function Header({
                 )}
               </div>
             )}
+
+          {/* Actions */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
 
             {/* Worker Menu Button */}
             {userRole === 'worker' && onTabChange && (
