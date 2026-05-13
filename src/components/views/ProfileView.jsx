@@ -18,9 +18,58 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
     shirt_size: worker?.shirt_size || ''
   });
 
+  // Reminder preferences
+  const [reminderPrefs, setReminderPrefs] = useState({
+    email_96h: true, email_48h: true, email_24h: true, email_4h: true,
+  });
+  const [reminderPrefsLoaded, setReminderPrefsLoaded] = useState(false);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
   useEffect(() => {
-    if (worker?.id) loadReliabilityLog();
+    if (worker?.id) {
+      loadReliabilityLog();
+      loadReminderPrefs();
+    }
   }, [worker?.id]);
+
+  const loadReminderPrefs = async () => {
+    try {
+      const { data } = await supabase
+        .from('worker_reminder_prefs')
+        .select('*')
+        .eq('worker_id', worker.id)
+        .maybeSingle();
+      if (data) {
+        setReminderPrefs({
+          email_96h: data.email_96h !== false,
+          email_48h: data.email_48h !== false,
+          email_24h: data.email_24h !== false,
+          email_4h:  data.email_4h  !== false,
+        });
+      }
+      setReminderPrefsLoaded(true);
+    } catch (e) {
+      setReminderPrefsLoaded(true);
+    }
+  };
+
+  const saveReminderPrefs = async (newPrefs) => {
+    setSavingPrefs(true);
+    try {
+      await supabase.from('worker_reminder_prefs').upsert(
+        { worker_id: worker.id, ...newPrefs, updated_at: new Date().toISOString() },
+        { onConflict: 'worker_id' }
+      );
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const toggleReminder = async (key) => {
+    const updated = { ...reminderPrefs, [key]: !reminderPrefs[key] };
+    setReminderPrefs(updated);
+    await saveReminderPrefs(updated);
+  };
 
   const loadReliabilityLog = async () => {
     setLoadingLog(true);
@@ -757,6 +806,59 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
             })}
           </div>
         )}
+      {/* Reminder Preferences */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Reminder Preferences</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Choose which shift reminders you want to receive by email</p>
+          </div>
+          {savingPrefs && <span className="text-xs text-gray-400">Saving…</span>}
+        </div>
+
+        {!reminderPrefsLoaded ? (
+          <p className="text-sm text-gray-400">Loading preferences…</p>
+        ) : (
+          <div className="space-y-3">
+            {[
+              { key: 'email_96h', label: '96-hour reminder', desc: '4 days before your shift' },
+              { key: 'email_48h', label: '48-hour reminder', desc: '2 days before your shift' },
+              { key: 'email_24h', label: '24-hour reminder', desc: 'The day before your shift' },
+              { key: 'email_4h',  label: '4-hour reminder',  desc: 'Day-of, 4 hours before' },
+            ].map(({ key, label, desc }) => (
+              <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',borderRadius:'8px',border:'0.5px solid #e5e7eb',background:'#f9fafb'}}>
+                <div>
+                  <div style={{fontSize:'14px',fontWeight:'500',color:'#111827'}}>{label}</div>
+                  <div style={{fontSize:'12px',color:'#6b7280',marginTop:'1px'}}>{desc}</div>
+                </div>
+                {/* Toggle */}
+                <button
+                  onClick={() => toggleReminder(key)}
+                  disabled={savingPrefs}
+                  style={{
+                    width:'44px',height:'24px',borderRadius:'12px',border:'none',cursor:'pointer',
+                    position:'relative',transition:'background 0.2s',flexShrink:0,
+                    background: reminderPrefs[key] ? '#7c0a02' : '#d1d5db',
+                  }}
+                  aria-label={`Toggle ${label}`}
+                >
+                  <div style={{
+                    position:'absolute',top:'2px',
+                    left: reminderPrefs[key] ? '22px' : '2px',
+                    width:'20px',height:'20px',borderRadius:'50%',background:'white',
+                    transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                  }}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p style={{fontSize:'11px',color:'#9ca3af',marginTop:'12px'}}>
+          SMS reminders coming soon. All reminders are ON by default.
+        </p>
+      </div>
+
       </div>
     </div>
   );
