@@ -1,13 +1,13 @@
 // api/send-shift-reminders.js
 // Runs every hour via GitHub Actions cron.
 // Finds upcoming confirmed shifts and sends pre-shift reminders at
-// 96h, 48h, 24h, and 4h before the start time.
+// 96h, 48h, 24h, and 4h before the shift start time.
 // Deduplication is enforced via the shift_reminders_sent table.
 // Built to support SMS in the future — add a sendSms() helper and
 // call it alongside sendEmail() using the same prefs structure.
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ycsauzvkrbcynifkawuw.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
 const RESEND_KEY   = process.env.RESEND_API_KEY;
 
 const REMINDER_TIERS = [96, 48, 24, 4]; // hours before shift
