@@ -208,11 +208,21 @@ export default async function handler(req, res) {
 
       const hoursUntilShift = (start - now) / (1000 * 60 * 60);
 
+      // Debug: log timing info
+      if (!results.debug) results.debug = [];
+      results.debug.push({
+        event: event.name,
+        date: event.date,
+        time: event.time,
+        serverNow: now.toISOString(),
+        shiftStart: start.toISOString(),
+        hoursUntil: Math.round(hoursUntilShift * 100) / 100,
+      });
+
       for (const tier of REMINDER_TIERS) {
         results.checked++;
 
         // Is now within the ±30min sending window for this tier?
-        // e.g. for 96h: send when 95.5h ≤ hoursUntilShift ≤ 96.5h
         const inWindow = hoursUntilShift >= (tier - 0.5) && hoursUntilShift <= (tier + 0.5);
         if (!inWindow) { results.skipped++; continue; }
 
