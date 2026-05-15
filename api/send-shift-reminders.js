@@ -38,11 +38,18 @@ const positionLabel = (key) =>
   (key || 'your position').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 // Build shift start as a JS Date from event date + time strings
+// Events are stored in local time (CST = UTC-6 / CDT = UTC-5)
+// We use UTC constructor and add the offset so comparisons work correctly
 const shiftStart = (date, time) => {
   if (!date || !time) return null;
   const [y, mo, d] = date.split('-').map(Number);
   const [h, mi] = time.split(':').map(Number);
-  return new Date(y, mo - 1, d, h, mi, 0, 0);
+  // Determine CDT vs CST: CDT (UTC-5) runs Mar-Nov, CST (UTC-6) runs Nov-Mar
+  const month = mo; // 1-indexed
+  const isDST = month >= 3 && month <= 11; // approximate DST window
+  const offsetHours = isDST ? 5 : 6; // CDT = UTC-5, CST = UTC-6
+  // Build as UTC by adding the offset
+  return new Date(Date.UTC(y, mo - 1, d, h + offsetHours, mi, 0, 0));
 };
 
 // ── Email sender ──────────────────────────────────────────────────────
@@ -222,8 +229,9 @@ export default async function handler(req, res) {
       for (const tier of REMINDER_TIERS) {
         results.checked++;
 
-        // Is now within the ±30min sending window for this tier?
-        const inWindow = hoursUntilShift >= (tier - 0.5) && hoursUntilShift <= (tier + 0.5);
+        // Is now within the ±60min sending window for this tier?
+        // Window is intentionally wide to handle timezone differences and cron timing variance
+        const inWindow = hoursUntilShift >= (tier - 1) && hoursUntilShift <= (tier + 1);
         if (!inWindow) { results.skipped++; continue; }
 
         // Check worker prefs (default all ON if no row exists)
