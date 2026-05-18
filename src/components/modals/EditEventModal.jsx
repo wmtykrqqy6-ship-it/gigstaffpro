@@ -195,6 +195,57 @@ export default function EditEventModal({
     }
   };
 
+
+  // Send immediate update emails when key event details change
+  const sendEventUpdatedEmails = async (oldEvent, newData) => {
+    const changed = [];
+    if (oldEvent.date !== newData.date) changed.push('Date');
+    if (oldEvent.time !== newData.time || oldEvent.end_time !== newData.end_time) changed.push('Time');
+    if (oldEvent.venue !== newData.venue) changed.push('Venue');
+    if (oldEvent.address !== newData.address) changed.push('Address');
+    if (!changed.length) return;
+
+    try {
+      const { data: asgData } = await supabase
+        .from('assignments')
+        .select('worker_id, position')
+        .eq('event_id', oldEvent.id)
+        .in('status', ['approved', 'assigned']);
+      if (!asgData?.length) return;
+
+      const workerMap = Object.fromEntries((workers || []).map(w => [String(w.id), w]));
+      const fmtTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + (h >= 12 ? 'PM' : 'AM'); };
+      const fmtDate = (d) => { if (!d) return ''; const [y, mo, day] = d.split('-').map(Number); return new Date(y, mo - 1, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); };
+      const posLabel = (key) => (key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const timeStr = newData.time ? (newData.end_time ? fmtTime(newData.time) + ' - ' + fmtTime(newData.end_time) : fmtTime(newData.time)) : '';
+      const changedLabel = changed.join(', ');
+
+      for (const asg of asgData) {
+        const worker = workerMap[String(asg.worker_id)];
+        if (!worker?.email) continue;
+        const rows = [
+          ['Date', fmtDate(newData.date)],
+          timeStr ? ['Time', timeStr] : null,
+          ['Position', posLabel(asg.position)],
+          newData.venue ? ['Venue', newData.venue] : null,
+          newData.address ? ['Address', newData.address] : null,
+          newData.notes ? ['Notes', newData.notes] : null,
+        ].filter(Boolean).map(([label, val]) =>
+          '<tr><td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">' + label + '</td><td style="padding:5px 0;color:#111;font-size:13px">' + val + '</td></tr>'
+        ).join('');
+
+        const html = '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><div style="max-width:520px;margin:24px auto"><div style="background:#7c0a02;padding:24px 20px;border-radius:8px 8px 0 0;text-align:center"><div style="font-size:22px;font-weight:bold;color:#fff">Vegas on Wheels</div><div style="font-size:13px;color:#fca5a5;margin-top:4px">Event Update - ' + changedLabel + ' Changed</div></div><div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px"><p style="margin:0 0 6px;font-size:15px;color:#111">Hi ' + worker.name + ',</p><p style="margin:0 0 16px;color:#374151;font-size:14px">The details for <strong>' + (newData.name || oldEvent.name) + '</strong> have been updated. Please review the latest information below.</p><div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#854d0e"><strong>What changed: ' + changedLabel + '</strong></div><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px"><table style="border-collapse:collapse;width:100%">' + rows + '</table></div><div style="text-align:center;margin-bottom:20px"><a href="https://gigstaffpro.vercel.app" style="display:inline-block;background:#7c0a02;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">View in Staff Portal</a></div></div></div></body></html>';
+
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: worker.email, subject: 'Update: ' + (newData.name || oldEvent.name) + ' - ' + changedLabel + ' changed', html }),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send update emails:', err);
+    }
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -213,6 +264,9 @@ export default function EditEventModal({
         .eq('id', event.id);
       
       if (error) throw error;
+      // Notify confirmed workers if key details changed
+      await sendEventUpdatedEmails(event, formData);
+
 
       // Check if venue is already in the library
       const venueName = formData.venue?.trim();
