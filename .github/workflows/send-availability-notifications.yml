@@ -1,0 +1,17 @@
+name: Send Availability Notifications
+
+on:
+  schedule:
+    # Run every hour at :15 past the hour
+    - cron: '15 * * * *'
+  workflow_dispatch: # Manual trigger for testing
+
+jobs:
+  send-availability-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Availability Notifications
+        run: |
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            https://gigstaffpro.vercel.app/api/send-availability-notifications
