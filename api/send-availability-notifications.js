@@ -161,7 +161,7 @@ export default async function handler(req, res) {
 
     // 4. Load all workers with their rank, email, and location memberships
     const workersRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/workers?select=id,name,email,rank&active=eq.true`,
+      `${SUPABASE_URL}/rest/v1/workers?select=id,name,email,rank`,
       { headers: sbHeaders() }
     );
     const workers = await workersRes.json();
