@@ -161,10 +161,21 @@ export default function AddEventModal({
     try {
       const warehouseId = await assignNearestWarehouse(formData.address);
       const saveData = { ...formData, warehouse_id: warehouseId };
-      const { error } = await supabase.from('events').insert([saveData]);
+      const { data: insertedEvent, error } = await supabase
+        .from('events')
+        .insert([saveData])
+        .select('id, date')
+        .single();
       if (error) throw error;
 
-      // Check if venue is already in the library
+      // Fire catch-up notifications for all eligible ranks immediately
+      // Handles events created close to event date where earlier windows already passed
+      if (insertedEvent?.id) {
+        fetch('/api/send-availability-notifications?catchup=true&event_id=' + insertedEvent.id, {
+          method: 'POST',
+        }).catch(() => {}); // Non-fatal — fire and forget
+      }
+
       const venueName = formData.venue?.trim();
       const alreadySaved = venues.some(v => v.name.toLowerCase() === venueName?.toLowerCase());
       if (venueName && !alreadySaved) {

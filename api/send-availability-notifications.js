@@ -187,9 +187,19 @@ export default async function handler(req, res) {
     const now = new Date();
     const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
+    // Catchup mode: fired from AddEventModal for a specific newly-created event
+    // Notifies all ranks whose windows are already open
+    const catchupMode = req.query?.catchup === 'true' || req.body?.catchup === true;
+    const catchupEventId = req.query?.event_id || req.body?.event_id;
+
     const notificationsToLog = [];
 
-    for (const event of events) {
+    // Filter to just the new event if in catchup mode
+    const eventsToProcess = catchupMode && catchupEventId
+      ? events.filter(e => String(e.id) === String(catchupEventId))
+      : events;
+
+    for (const event of eventsToProcess) {
       if (!event.date) continue;
 
       const [ey, em, ed] = event.date.split('-').map(Number);
@@ -208,10 +218,14 @@ export default async function handler(req, res) {
 
         const unlockDays = rankAccessDays[rank] ?? DEFAULT_RANK_ACCESS[rank];
 
-        // This rank unlocks when daysUntil <= unlockDays
-        // We fire the notification on the day it unlocks (within a 24h window)
-        // i.e. daysUntil is exactly at the unlockDays threshold today
-        const shouldNotify = daysUntil <= unlockDays && daysUntil >= (unlockDays - 1);
+        let shouldNotify;
+        if (catchupMode) {
+          // Catchup: notify all ranks whose windows are already open (daysUntil <= unlockDays)
+          shouldNotify = daysUntil <= unlockDays;
+        } else {
+          // Normal hourly cron: only notify on the day the window opens (within 24h window)
+          shouldNotify = daysUntil <= unlockDays && daysUntil >= (unlockDays - 1);
+        }
 
         if (!shouldNotify) { results.skipped++; continue; }
 
