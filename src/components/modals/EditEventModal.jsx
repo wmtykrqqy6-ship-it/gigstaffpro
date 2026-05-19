@@ -422,7 +422,8 @@ export default function EditEventModal({
                         value={formData.date}
                         onChange={(e) => setFormData({...formData, date: e.target.value})}
                         className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        style={{WebkitAppearance:'none',color:formData.date?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 32px'}}
+                        style={{WebkitAppearance:'none',color:formData.date?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 32px',minHeight:'44px',fontSize:'16px'}}
+                        placeholder="Select date"
                       />
                     </div>
                   </div>
@@ -438,7 +439,8 @@ export default function EditEventModal({
                           value={formData.time}
                           onChange={(e) => setFormData({...formData, time: e.target.value})}
                           className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px'}}
+                          style={{WebkitAppearance:'none',color:formData.time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
+                          placeholder="Select time"
                         />
                       </div>
                     </div>
@@ -451,7 +453,8 @@ export default function EditEventModal({
                           value={formData.end_time}
                           onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                           className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.end_time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px'}}
+                          style={{WebkitAppearance:'none',color:formData.end_time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
+                          placeholder="Select time"
                         />
                       </div>
                     </div>
