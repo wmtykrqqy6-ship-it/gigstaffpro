@@ -337,7 +337,8 @@ export default function AddEventModal({
                       value={formData.date}
                       onChange={(e) => setFormData({...formData, date: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    />
+                    style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
+                      />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -349,7 +350,8 @@ export default function AddEventModal({
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
+                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
+                        />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
@@ -358,7 +360,8 @@ export default function AddEventModal({
                         value={formData.end_time}
                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
+                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
+                        />
                     </div>
                   </div>
                 </div>

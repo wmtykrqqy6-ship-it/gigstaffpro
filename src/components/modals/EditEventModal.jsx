@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';  
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey } from '../../utils/positionHelpers';
@@ -445,7 +445,8 @@ export default function EditEventModal({
                       value={formData.date}
                       onChange={(e) => setFormData({...formData, date: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    />
+                    style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
+                      />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -457,6 +458,7 @@ export default function EditEventModal({
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
                       />
                     </div>
                     <div>
@@ -466,6 +468,7 @@ export default function EditEventModal({
                         value={formData.end_time}
                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
                       />
                     </div>
                   </div>
