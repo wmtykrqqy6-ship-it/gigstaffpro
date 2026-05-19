@@ -69,17 +69,29 @@ export default function PaymentCalculatorModal({
     return /\b53147\b/.test(address);
   };
 
+  // Calculate hours from event start/end time — reflects any time changes
+  const calcHoursFromEvent = (event) => {
+    if (!event?.time || !event?.end_time) return null;
+    const [sh, sm] = event.time.split(':').map(Number);
+    const [eh, em] = event.end_time.split(':').map(Number);
+    let startMins = sh * 60 + sm;
+    let endMins = eh * 60 + em;
+    if (endMins <= startMins) endMins += 24 * 60; // midnight crossover
+    return Math.round(((endMins - startMins) / 60) * 10) / 10;
+  };
+
   useEffect(() => {
     if (assignmentData) {
       // Check if event has payment settings configured
       if (eventPaymentSettings[selectedEvent.id]) {
         const settings = eventPaymentSettings[selectedEvent.id];
-        setHours(settings.hours);
+        // Use live event hours if available, otherwise fall back to saved settings
+        setHours(calcHoursFromEvent(selectedEvent) ?? settings.hours);
         setMiles(settings.miles);
         setIsLakeGeneva(settings.isLakeGeneva);
         setIsHoliday(settings.isHoliday);
       } else {
-        setHours(assignmentData.defaultHours || 0);
+        setHours(calcHoursFromEvent(selectedEvent) ?? assignmentData.defaultHours ?? 0);
         setMiles(0);
         // Auto-detect Lake Geneva from event address zip code
         setIsLakeGeneva(isLakeGenevaZip(selectedEvent?.address));
@@ -88,21 +100,15 @@ export default function PaymentCalculatorModal({
     }
   }, [assignmentData, eventPaymentSettings, selectedEvent]);
 
-  // Auto-fetch miles: worker home location → event address
-  // Always fetches fresh — worker home→event overrides warehouse→event saved in event settings
+  // Auto-fetch miles: worker home location address → event address (fallback to warehouse)
   useEffect(() => {
     if (!open || !assignmentData || !selectedEvent) return;
+    if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
     const eventAddress = selectedEvent.address;
     if (!eventAddress) return;
     // Travel origin: worker home location → event location → no auto-calc
     const travelOrigin = workerHomeLocation?.address || eventLocation?.address || null;
-    if (!travelOrigin) {
-      // No worker home location — fall back to event payment settings miles
-      if (eventPaymentSettings[selectedEvent.id]?.miles > 0) {
-        setMiles(eventPaymentSettings[selectedEvent.id].miles);
-      }
-      return;
-    }
+    if (!travelOrigin) return;
 
     const fetchMiles = async () => {
       setFetchingMiles(true);
