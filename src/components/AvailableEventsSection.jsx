@@ -564,8 +564,18 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   )}
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
                     const settings = eventPaymentSettings[event.id];
-                    const { hours, isLakeGeneva, isHoliday } = settings;
-                    const numHours = Number(hours) || 0;
+                    const { isLakeGeneva, isHoliday } = settings;
+                    // Calculate hours from live event time — reflects any time changes
+                    const calcEventHours = () => {
+                      if (!event.time || !event.end_time) return null;
+                      const [sh, sm] = event.time.split(':').map(Number);
+                      const [eh, em] = event.end_time.split(':').map(Number);
+                      let startMins = sh * 60 + sm;
+                      let endMins = eh * 60 + em;
+                      if (endMins <= startMins) endMins += 24 * 60; // midnight crossover
+                      return Math.round(((endMins - startMins) / 60) * 10) / 10;
+                    };
+                    const numHours = calcEventHours() ?? Number(settings.hours) ?? 0;
                     if (!numHours) return null;
 
                     // Travel miles from worker's home location → event
