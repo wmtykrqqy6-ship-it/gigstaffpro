@@ -196,7 +196,6 @@ export default function EditEventModal({
   };
 
 
-  // Send immediate update emails when key event details change
   const sendEventUpdatedEmails = async (oldEvent, newData) => {
     const changed = [];
     if (oldEvent.date !== newData.date) changed.push('Date');
@@ -204,48 +203,25 @@ export default function EditEventModal({
     if (oldEvent.venue !== newData.venue) changed.push('Venue');
     if (oldEvent.address !== newData.address) changed.push('Address');
     if (!changed.length) return;
-
     try {
-      const { data: asgData } = await supabase
-        .from('assignments')
-        .select('worker_id, position')
-        .eq('event_id', oldEvent.id)
-        .in('status', ['approved', 'assigned']);
+      const { data: asgData } = await supabase.from('assignments').select('worker_id, position').eq('event_id', oldEvent.id).in('status', ['approved', 'assigned']);
       if (!asgData?.length) return;
-
       const workerMap = Object.fromEntries((workers || []).map(w => [String(w.id), w]));
       const fmtTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + (h >= 12 ? 'PM' : 'AM'); };
       const fmtDate = (d) => { if (!d) return ''; const [y, mo, day] = d.split('-').map(Number); return new Date(y, mo - 1, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); };
       const posLabel = (key) => (key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       const timeStr = newData.time ? (newData.end_time ? fmtTime(newData.time) + ' - ' + fmtTime(newData.end_time) : fmtTime(newData.time)) : '';
       const changedLabel = changed.join(', ');
-
       for (const asg of asgData) {
         const worker = workerMap[String(asg.worker_id)];
         if (!worker?.email) continue;
-        const rows = [
-          ['Date', fmtDate(newData.date)],
-          timeStr ? ['Time', timeStr] : null,
-          ['Position', posLabel(asg.position)],
-          newData.venue ? ['Venue', newData.venue] : null,
-          newData.address ? ['Address', newData.address] : null,
-          newData.notes ? ['Notes', newData.notes] : null,
-        ].filter(Boolean).map(([label, val]) =>
-          '<tr><td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">' + label + '</td><td style="padding:5px 0;color:#111;font-size:13px">' + val + '</td></tr>'
-        ).join('');
-
-        const html = '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><div style="max-width:520px;margin:24px auto"><div style="background:#7c0a02;padding:24px 20px;border-radius:8px 8px 0 0;text-align:center"><div style="font-size:22px;font-weight:bold;color:#fff">Vegas on Wheels</div><div style="font-size:13px;color:#fca5a5;margin-top:4px">Event Update - ' + changedLabel + ' Changed</div></div><div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px"><p style="margin:0 0 6px;font-size:15px;color:#111">Hi ' + worker.name + ',</p><p style="margin:0 0 16px;color:#374151;font-size:14px">The details for <strong>' + (newData.name || oldEvent.name) + '</strong> have been updated. Please review the latest information below.</p><div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:#92400e">What changed: ' + changedLabel + '</div><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px"><table style="border-collapse:collapse;width:100%">' + rows + '</table></div><div style="text-align:center;margin-bottom:20px"><a href="https://gigstaffpro.vercel.app" style="display:inline-block;background:#7c0a02;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">View in Staff Portal</a></div></div></div></body></html>';
-
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: worker.email, subject: 'Update: ' + (newData.name || oldEvent.name) + ' - ' + changedLabel + ' changed', html }),
-        });
+        const rows = [['Date', fmtDate(newData.date)], timeStr ? ['Time', timeStr] : null, ['Position', posLabel(asg.position)], newData.venue ? ['Venue', newData.venue] : null, newData.address ? ['Address', newData.address] : null].filter(Boolean).map(([label, val]) => '<tr><td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px">' + label + '</td><td style="padding:5px 0;color:#111;font-size:13px">' + val + '</td></tr>').join('');
+        const html = '<!DOCTYPE html><html><body style="background:#f3f4f6;font-family:Arial,sans-serif"><div style="max-width:520px;margin:24px auto"><div style="background:#7c0a02;padding:20px;border-radius:8px 8px 0 0;text-align:center"><div style="font-size:20px;font-weight:bold;color:#fff">Vegas on Wheels</div><div style="font-size:12px;color:#fca5a5">Event Update - ' + changedLabel + ' Changed</div></div><div style="background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px"><p style="color:#111">Hi ' + worker.name + ',</p><p style="color:#374151;font-size:14px">The details for <strong>' + (newData.name || oldEvent.name) + '</strong> have been updated.</p><div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:10px;margin-bottom:16px;font-weight:600;color:#92400e">What changed: ' + changedLabel + '</div><table style="border-collapse:collapse;width:100%;background:#f9fafb;border-radius:8px;padding:14px">' + rows + '</table><div style="text-align:center;margin-top:20px"><a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold">View in Staff Portal</a></div></div></div></body></html>';
+        await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: worker.email, subject: 'Update: ' + (newData.name || oldEvent.name) + ' - ' + changedLabel + ' changed', html }) });
       }
-    } catch (err) {
-      console.error('Failed to send update emails:', err);
-    }
+    } catch (err) { console.error('Failed to send update emails:', err); }
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -264,9 +240,8 @@ export default function EditEventModal({
         .eq('id', event.id);
       
       if (error) throw error;
-      // Notify confirmed workers if key details changed
-      await sendEventUpdatedEmails(event, formData);
 
+      await sendEventUpdatedEmails(event, formData);
 
       // Check if venue is already in the library
       const venueName = formData.venue?.trim();
@@ -439,45 +414,45 @@ export default function EditEventModal({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
-                    <input
-                    <div style={{position:"relative"}}>
-                      <Calendar size={16} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      style={{WebkitAppearance:"none",color:formData.date?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 32px"}}
-                    />
+                    <div style={{position:'relative'}}>
+                      <Calendar size={16} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
+                      <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        style={{WebkitAppearance:'none',color:formData.date?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 32px'}}
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                      <input
-                      <div style={{position:"relative"}}>
-                        <Clock size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
-                        type="time"
-                        required
-                        value={formData.time}
-                        onChange={(e) => setFormData({...formData, time: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        style={{WebkitAppearance:"none",color:formData.time?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 30px"}}
-                      />
+                      <div style={{position:'relative'}}>
+                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
+                        <input
+                          type="time"
+                          required
+                          value={formData.time}
+                          onChange={(e) => setFormData({...formData, time: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          style={{WebkitAppearance:'none',color:formData.time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px'}}
+                        />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <input
-                      <div style={{position:"relative"}}>
-                        <Clock size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
-                        type="time"
-                        value={formData.end_time}
-                        onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        style={{WebkitAppearance:"none",color:formData.time?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 30px"}}
-                      />
+                      <div style={{position:'relative'}}>
+                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
+                        <input
+                          type="time"
+                          value={formData.end_time}
+                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          style={{WebkitAppearance:'none',color:formData.end_time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px'}}
+                        />
                       </div>
                     </div>
                   </div>
