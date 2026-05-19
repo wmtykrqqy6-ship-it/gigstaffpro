@@ -114,7 +114,17 @@ export default function AssignWorkersModal({
     } else if (event && eventPaymentSettings[event.id]) {
       // Load saved settings
       const settings = eventPaymentSettings[event.id];
-      setEventHours(settings.hours);
+      // Use live event time if available, fall back to saved settings
+      const calcHours = () => {
+        if (!event?.time || !event?.end_time) return null;
+        const [sh, sm] = event.time.split(':').map(Number);
+        const [eh, em] = event.end_time.split(':').map(Number);
+        let startMins = sh * 60 + sm;
+        let endMins = eh * 60 + em;
+        if (endMins <= startMins) endMins += 24 * 60;
+        return Math.round(((endMins - startMins) / 60) * 10) / 10;
+      };
+      setEventHours(calcHours() ?? settings.hours);
       setEventMiles(settings.miles);
       setEventIsLakeGeneva(settings.isLakeGeneva);
       setEventIsHoliday(settings.isHoliday);
@@ -122,47 +132,6 @@ export default function AssignWorkersModal({
       setMilesLoading(false);
     }
   }, [event, eventPaymentSettings, warehouseAddress]);
-
-
-  // Clear cached distances when event changes so they recalculate for the new address
-  useEffect(() => {
-    setWorkerDistances({});
-  }, [event?.id]);
-
-  // Fetch worker home→event distances when sort by proximity is enabled
-  useEffect(() => {
-    if (!sortByDistance || !event?.address || !workers?.length) return;
-    const workersNeedingDistance = workers.filter(w => w.address && workerDistances[w.id] == null);
-    if (!workersNeedingDistance.length) return;
-
-    setDistancesLoading(true);
-    const batchSize = 5;
-    let completed = 0;
-
-    const fetchBatch = async (batch) => {
-      await Promise.all(batch.map(async (worker) => {
-        try {
-          const res = await fetch(
-            `/api/get-distance?origin=${encodeURIComponent(worker.address)}&destination=${encodeURIComponent(event.address)}`
-          );
-          const data = await res.json();
-          if (data.miles != null) {
-            setWorkerDistances(prev => ({ ...prev, [worker.id]: data.miles }));
-          }
-        } catch {}
-        completed++;
-      }));
-    };
-
-    const runBatches = async () => {
-      for (let i = 0; i < workersNeedingDistance.length; i += batchSize) {
-        await fetchBatch(workersNeedingDistance.slice(i, i + batchSize));
-      }
-      setDistancesLoading(false);
-    };
-
-    runBatches();
-  }, [sortByDistance, event?.address, workers]);
 
   // Early return AFTER all hooks
   if (!open || !event) return null;
@@ -184,21 +153,15 @@ export default function AssignWorkersModal({
     alert('Payment settings saved! All new assignments will use these settings.');
   };
 
-  const eventAssignments = assignments.filter(a => String(a.event_id) === String(event.id));
+  const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
-    const posNorm = norm(position);
-    return eventAssignments.filter(a => {
-      if (!a.position) return false;
-      const aNorm = norm(a.position);
-      const posMatch = a.position === position ||
-        a.position.toLowerCase() === position.toLowerCase() ||
-        aNorm === posNorm ||
-        (posNorm.length >= 4 && (posNorm.startsWith(aNorm) || aNorm.startsWith(posNorm)));
-      if (!posMatch) return false;
-      return !['standby', 'rejected', 'cancelled'].includes(a.status);
-    });
+    // Count approved/assigned (legacy) assignments only - exclude standby, pending, rejected, cancelled
+    const filtered = eventAssignments.filter(a => 
+      a.position === position && 
+      (a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined)
+    );
+    return filtered;
   };
 
   const getPositionCount = (positionKey) => {
@@ -366,7 +329,14 @@ export default function AssignWorkersModal({
               
               {eventPaymentSettings[event.id] && !showEventPaymentSettings && (
                 <div className="text-sm text-gray-700">
-                  <p>✓ Payment configured: {eventPaymentSettings[event.id].hours} hrs, {eventPaymentSettings[event.id].miles} miles
+                  <p>✓ Payment configured: {(() => {
+                      if (!event?.time || !event?.end_time) return eventPaymentSettings[event.id].hours;
+                      const [sh, sm] = event.time.split(':').map(Number);
+                      const [eh, em] = event.end_time.split(':').map(Number);
+                      let s = sh*60+sm, e = eh*60+em;
+                      if (e<=s) e+=1440;
+                      return Math.round(((e-s)/60)*10)/10;
+                    })()} hrs, {eventPaymentSettings[event.id].miles} miles
                     {eventPaymentSettings[event.id].isLakeGeneva && ', Lake Geneva'}
                     {eventPaymentSettings[event.id].isHoliday && ', Holiday'}
                   </p>
@@ -508,7 +478,8 @@ export default function AssignWorkersModal({
                 
                 const posAssignments = getPositionAssignments(positionKey);
                 const filled = posAssignments.length;
-                const needed = pos.count;
+                const needed = pos.count || 0;
+                if (needed === 0) return null; // skip positions with no workers needed
                 const isFull = filled >= needed;
                 const isExpanded = expandedPositions[positionKey];
 
@@ -531,10 +502,8 @@ export default function AssignWorkersModal({
                   })
                   .sort((a, b) => {
                     if (sortByDistance) {
-                      // Workers with known distance sort by miles asc
-                      // Workers with no address or pending distance go to bottom
-                      const distA = workerDistances[a.id] ?? (a.address ? 9999 : 99999);
-                      const distB = workerDistances[b.id] ?? (b.address ? 9999 : 99999);
+                      const distA = workerDistances[a.id] ?? Infinity;
+                      const distB = workerDistances[b.id] ?? Infinity;
                       if (distA !== distB) return distA - distB;
                     }
                     // Default: rank first (lower is better), then reliability
@@ -823,32 +792,12 @@ export default function AssignWorkersModal({
                                       <span className="text-xs text-gray-600 flex items-center">
                                         ⭐ {worker.reliability.toFixed(1)}
                                       </span>
-                                      {sortByDistance && (() => {
-                                        const d = workerDistances[worker.id];
-                                        if (d != null) {
-                                          const color = d <= 20 ? 'text-green-600' : d <= 40 ? 'text-yellow-600' : 'text-red-600';
-                                          return (
-                                            <span className={`text-xs font-medium flex items-center space-x-0.5 ${color}`}>
-                                              <Navigation size={11} />
-                                              <span>{d} mi</span>
-                                            </span>
-                                          );
-                                        }
-                                        if (!worker.address) {
-                                          return (
-                                            <span className="text-xs text-gray-400 flex items-center space-x-0.5">
-                                              <Navigation size={11} />
-                                              <span>no addr</span>
-                                            </span>
-                                          );
-                                        }
-                                        return (
-                                          <span className="text-xs text-gray-400 flex items-center space-x-0.5">
-                                            <Navigation size={11} />
-                                            <span>...</span>
-                                          </span>
-                                        );
-                                      })()}
+                                      {workerDistances[worker.id] != null && (
+                                        <span className="text-xs text-gray-500 flex items-center space-x-0.5">
+                                          <Navigation size={11} className="text-gray-400" />
+                                          <span>{workerDistances[worker.id]} mi</span>
+                                        </span>
+                                      )}
                                       {hasTimeConflict && (
                                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">
                                           TIME CONFLICT
