@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Calendar, Clock } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -332,36 +332,45 @@ export default function AddEventModal({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
                     <input
+                    <div style={{position:"relative"}}>
+                      <Calendar size={16} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
                       type="date"
                       required
                       value={formData.date}
                       onChange={(e) => setFormData({...formData, date: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
-                      />
+                      style={{WebkitAppearance:"none",color:formData.date?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 32px"}}
+                    />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                       <input
+                      <div style={{position:"relative"}}>
+                        <Clock size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
                         type="time"
                         required
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
-                        />
+                        style={{WebkitAppearance:"none",color:formData.time?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 30px"}}
+                      />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                       <input
+                      <div style={{position:"relative"}}>
+                        <Clock size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:1}} />
                         type="time"
                         value={formData.end_time}
                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      style={{WebkitAppearance:'none',color:'#111827',backgroundColor:'white'}}
-                        />
+                        style={{WebkitAppearance:"none",color:formData.time?"#111827":"#9ca3af",backgroundColor:"white",padding:"8px 12px 8px 30px"}}
+                      />
+                      </div>
                     </div>
                   </div>
                 </div>
