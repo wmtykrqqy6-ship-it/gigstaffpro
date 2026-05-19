@@ -80,14 +80,14 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
 
   <div style="background:#7c0a02;padding:24px 20px;border-radius:8px 8px 0 0;text-align:center">
     <div style="font-size:22px;font-weight:bold;color:#fff">Vegas on Wheels</div>
-    <div style="font-size:13px;color:#fca5a5;margin-top:4px">New Shift Available — Rank ${rank} Priority Access</div>
+    <div style="font-size:13px;color:#fca5a5;margin-top:4px">New Shift Available — Sign up before it fills up</div>
   </div>
 
   <div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
     <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${worker.name},</p>
     <p style="margin:0 0 20px;color:#374151;font-size:14px">
       A new shift is available for <strong>${event.name}</strong>.
-      As a Rank ${rank} worker, you have early access to sign up before lower ranks are notified.
+      Sign up in the staff portal before spots fill up.
     </p>
 
     <!-- Event details -->
