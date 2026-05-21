@@ -479,7 +479,6 @@ export default function AssignWorkersModal({
                 const posAssignments = getPositionAssignments(positionKey);
                 const filled = posAssignments.length;
                 const needed = pos.count || 0;
-                if (needed === 0) return null; // skip positions with no workers needed
                 const isFull = filled >= needed;
                 const isExpanded = expandedPositions[positionKey];
 
