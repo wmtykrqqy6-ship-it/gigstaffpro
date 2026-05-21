@@ -475,71 +475,67 @@ export default function DashboardView({
 
       {/* Staffing Alerts */}
       {unfilledAlerts.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
-            <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
-            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
+        <div style={{background:'white',borderRadius:'12px',border:'0.5px solid #e5e7eb',overflow:'hidden'}}>
+          {/* Header */}
+          <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 16px 12px',borderBottom:'0.5px solid #f3f4f6'}}>
+            <AlertCircle size={20} style={{color:'#E24B4A',flexShrink:0}} />
+            <div style={{flex:1}}>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <h3 style={{fontSize:'15px',fontWeight:'500',color:'#111827',margin:0}}>Staffing Alerts</h3>
+                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#E24B4A',color:'white',fontSize:'11px',fontWeight:'500',width:'18px',height:'18px',borderRadius:'50%'}}>{unfilledAlerts.length}</span>
+              </div>
+              <p style={{fontSize:'12px',color:'#9ca3af',margin:'1px 0 0'}}>Events with open positions that need attention</p>
+            </div>
           </div>
-          <div className="space-y-2">
-            {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => (
-              <div
-                key={event.id}
-                onClick={() => onOpenAssignModal(event)}
-                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                  tier === '24h'
-                    ? 'bg-red-50 border-red-200 hover:border-red-400'
-                    : 'bg-amber-50 border-amber-200 hover:border-amber-400'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  {/* Event name + time badge */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
-                      tier === '24h'
-                        ? 'bg-red-500 text-white'
-                        : daysUntil === 0 ? 'bg-orange-500 text-white'
-                        : daysUntil === 1 ? 'bg-orange-400 text-white'
-                        : 'bg-amber-400 text-amber-900'
-                    }`}>
+
+          {/* Alert rows */}
+          {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }, idx) => (
+            <div key={event.id} style={{display:'flex',borderTop: idx > 0 ? '0.5px solid #f3f4f6' : 'none'}}>
+              {/* Colored left bar */}
+              <div style={{width:'4px',flexShrink:0,background: tier === '24h' ? '#E24B4A' : '#EF9F27'}} />
+              {/* Event detail */}
+              <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'#f9fafb',gap:'12px'}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'3px',flexWrap:'wrap'}}>
+                    <span style={{
+                      fontSize:'11px',fontWeight:'500',padding:'3px 8px',borderRadius:'6px',flexShrink:0,
+                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
+                      color: tier === '24h' ? '#791F1F' : '#633806'
+                    }}>
                       {tier === '24h'
-                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h away`
-                        : daysUntil === 0 ? 'TODAY'
-                        : daysUntil === 1 ? 'TOMORROW'
-                        : `${daysUntil} days`
-                      }
+                        ? hoursUntil < 1 ? 'Now' : `${Math.round(hoursUntil)}h away`
+                        : daysUntil === 0 ? 'Today'
+                        : daysUntil === 1 ? 'Tomorrow'
+                        : `${daysUntil} days`}
                     </span>
-                    <span className="font-bold text-gray-900 text-sm truncate">{event.name}</span>
-                    {event.venue && (
-                      <span className="text-xs text-gray-400 truncate hidden sm:block">· {event.venue}</span>
-                    )}
+                    <span style={{fontSize:'14px',fontWeight:'500',color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.name}</span>
                   </div>
-                  {/* Open position pills */}
-                  <div className="flex flex-wrap gap-1.5">
+                  <div style={{fontSize:'12px',color:'#9ca3af',marginBottom:'6px'}}>
+                    {[event.venue, event.time ? formatTime(event.time, timeFormat) : null].filter(Boolean).join(' · ')}
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'5px'}}>
                     {unfilledPositions.map(({ label, open }) => (
-                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${
-                        tier === '24h'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {label}
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
-                          tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
-                        }`}>{open}</span>
+                      <span key={label} style={{
+                        fontSize:'11px',fontWeight:'500',padding:'2px 8px',borderRadius:'6px',
+                        display:'inline-flex',alignItems:'center',gap:'4px',
+                        background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
+                        border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
+                        color: tier === '24h' ? '#791F1F' : '#633806'
+                      }}>
+                        {label} <strong>{open} open</strong>
                       </span>
                     ))}
                   </div>
                 </div>
-                <button className={`flex-shrink-0 ml-4 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  tier === '24h'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-amber-500 text-white hover:bg-amber-600'
-                }`}>
-                  Assign
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
+                  style={{flexShrink:0,fontSize:'12px',fontWeight:'500',padding:'7px 14px',borderRadius:'8px',border:'none',background:'#7c1d1d',color:'white',cursor:'pointer',whiteSpace:'nowrap'}}
+                >
+                  Assign Staff
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 
