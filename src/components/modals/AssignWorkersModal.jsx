@@ -170,7 +170,7 @@ export default function AssignWorkersModal({
       const pKey = p.key || p.name || p;
       return pKey === positionKey || p.name === positionKey;
     });
-    return pos ? pos.count : 0;
+    return pos ? (pos.count || 1) : 0;
   };
 
   const isPositionFilled = (position) => {
@@ -478,7 +478,7 @@ export default function AssignWorkersModal({
                 
                 const posAssignments = getPositionAssignments(positionKey);
                 const filled = posAssignments.length;
-                const needed = pos.count || 0;
+                const needed = pos.count || getPositionCount(positionKey) || 1;
                 const isFull = filled >= needed;
                 const isExpanded = expandedPositions[positionKey];
 
