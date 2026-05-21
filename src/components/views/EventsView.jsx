@@ -62,7 +62,7 @@ export default function EventsView({
       a.event_id === event.id && 
       a.status !== 'standby'
     );
-    const total = event.positions.reduce((sum, p) => sum + (p.count || 1), 0);
+    const total = event.positions.reduce((sum, p) => sum + p.count, 0);
     const filled = eventAssignments.length;
     const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
     
@@ -398,7 +398,7 @@ export default function EventsView({
                   {event.positions && event.positions.length > 0 && (
                     <div className="flex items-center space-x-1">
                       <Users size={16} />
-                      <span>{event.positions.reduce((sum, p) => sum + (p.count || 1), 0)} workers needed</span>
+                      <span>{event.positions.reduce((sum, p) => sum + p.count, 0)} workers needed</span>
                     </div>
                   )}
                   <div className="flex items-center space-x-1">
@@ -488,17 +488,34 @@ export default function EventsView({
                           (a.position === posKey || a.position === pos.name || a.position === pos.key)
                         ).length;
                         
+                        const filledCount = assignments.filter(a =>
+                          a.event_id === event.id &&
+                          ['approved','assigned'].includes(a.status) &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        ).length;
+                        const isFull = filledCount >= count;
+                        const isPartial = filledCount > 0 && !isFull;
+
                         return (
-                        <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-medium">{posLabel}</span>
-                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
+                        <div key={idx} style={{
+                          background: isFull ? '#f0fdf4' : isPartial ? '#fffbeb' : '#fff1f2',
+                          border: `0.5px solid ${isFull ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecdd3'}`,
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          fontSize: '13px'
+                        }}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom: (pendingCount > 0 || standbyCount > 0) ? '4px' : '0'}}>
+                            <span style={{fontWeight:'500',color: isFull ? '#166534' : isPartial ? '#92400e' : '#9f1239'}}>{posLabel}</span>
+                            <span style={{
+                              fontSize:'11px',fontWeight:'700',padding:'1px 6px',borderRadius:'6px',
+                              background: isFull ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecdd3',
+                              color: isFull ? '#14532d' : isPartial ? '#78350f' : '#881337'
+                            }}>{filledCount}/{count}</span>
                           </div>
                           {(pendingCount > 0 || standbyCount > 0) && (
-                            <div className="text-xs text-gray-600 mt-1">
-                              {pendingCount > 0 && <span>{pendingCount} pending</span>}
-                              {pendingCount > 0 && standbyCount > 0 && <span>, </span>}
-                              {standbyCount > 0 && <span className="text-orange-700">{standbyCount} standby</span>}
+                            <div style={{fontSize:'11px',color:'#6b7280',display:'flex',gap:'6px'}}>
+                              {pendingCount > 0 && <span style={{color:'#854d0e'}}>{pendingCount} pending</span>}
+                              {standbyCount > 0 && <span style={{color:'#9a3412'}}>{standbyCount} standby</span>}
                             </div>
                           )}
                         </div>
