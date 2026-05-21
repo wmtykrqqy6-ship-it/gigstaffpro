@@ -135,7 +135,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                   </div>
                   {dayEvts.slice(0, 2).map(ev => {
                     const filled = assignments.filter(a => a.event_id === ev.id).length;
-                    const total = ev.positions?.reduce((s, p) => s + p.count, 0) || 0;
+                    const total = ev.positions?.reduce((s, p) => s + (p.count || 1), 0) || 0;
                     return (
                       <div key={ev.id} className={`text-xs p-0.5 rounded mb-0.5 truncate ${
                         isPast
@@ -178,8 +178,8 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
             <div className="space-y-3">
               {dayEvents.map(event => {
                 const eventAssignments = assignments.filter(a => a.event_id === event.id);
-                const total = event.positions?.reduce((s, p) => s + p.count, 0) || 0;
-                const filled = eventAssignments.length;
+                const total = event.positions?.reduce((s, p) => s + (p.count || 1), 0) || 0;
+                const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
                 return (
                   <div key={event.id} className="border rounded-lg p-3 hover:shadow-sm transition-shadow">
                     <div className="flex items-start justify-between mb-2">
@@ -190,7 +190,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                           <span className="flex items-center space-x-1"><MapPin size={12} /><span>{event.venue}</span></span>
                         </div>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded font-medium flex-shrink-0 ${
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
                         filled >= total && total > 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                       }`}>{filled}/{total}</span>
                     </div>
@@ -309,20 +309,18 @@ export default function DashboardView({
 
   const upcomingEvents = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const [ey, em, ed] = (e.date || '').split('-').map(Number);
-    if (!ey) return false;
-    const eventDate = new Date(ey, em - 1, ed);
+    const eventDate = new Date(e.date);
+    eventDate.setHours(0, 0, 0, 0);
     return eventDate >= today;
   }).length;
   const needStaffing = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const [ey, em, ed] = (e.date || '').split('-').map(Number);
-    if (!ey) return false;
-    const eventDate = new Date(ey, em - 1, ed);
+    const eventDate = new Date(e.date);
+    eventDate.setHours(0, 0, 0, 0);
     if (eventDate < today) return false;
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
-    const totalNeeded = e.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
-    const filled = eventAssignments.length;
+    const totalNeeded = e.positions?.reduce((sum, p) => sum + (p.count || 1), 0) || 0;
+    const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
     return filled < totalNeeded && totalNeeded > 0;
   }).length;
 
@@ -481,81 +479,64 @@ export default function DashboardView({
           <div className="flex items-center space-x-2 mb-4">
             <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
             <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
-            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded">{unfilledAlerts.length}</span>
+            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
           </div>
           <div className="space-y-2">
             {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => (
               <div
                 key={event.id}
                 onClick={() => onOpenAssignModal(event)}
-                style={{
-                  background: 'white',
-                  border: '0.5px solid #e5e7eb',
-                  borderLeft: `3px solid ${tier === '24h' ? '#E24B4A' : '#EF9F27'}`,
-                  borderRadius: '8px',
-                  padding: '12px 14px',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.15s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = tier === '24h' ? '#E24B4A' : '#EF9F27'}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.borderLeftColor = tier === '24h' ? '#E24B4A' : '#EF9F27'; }}
+                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                  tier === '24h'
+                    ? 'bg-red-50 border-red-200 hover:border-red-400'
+                    : 'bg-amber-50 border-amber-200 hover:border-amber-400'
+                }`}
               >
-                {/* Top row: time badge + name/venue + assign button */}
-                <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px', marginBottom:'10px'}}>
-                  <div style={{display:'flex', alignItems:'flex-start', gap:'8px', minWidth:0, flex:1}}>
-                    <span style={{
-                      fontSize:'11px', fontWeight:'500', padding:'3px 8px', borderRadius:'6px',
-                      whiteSpace:'nowrap', flexShrink:0, marginTop:'1px',
-                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
-                      color: tier === '24h' ? '#A32D2D' : '#854F0B'
-                    }}>
+                <div className="min-w-0 flex-1">
+                  {/* Event name + time badge */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                      tier === '24h'
+                        ? 'bg-red-500 text-white'
+                        : daysUntil === 0 ? 'bg-orange-500 text-white'
+                        : daysUntil === 1 ? 'bg-orange-400 text-white'
+                        : 'bg-amber-400 text-amber-900'
+                    }`}>
                       {tier === '24h'
-                        ? hoursUntil < 1 ? 'Now' : `${Math.round(hoursUntil)}h away`
-                        : daysUntil === 0 ? 'Today'
-                        : daysUntil === 1 ? 'Tomorrow'
+                        ? hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}h away`
+                        : daysUntil === 0 ? 'TODAY'
+                        : daysUntil === 1 ? 'TOMORROW'
                         : `${daysUntil} days`
                       }
                     </span>
-                    <div style={{minWidth:0}}>
-                      <div style={{fontSize:'14px', fontWeight:'500', color:'#111827', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{event.name}</div>
-                      {(event.venue || event.time) && (
-                        <div style={{fontSize:'12px', color:'#9ca3af', marginTop:'1px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
-                          {[event.venue, event.time ? formatTime(event.time, timeFormat) : null].filter(Boolean).join(' · ')}
-                        </div>
-                      )}
-                    </div>
+                    <span className="font-bold text-gray-900 text-sm truncate">{event.name}</span>
+                    {event.venue && (
+                      <span className="text-xs text-gray-400 truncate hidden sm:block">· {event.venue}</span>
+                    )}
                   </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); onOpenAssignModal(event); }}
-                    style={{
-                      flexShrink:0, fontSize:'12px', fontWeight:'500', padding:'5px 12px', borderRadius:'6px', cursor:'pointer',
-                      border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
-                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
-                      color: tier === '24h' ? '#A32D2D' : '#854F0B'
-                    }}
-                  >
-                    Assign Staff
-                  </button>
+                  {/* Open position pills */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {unfilledPositions.map(({ label, open }) => (
+                      <span key={label} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${
+                        tier === '24h'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {label}
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
+                          tier === '24h' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
+                        }`}>{open}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                {/* Position tags */}
-                <div style={{display:'flex', flexWrap:'wrap', gap:'6px'}}>
-                  {unfilledPositions.map(({ label, open }) => (
-                    <span key={label} style={{
-                      display:'inline-flex', alignItems:'center', gap:'5px',
-                      fontSize:'12px', fontWeight:'500', padding:'4px 8px', borderRadius:'6px',
-                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
-                      border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
-                      color: tier === '24h' ? '#791F1F' : '#633806'
-                    }}>
-                      {label}
-                      <span style={{
-                        fontSize:'11px', fontWeight:'500', padding:'1px 5px', borderRadius:'4px',
-                        background: tier === '24h' ? '#F09595' : '#EF9F27',
-                        color: tier === '24h' ? '#501313' : '#412402'
-                      }}>{open} open</span>
-                    </span>
-                  ))}
-                </div>
+                <button className={`flex-shrink-0 ml-4 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  tier === '24h'
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-amber-500 text-white hover:bg-amber-600'
+                }`}>
+                  Assign
+                </button>
               </div>
             ))}
           </div>
@@ -573,10 +554,7 @@ export default function DashboardView({
         const weekEvents = scopedEvents
           .filter(event => {
             if (event.status === 'cancelled' || event.status === 'archived') return false;
-            // Parse as local date to avoid UTC offset shifting the day
-            const [ey, em, ed] = (event.date || '').split('-').map(Number);
-            if (!ey) return false;
-            const eventDate = new Date(ey, em - 1, ed);
+            const eventDate = new Date(event.date);
             return eventDate >= now && eventDate <= sevenDaysOut;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -598,12 +576,11 @@ export default function DashboardView({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {weekEvents.map(event => {
                   const eventAssignments = assignments.filter(a => a.event_id === event.id);
-                  const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
-                  const filled = eventAssignments.length;
+                  const totalNeeded = event.positions?.reduce((sum, p) => sum + (p.count || 1), 0) || 0;
+                  const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
-                  const [_ey, _em, _ed] = (event.date || '').split('-').map(Number);
-                  const eventDate = new Date(_ey, _em - 1, _ed);
-                  const daysUntil = Math.round((eventDate - now) / (1000 * 60 * 60 * 24));
+                  const eventDate = new Date(event.date);
+                  const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
                   const urgencyBorder = daysUntil === 0 ? 'border-l-red-500'
                     : daysUntil === 1 ? 'border-l-orange-400'
                     : !isFullyStaffed ? 'border-l-yellow-400'
@@ -624,10 +601,8 @@ export default function DashboardView({
                             {daysUntil > 1 && <span className="text-xs text-gray-400">in {daysUntil} days</span>}
                           </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 ml-2 ${
-                          isFullyStaffed ? 'bg-green-100 text-green-700'
-                          : (daysUntil === 0 || filled === 0) ? 'bg-red-100 text-red-700'
-                          : 'bg-yellow-100 text-yellow-700'
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ml-2 ${
+                          isFullyStaffed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {filled}/{totalNeeded}
                         </span>
@@ -635,7 +610,7 @@ export default function DashboardView({
                       <div className="space-y-1 text-xs text-gray-500">
                         <div className="flex items-center space-x-1">
                           <Calendar size={11} className="flex-shrink-0" />
-                          <span>{new Date(_ey, _em - 1, _ed).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                          <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                           <span className="text-gray-300">·</span>
                           <Clock size={11} className="flex-shrink-0" />
                           <span>{formatTime(event.time, timeFormat)}</span>
@@ -647,14 +622,6 @@ export default function DashboardView({
                           </div>
                         )}
                       </div>
-                      {!isFullyStaffed && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
-                          style={{marginTop:'8px',width:'100%',fontSize:'11px',fontWeight:'500',padding:'5px 0',borderRadius:'6px',border:'0.5px solid #bfdbfe',background:'#eff6ff',color:'#1e40af',cursor:'pointer'}}
-                        >
-                          Assign Staff
-                        </button>
-                      )}
                     </div>
                   );
                 })}
@@ -678,7 +645,7 @@ export default function DashboardView({
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Last 7 days</span>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">Last 7 days</span>
         </div>
         {recentActivity.length === 0 ? (
           <div className="text-center py-10">
