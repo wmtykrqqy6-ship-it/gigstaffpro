@@ -387,9 +387,16 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     }
   };
 
-  const pendingCount = applications.filter(a => a.status === 'pending').length;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isUpcoming = (app) => {
+    const [ey, em, ed] = (app.event?.date || '').split('-').map(Number);
+    if (!ey) return true;
+    return new Date(ey, em - 1, ed) >= today;
+  };
+  const pendingCount = applications.filter(a => a.status === 'pending' && isUpcoming(a)).length;
   const approvedCount = applications.filter(a => a.status === 'approved').length;
-  const standbyCount = applications.filter(a => a.status === 'standby').length;
+  const standbyCount = applications.filter(a => a.status === 'standby' && isUpcoming(a)).length;
 
   return (
     <div className="space-y-6">
