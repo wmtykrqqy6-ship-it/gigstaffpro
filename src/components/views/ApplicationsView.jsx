@@ -140,6 +140,17 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     if (filter === 'approved' && app.status !== 'approved') return false;
     if (filter === 'rejected' && app.status !== 'rejected') return false;
     if (filter === 'standby' && app.status !== 'standby') return false;
+
+    // Hide past events from pending and standby views
+    if (filter === 'pending' || filter === 'standby') {
+      const [ey, em, ed] = (app.event?.date || '').split('-').map(Number);
+      if (ey) {
+        const eventDate = new Date(ey, em - 1, ed);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (eventDate < today) return false;
+      }
+    }
     
     // Search filter
     if (searchTerm) {
