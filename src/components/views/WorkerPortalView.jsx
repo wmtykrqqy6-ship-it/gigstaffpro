@@ -94,7 +94,16 @@ export default function WorkerPortalView({  loggedInWorker,
         const event = events.find(e => e.id === assignment.event_id);
         return { ...assignment, event };
       })
-      .filter(a => a.event);
+      .filter(a => {
+        if (!a.event) return false;
+        // Only show pending for upcoming events — filter out past events
+        const [ey, em, ed] = (a.event.date || '').split('-').map(Number);
+        if (!ey) return false;
+        const eventDate = new Date(ey, em - 1, ed);
+        const todayCheck = new Date();
+        todayCheck.setHours(0, 0, 0, 0);
+        return eventDate >= todayCheck;
+      });
 
     const today = new Date();
     const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
