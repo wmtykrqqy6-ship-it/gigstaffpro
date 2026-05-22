@@ -83,7 +83,6 @@ const GigStaffPro = () => {
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [selectedWorkerForPin, setSelectedWorkerForPin] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteDefaultPosition, setInviteDefaultPosition] = useState(null);
   const [selectedEventForInvite, setSelectedEventForInvite] = useState(null);
   const [locations, setLocations] = useState([]);
   const [activeLocation, setActiveLocation] = useState(() => {
@@ -1064,18 +1063,15 @@ setAppPositions(storedPositions);
             setSelectedEvent(event);
             setShowAssignModal(true);
           }}
-          onOpenInviteModal={(event, positionKey) => {
+          onOpenInviteModal={(event) => {
             setSelectedEventForInvite(event);
-            setInviteDefaultPosition(positionKey || null);
             setShowInviteModal(true);
           }}
           onOpenEditEvent={(event) => {
             setSelectedEvent(event);
             setShowEditEvent(true);
           }}
-          workers={workers}
           onDeleteEvent={deleteEvent}
-          onReloadAssignments={loadAssignments}
         />
       );
     }
@@ -1243,8 +1239,7 @@ setAppPositions(storedPositions);
         bonuses={bonuses}
         locations={locations}
         getEffectiveRate={getEffectiveRate}
-        defaultPosition={inviteDefaultPosition}
-        onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); setInviteDefaultPosition(null); }}
+        onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={loadAssignments}
       />
      <AddWorkerModal
