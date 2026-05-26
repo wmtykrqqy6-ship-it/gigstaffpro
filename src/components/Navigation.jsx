@@ -17,7 +17,7 @@ export default function Navigation({
   currentView,
   onNavigate,
   pendingReportsCount = 0,
-  events = [],
+  pendingApplicationsCount = 0,
   locations = [],
   activeLocation = 'all',
   onSetActiveLocation
@@ -30,17 +30,7 @@ export default function Navigation({
     ? 'All Markets'
     : (locations.find(l => l.id === activeLocation)?.name || 'All Markets');
 
-  // Count pending applications — exclude past events
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const eventMap = Object.fromEntries((events || []).map(e => [String(e.id), e]));
-  const pendingCount = (assignments || []).filter(a => {
-    if (a.status !== 'pending') return false;
-    const event = eventMap[String(a.event_id)];
-    if (!event?.date) return true;
-    const [ey, em, ed] = event.date.split('-').map(Number);
-    return new Date(ey, em - 1, ed) >= today;
-  }).length;
+  const pendingCount = pendingApplicationsCount;
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
