@@ -94,16 +94,7 @@ export default function WorkerPortalView({  loggedInWorker,
         const event = events.find(e => e.id === assignment.event_id);
         return { ...assignment, event };
       })
-      .filter(a => {
-        if (!a.event) return false;
-        // Only show pending for upcoming events — filter out past events
-        const [ey, em, ed] = (a.event.date || '').split('-').map(Number);
-        if (!ey) return false;
-        const eventDate = new Date(ey, em - 1, ed);
-        const todayCheck = new Date();
-        todayCheck.setHours(0, 0, 0, 0);
-        return eventDate >= todayCheck;
-      });
+      .filter(a => a.event);
 
     const today = new Date();
     const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -234,6 +225,97 @@ export default function WorkerPortalView({  loggedInWorker,
 
     const [pendingInvites, setPendingInvites] = useState([]);
     const [respondingInvite, setRespondingInvite] = useState(null);
+
+    // Check-in state
+    const [checkIns, setCheckIns] = useState({});
+    const [checkingIn, setCheckingIn] = useState({});
+    const [manualNotes, setManualNotes] = useState({});
+    const [showManualCheckIn, setShowManualCheckIn] = useState({});
+
+    // Load check-ins for this worker
+    React.useEffect(() => {
+      if (!currentWorker?.id) return;
+      const loadCheckIns = async () => {
+        const { data } = await supabase.from('check_ins').select('*').eq('worker_id', currentWorker.id);
+        const map = {};
+        (data || []).forEach(ci => { map[ci.assignment_id] = ci; });
+        setCheckIns(map);
+      };
+      loadCheckIns();
+    }, [currentWorker?.id]);
+
+    const submitCheckIn = async ({ assignmentId, event, workerLat, workerLng, distanceMiles, method, flagged, notes }) => {
+      try {
+        const { data, error } = await supabase.from('check_ins').upsert({
+          assignment_id: assignmentId,
+          worker_id: currentWorker.id,
+          event_id: event.id,
+          checked_in_at: new Date().toISOString(),
+          method,
+          latitude: workerLat || null,
+          longitude: workerLng || null,
+          distance_from_venue: distanceMiles ? Math.round(distanceMiles * 100) / 100 : null,
+          notes: notes || null,
+          flagged,
+          admin_override: false,
+        }, { onConflict: 'assignment_id' }).select().single();
+        if (error) throw error;
+        setCheckIns(prev => ({ ...prev, [assignmentId]: data }));
+        setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: false }));
+      } catch (err) { alert('Check-in failed: ' + err.message); }
+      finally { setCheckingIn(prev => ({ ...prev, [assignmentId]: false })); }
+    };
+
+    const handleCheckIn = async (assignment) => {
+      const assignmentId = assignment.id;
+      const event = assignment.event;
+      setCheckingIn(prev => ({ ...prev, [assignmentId]: true }));
+      try {
+        const geoLat = event.meeting_point_lat || null;
+        const geoLng = event.meeting_point_lng || null;
+        const position = await new Promise((resolve, reject) => {
+          if (!navigator.geolocation) return reject(new Error('no-gps'));
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, maximumAge: 0 });
+        });
+        const workerLat = position.coords.latitude;
+        const workerLng = position.coords.longitude;
+        let distanceMiles = null;
+        let method = 'manual';
+        let flagged = true;
+        if (geoLat && geoLng) {
+          const R = 3958.8;
+          const dLat = (geoLat - workerLat) * Math.PI / 180;
+          const dLng = (geoLng - workerLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(workerLat*Math.PI/180)*Math.cos(geoLat*Math.PI/180)*Math.sin(dLng/2)**2;
+          distanceMiles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          if (distanceMiles <= 0.25) { method = 'geo'; flagged = false; }
+        }
+        if (method === 'geo') {
+          await submitCheckIn({ assignmentId, event, workerLat, workerLng, distanceMiles, method, flagged, notes: null });
+        } else {
+          setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: true }));
+          setCheckingIn(prev => ({ ...prev, [assignmentId]: false }));
+        }
+      } catch (err) {
+        // GPS denied or unavailable
+        setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: true }));
+        setCheckingIn(prev => ({ ...prev, [assignmentId]: false }));
+      }
+    };
+
+    const handleManualCheckIn = async (assignment) => {
+      setCheckingIn(prev => ({ ...prev, [assignment.id]: true }));
+      await submitCheckIn({
+        assignmentId: assignment.id,
+        event: assignment.event,
+        workerLat: null, workerLng: null,
+        distanceMiles: null,
+        method: 'manual',
+        flagged: true,
+        notes: manualNotes[assignment.id] || '',
+      });
+    };
+
 
     React.useEffect(() => {
       if (!currentWorker?.id) return;
@@ -881,6 +963,92 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     )}
 
+                    {/* Meeting Point */}
+                    {assignment.event.meeting_point_description && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm font-semibold text-blue-900 mb-1">📍 Meeting Point</p>
+                        <p className="text-sm text-blue-800">{assignment.event.meeting_point_description}</p>
+                        {assignment.event.meeting_point_url && (
+                          <a href={assignment.event.meeting_point_url} target="_blank" rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-1 inline-flex items-center space-x-1">
+                            <MapPin size={13} /><span>Open Meeting Point in Maps</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Check-in Button */}
+                    {(() => {
+                      const now = new Date();
+                      const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
+                      const [sh, sm] = (assignment.event.time || '00:00').split(':').map(Number);
+                      const shiftStart = new Date(ey, em - 1, ed, sh, sm, 0);
+                      const hoursUntil = (shiftStart - now) / (1000 * 60 * 60);
+                      const canCheckIn = hoursUntil <= 1 && hoursUntil > -8; // within 1hr before, up to 8hrs after
+                      const existingCheckIn = checkIns[assignment.id];
+                      const isLoading = checkingIn[assignment.id];
+                      const showManual = showManualCheckIn[assignment.id];
+
+                      if (!canCheckIn && !existingCheckIn) return null;
+
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          {existingCheckIn ? (
+                            <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <span className="text-green-600 text-lg">✓</span>
+                              <div>
+                                <p className="text-sm font-semibold text-green-800">Checked In</p>
+                                <p className="text-xs text-green-600">
+                                  {new Date(existingCheckIn.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                  {' · '}{existingCheckIn.method === 'geo' ? '📍 GPS verified' : '✋ Manual'}
+                                  {existingCheckIn.flagged && existingCheckIn.method !== 'geo' && ' · ⚠ Flagged for review'}
+                                </p>
+                              </div>
+                            </div>
+                          ) : showManual ? (
+                            <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
+                              <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
+                              <textarea
+                                value={manualNotes[assignment.id] || ''}
+                                onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
+                                placeholder="Optional: explain your location (e.g. 'At the back entrance as instructed')"
+                                rows={2}
+                                className="w-full px-3 py-2 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 bg-white"
+                              />
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleManualCheckIn(assignment)}
+                                  disabled={isLoading}
+                                  className="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+                                >
+                                  {isLoading ? 'Checking in...' : 'Submit Manual Check-in'}
+                                </button>
+                                <button
+                                  onClick={() => setShowManualCheckIn(prev => ({ ...prev, [assignment.id]: false }))}
+                                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleCheckIn(assignment)}
+                              disabled={isLoading}
+                              className="w-full bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+                            >
+                              {isLoading ? (
+                                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>Locating...</span></>
+                              ) : (
+                                <><span>✓</span><span>Check In Now</span></>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {/* Switch Position Section */}
                     {(() => {
                       // Get available positions for this event
@@ -1124,7 +1292,93 @@ export default function WorkerPortalView({  loggedInWorker,
                           </div>
                         )}
 
-                        {/* Switch Position Section */}
+                        {/* Meeting Point */}
+                    {assignment.event.meeting_point_description && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm font-semibold text-blue-900 mb-1">📍 Meeting Point</p>
+                        <p className="text-sm text-blue-800">{assignment.event.meeting_point_description}</p>
+                        {assignment.event.meeting_point_url && (
+                          <a href={assignment.event.meeting_point_url} target="_blank" rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-1 inline-flex items-center space-x-1">
+                            <MapPin size={13} /><span>Open Meeting Point in Maps</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Check-in Button */}
+                    {(() => {
+                      const now = new Date();
+                      const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
+                      const [sh, sm] = (assignment.event.time || '00:00').split(':').map(Number);
+                      const shiftStart = new Date(ey, em - 1, ed, sh, sm, 0);
+                      const hoursUntil = (shiftStart - now) / (1000 * 60 * 60);
+                      const canCheckIn = hoursUntil <= 1 && hoursUntil > -8; // within 1hr before, up to 8hrs after
+                      const existingCheckIn = checkIns[assignment.id];
+                      const isLoading = checkingIn[assignment.id];
+                      const showManual = showManualCheckIn[assignment.id];
+
+                      if (!canCheckIn && !existingCheckIn) return null;
+
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          {existingCheckIn ? (
+                            <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <span className="text-green-600 text-lg">✓</span>
+                              <div>
+                                <p className="text-sm font-semibold text-green-800">Checked In</p>
+                                <p className="text-xs text-green-600">
+                                  {new Date(existingCheckIn.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                  {' · '}{existingCheckIn.method === 'geo' ? '📍 GPS verified' : '✋ Manual'}
+                                  {existingCheckIn.flagged && existingCheckIn.method !== 'geo' && ' · ⚠ Flagged for review'}
+                                </p>
+                              </div>
+                            </div>
+                          ) : showManual ? (
+                            <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
+                              <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
+                              <textarea
+                                value={manualNotes[assignment.id] || ''}
+                                onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
+                                placeholder="Optional: explain your location (e.g. 'At the back entrance as instructed')"
+                                rows={2}
+                                className="w-full px-3 py-2 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 bg-white"
+                              />
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleManualCheckIn(assignment)}
+                                  disabled={isLoading}
+                                  className="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+                                >
+                                  {isLoading ? 'Checking in...' : 'Submit Manual Check-in'}
+                                </button>
+                                <button
+                                  onClick={() => setShowManualCheckIn(prev => ({ ...prev, [assignment.id]: false }))}
+                                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleCheckIn(assignment)}
+                              disabled={isLoading}
+                              className="w-full bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+                            >
+                              {isLoading ? (
+                                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>Locating...</span></>
+                              ) : (
+                                <><span>✓</span><span>Check In Now</span></>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Switch Position Section */}
                         {(() => {
                           // Get available positions for this event
                           const eventPositions = assignment.event.positions || [];
