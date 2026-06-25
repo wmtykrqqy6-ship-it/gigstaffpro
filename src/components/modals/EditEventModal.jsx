@@ -116,7 +116,11 @@ export default function EditEventModal({
         host_worker_id: event.host_worker_id || null,
         location_id: event.location_id || null,
         client_id: event.client_id || null,
-        invite_only: event.invite_only || false
+        invite_only: event.invite_only || false,
+        meeting_point_description: event.meeting_point_description || '',
+        meeting_point_url: event.meeting_point_url || '',
+        meeting_point_lat: event.meeting_point_lat || null,
+        meeting_point_lng: event.meeting_point_lng || null
       });
     }
   }, [event]);
