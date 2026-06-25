@@ -30,7 +30,11 @@ export default function AddEventModal({
     host_worker_id: null,
     location_id: null,
     client_id: null,
-    invite_only: false
+    invite_only: false,
+    meeting_point_description: '',
+    meeting_point_url: '',
+    meeting_point_lat: null,
+    meeting_point_lng: null
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
@@ -161,16 +165,8 @@ export default function AddEventModal({
     try {
       const warehouseId = await assignNearestWarehouse(formData.address);
       const saveData = { ...formData, warehouse_id: warehouseId };
-      const { data: insertedEvent, error } = await supabase
-        .from('events')
-        .insert([saveData])
-        .select('id')
-        .single();
+      const { error } = await supabase.from('events').insert([saveData]);
       if (error) throw error;
-
-      if (insertedEvent?.id) {
-        fetch('/api/send-availability-notifications?catchup=true&event_id=' + insertedEvent.id, { method: 'POST' }).catch(() => {});
-      }
 
       // Check if venue is already in the library
       const venueName = formData.venue?.trim();
@@ -328,49 +324,34 @@ export default function AddEventModal({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
-                    <div style={{position:'relative'}}>
-                      <Calendar size={16} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                      <input
-                        type="date"
-                        required
-                        value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value})}
-                        className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        style={{WebkitAppearance:'none',color:formData.date?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 32px',minHeight:'44px',fontSize:'16px'}}
-                        placeholder="Select date"
-                      />
-                    </div>
+                    <input
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                      <div style={{position:'relative'}}>
-                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                        <input
-                          type="time"
-                          required
-                          value={formData.time}
-                          onChange={(e) => setFormData({...formData, time: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
-                          placeholder="Select time"
-                        />
-                      </div>
+                      <input
+                        type="time"
+                        required
+                        value={formData.time}
+                        onChange={(e) => setFormData({...formData, time: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <div style={{position:'relative'}}>
-                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                        <input
-                          type="time"
-                          value={formData.end_time}
-                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.end_time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
-                          placeholder="Select time"
-                        />
-                      </div>
+                      <input
+                        type="time"
+                        value={formData.end_time}
+                        onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
                     </div>
                   </div>
                 </div>
@@ -588,6 +569,47 @@ export default function AddEventModal({
                 />
               </div>
 
+              {/* Meeting Point */}
+              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">📍 Meeting Point</p>
+                  <p className="text-xs text-blue-600 mt-0.5">For large venues or resorts — set the exact spot where workers should meet. This also sets the geo-fence center for check-in.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={formData.meeting_point_description}
+                    onChange={(e) => setFormData({...formData, meeting_point_description: e.target.value})}
+                    placeholder="e.g. Ballroom B entrance, north side of building"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Google Maps Link (optional)</label>
+                  <input
+                    type="url"
+                    value={formData.meeting_point_url}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      const match = url.match(/[/@](-?[0-9]+[.][0-9]+),(-?[0-9]+[.][0-9]+)/);
+                      if (match) {
+                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: parseFloat(match[1]), meeting_point_lng: parseFloat(match[2])});
+                      } else {
+                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: null, meeting_point_lng: null});
+                      }
+                    }}
+                    placeholder="Paste a Google Maps link..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                  />
+                  {formData.meeting_point_lat && formData.meeting_point_lng && (
+                    <p className="text-xs text-green-600 mt-1">✓ Coordinates extracted — geo-fence will center here</p>
+                  )}
+                  {formData.meeting_point_url && !formData.meeting_point_lat && (
+                    <p className="text-xs text-amber-600 mt-1">⚠ Could not extract coordinates — geo-fence will use venue address</p>
+                  )}
+                </div>
+              </div>
               {/* Invite Only Toggle */}
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div>

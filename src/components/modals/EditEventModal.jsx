@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock } from 'lucide-react';
+import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
@@ -31,7 +31,11 @@ export default function EditEventModal({
     status: STATUS.EVENT.CONFIRMED,
     host_worker_id: null,
     location_id: null,
-    invite_only: false
+    invite_only: false,
+    meeting_point_description: '',
+    meeting_point_url: '',
+    meeting_point_lat: null,
+    meeting_point_lng: null
   });
   const [saving, setSaving] = useState(false);
   const [locations, setLocations] = useState([]);
@@ -195,33 +199,6 @@ export default function EditEventModal({
     }
   };
 
-
-  const sendEventUpdatedEmails = async (oldEvent, newData) => {
-    const changed = [];
-    if (oldEvent.date !== newData.date) changed.push('Date');
-    if (oldEvent.time !== newData.time || oldEvent.end_time !== newData.end_time) changed.push('Time');
-    if (oldEvent.venue !== newData.venue) changed.push('Venue');
-    if (oldEvent.address !== newData.address) changed.push('Address');
-    if (!changed.length) return;
-    try {
-      const { data: asgData } = await supabase.from('assignments').select('worker_id, position').eq('event_id', oldEvent.id).in('status', ['approved', 'assigned']);
-      if (!asgData?.length) return;
-      const workerMap = Object.fromEntries((workers || []).map(w => [String(w.id), w]));
-      const fmtTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + (h >= 12 ? 'PM' : 'AM'); };
-      const fmtDate = (d) => { if (!d) return ''; const [y, mo, day] = d.split('-').map(Number); return new Date(y, mo - 1, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); };
-      const posLabel = (key) => (key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const timeStr = newData.time ? (newData.end_time ? fmtTime(newData.time) + ' - ' + fmtTime(newData.end_time) : fmtTime(newData.time)) : '';
-      const changedLabel = changed.join(', ');
-      for (const asg of asgData) {
-        const worker = workerMap[String(asg.worker_id)];
-        if (!worker?.email) continue;
-        const rows = [['Date', fmtDate(newData.date)], timeStr ? ['Time', timeStr] : null, ['Position', posLabel(asg.position)], newData.venue ? ['Venue', newData.venue] : null, newData.address ? ['Address', newData.address] : null].filter(Boolean).map(([label, val]) => '<tr><td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px">' + label + '</td><td style="padding:5px 0;color:#111;font-size:13px">' + val + '</td></tr>').join('');
-        const html = '<!DOCTYPE html><html><body style="background:#f3f4f6;font-family:Arial,sans-serif"><div style="max-width:520px;margin:24px auto"><div style="background:#7c0a02;padding:20px;border-radius:8px 8px 0 0;text-align:center"><div style="font-size:20px;font-weight:bold;color:#fff">Vegas on Wheels</div><div style="font-size:12px;color:#fca5a5">Event Update - ' + changedLabel + ' Changed</div></div><div style="background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px"><p style="color:#111">Hi ' + worker.name + ',</p><p style="color:#374151;font-size:14px">The details for <strong>' + (newData.name || oldEvent.name) + '</strong> have been updated.</p><div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:10px;margin-bottom:16px;font-weight:600;color:#92400e">What changed: ' + changedLabel + '</div><table style="border-collapse:collapse;width:100%;background:#f9fafb;border-radius:8px;padding:14px">' + rows + '</table><div style="text-align:center;margin-top:20px"><a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold">View in Staff Portal</a></div></div></div></body></html>';
-        await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: worker.email, subject: 'Update: ' + (newData.name || oldEvent.name) + ' - ' + changedLabel + ' changed', html }) });
-      }
-    } catch (err) { console.error('Failed to send update emails:', err); }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -240,8 +217,6 @@ export default function EditEventModal({
         .eq('id', event.id);
       
       if (error) throw error;
-
-      await sendEventUpdatedEmails(event, formData);
 
       // Check if venue is already in the library
       const venueName = formData.venue?.trim();
@@ -414,49 +389,34 @@ export default function EditEventModal({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
-                    <div style={{position:'relative'}}>
-                      <Calendar size={16} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                      <input
-                        type="date"
-                        required
-                        value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value})}
-                        className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        style={{WebkitAppearance:'none',color:formData.date?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 32px',minHeight:'44px',fontSize:'16px'}}
-                        placeholder="Select date"
-                      />
-                    </div>
+                    <input
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                      <div style={{position:'relative'}}>
-                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                        <input
-                          type="time"
-                          required
-                          value={formData.time}
-                          onChange={(e) => setFormData({...formData, time: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
-                          placeholder="Select time"
-                        />
-                      </div>
+                      <input
+                        type="time"
+                        required
+                        value={formData.time}
+                        onChange={(e) => setFormData({...formData, time: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <div style={{position:'relative'}}>
-                        <Clock size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',pointerEvents:'none',zIndex:1}} />
-                        <input
-                          type="time"
-                          value={formData.end_time}
-                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                          style={{WebkitAppearance:'none',color:formData.end_time?'#111827':'#9ca3af',backgroundColor:'white',padding:'8px 12px 8px 30px',minHeight:'44px',fontSize:'16px'}}
-                          placeholder="Select time"
-                        />
-                      </div>
+                      <input
+                        type="time"
+                        value={formData.end_time}
+                        onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
                     </div>
                   </div>
                 </div>
@@ -667,6 +627,47 @@ export default function EditEventModal({
                 />
               </div>
 
+              {/* Meeting Point */}
+              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">📍 Meeting Point</p>
+                  <p className="text-xs text-blue-600 mt-0.5">For large venues or resorts — set the exact spot where workers should meet. This also sets the geo-fence center for check-in.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={formData.meeting_point_description}
+                    onChange={(e) => setFormData({...formData, meeting_point_description: e.target.value})}
+                    placeholder="e.g. Ballroom B entrance, north side of building"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Google Maps Link (optional)</label>
+                  <input
+                    type="url"
+                    value={formData.meeting_point_url}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      const match = url.match(/[/@](-?[0-9]+[.][0-9]+),(-?[0-9]+[.][0-9]+)/);
+                      if (match) {
+                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: parseFloat(match[1]), meeting_point_lng: parseFloat(match[2])});
+                      } else {
+                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: null, meeting_point_lng: null});
+                      }
+                    }}
+                    placeholder="Paste a Google Maps link..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                  />
+                  {formData.meeting_point_lat && formData.meeting_point_lng && (
+                    <p className="text-xs text-green-600 mt-1">✓ Coordinates extracted — geo-fence will center here</p>
+                  )}
+                  {formData.meeting_point_url && !formData.meeting_point_lat && (
+                    <p className="text-xs text-amber-600 mt-1">⚠ Could not extract coordinates — geo-fence will use venue address</p>
+                  )}
+                </div>
+              </div>
               {/* Invite Only Toggle */}
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div>
