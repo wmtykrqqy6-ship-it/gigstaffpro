@@ -104,59 +104,42 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       const workerRank = currentWorker.rank || 5;
       const accessDays = rankAccessDays[workerRank] || 14;
       
-      console.log('Worker:', currentWorker.name, 'Rank:', workerRank, 'Access Days:', accessDays);
-      console.log('Worker Skills:', currentWorker.skills);
-      
       return events
         .filter(event => {
-          console.log('--- Checking Event:', event.name);
           
-          // Must be future event
-          const eventDate = new Date(event.date);
-          eventDate.setHours(0, 0, 0, 0);
-          console.log('Event Date:', eventDate, 'Today:', today, 'Is Future:', eventDate >= today);
-          if (eventDate < today) {
-            console.log('❌ Event is in the past');
-            return false;
-          }
+          // Must be future or today event — use local date parse to avoid UTC offset bug
+          const [ey, em, ed] = (event.date || '').split('-').map(Number);
+          const eventDate = new Date(ey, em - 1, ed);
+          if (eventDate < today) return false;
           
           // Calculate days until event
           const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-          console.log('Days Until Event:', daysUntil, 'Access Window:', accessDays);
           
           // Check if within access window (Rank 1 with 0 days can see all future events)
           if (accessDays > 0 && daysUntil > accessDays) {
-            console.log('❌ Outside access window');
-            return false;
+              return false;
           }
           
           // Must have positions that match worker skills (using position keys)
           const eventPositions = Array.isArray(event.positions) ? event.positions : [];
-          console.log('Event Positions:', JSON.stringify(eventPositions));
-          console.log('Worker Skills:', JSON.stringify(currentWorker.skills));
           
           // Extract position keys from position objects
           const positionKeys = eventPositions.map(pos => 
             pos.key || getPositionKey(pos.name || pos)
           );
-          console.log('Position Keys:', JSON.stringify(positionKeys));
           
           const workerSkillKeys = currentWorker.skills || [];
           const hasMatchingSkill = positionKeys.some(posKey => 
             workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
           );
-          console.log('Has Matching Skill:', hasMatchingSkill);
           
           // DEBUG: Show which positions/skills are being compared
-          console.log('Comparison breakdown:');
           positionKeys.forEach(posKey => {
             const matches = workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
-            console.log(`  "${posKey}" matches worker skills? ${matches}`);
-          });
+            });
           
           if (!hasMatchingSkill) {
-            console.log('❌ No matching skills');
-            return false;
+              return false;
           }
           
           // Hide invite-only events unless worker is already assigned
@@ -165,8 +148,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               a.event_id === event.id && a.worker_id === currentWorker.id
             );
             if (!isAssigned) {
-              console.log('❌ Invite-only event, worker not assigned');
-              return false;
+                  return false;
             }
           }
 
@@ -177,11 +159,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             const status = a.status;
             return status === 'approved' || status === 'pending' || status === 'standby' || (!status);
           });
-          console.log('Already Assigned:', alreadyAssigned);
           
           if (alreadyAssigned) {
-            console.log('❌ Already assigned');
-            return false;
+              return false;
           }
           
           // Check for time conflicts with APPROVED assignments
@@ -210,14 +190,12 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               if (thisEnd && otherEnd) {
                 const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
                 if (hasOverlap) {
-                  console.log(`❌ Time conflict with ${otherEvent.name}`);
-                  return false; // Hide this event
+                          return false; // Hide this event
                 }
               }
             }
           }
           
-          console.log('✅ Event is available!');
           return true;
         })
         .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -256,7 +234,6 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                    aLabel === position;
           }).length;
 
-          console.log(`Position check: "${position}" | pKey: ${pKey} | approved: ${currentApproved} | max: ${maxCount}`);
 
           if (currentApproved >= maxCount) {
             const joinStandby = confirm(
@@ -344,7 +321,6 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             return;
           }
         } else {
-          console.log(`Position check: Could not find position def for "${position}" in`, event.positions);
         }
       }
 
@@ -564,18 +540,8 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   )}
                   {paymentTrackingEnabled && eventPaymentSettings[event.id] && (() => {
                     const settings = eventPaymentSettings[event.id];
-                    const { isLakeGeneva, isHoliday } = settings;
-                    // Calculate hours from live event time — reflects any time changes
-                    const calcEventHours = () => {
-                      if (!event.time || !event.end_time) return null;
-                      const [sh, sm] = event.time.split(':').map(Number);
-                      const [eh, em] = event.end_time.split(':').map(Number);
-                      let startMins = sh * 60 + sm;
-                      let endMins = eh * 60 + em;
-                      if (endMins <= startMins) endMins += 24 * 60; // midnight crossover
-                      return Math.round(((endMins - startMins) / 60) * 10) / 10;
-                    };
-                    const numHours = calcEventHours() ?? Number(settings.hours) ?? 0;
+                    const { hours, isLakeGeneva, isHoliday } = settings;
+                    const numHours = Number(hours) || 0;
                     if (!numHours) return null;
 
                     // Travel miles from worker's home location → event
