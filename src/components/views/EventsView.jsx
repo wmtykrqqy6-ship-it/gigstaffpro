@@ -295,6 +295,12 @@ export default function EventsView({
         )}
       </div>
 
+      {/* DEBUG - remove after testing */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="text-xs text-gray-400 p-2 bg-gray-50 rounded mb-2">
+          Debug: {events.length} total events, {scopedEvents.length} scoped, {filteredEvents?.length ?? '?'} filtered, {sortedEvents.length} sorted | statusFilter: {statusFilter} | dateRange: {dateRangeFilter} | location: {activeLocation}
+        </div>
+      )}
       {scopedEvents.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
