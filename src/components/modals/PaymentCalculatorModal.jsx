@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
@@ -33,36 +33,6 @@ export default function PaymentCalculatorModal({
   const assignedWorker = workers?.find(w => w.id === assignmentData?.workerId);
   const workerHomeLocation = locations.find(l => l.id === assignedWorker?.home_location_id) || null;
 
-  // Don't show payment modal if payment tracking is disabled
-  if (!paymentTrackingEnabled) {
-    if (open && assignmentData) {
-      // Just assign without payment calculation
-      const assignWithoutPayment = async () => {
-        try {
-          const { error } = await supabase
-            .from('assignments')
-            .insert([{
-              event_id: selectedEvent.id,
-              worker_id: assignmentData.workerId,
-              position: assignmentData.position,
-              status: 'approved'
-            }]);
-          
-          if (error) throw error;
-          
-          const worker = workers.find(w => w.id === assignmentData.workerId);
-          if (onSuccess) await onSuccess();
-          onClose();
-          alert(`${worker.name} assigned to ${assignmentData.position}`);
-        } catch (error) {
-          alert('Error creating assignment: ' + error.message);
-        }
-      };
-      assignWithoutPayment();
-    }
-    return null;
-  }
-
   // Detect Lake Geneva zip code (53147) from event address
   const isLakeGenevaZip = (address) => {
     if (!address) return false;
@@ -80,7 +50,55 @@ export default function PaymentCalculatorModal({
     return Math.round(((endMins - startMins) / 60) * 10) / 10;
   };
 
+  // Guards the no-payment auto-assign effect below against firing more than once for
+  // the same open assignment — see the effect's comment for the full explanation.
+  const hasAssignedWithoutPaymentRef = useRef(false);
+
+  // When payment tracking is disabled, assign the worker immediately with no payment
+  // calculation. Declared as a hook (not an early return) so every hook in this
+  // component always runs, in the same order, regardless of paymentTrackingEnabled.
+  // hasAssignedWithoutPaymentRef is set synchronously (before the async insert starts)
+  // so a second effect run — from a parent rerender, a changed selectedEvent/workers/
+  // onSuccess/onClose reference, or React StrictMode's dev-only double-invocation of
+  // effects — sees the guard already set and exits immediately instead of starting a
+  // second insert.
   useEffect(() => {
+    if (paymentTrackingEnabled || !open || !assignmentData) {
+      hasAssignedWithoutPaymentRef.current = false;
+      return;
+    }
+    if (hasAssignedWithoutPaymentRef.current) return;
+    hasAssignedWithoutPaymentRef.current = true;
+
+    const assignWithoutPayment = async () => {
+      try {
+        const { error } = await supabase
+          .from('assignments')
+          .insert([{
+            event_id: selectedEvent.id,
+            worker_id: assignmentData.workerId,
+            position: assignmentData.position,
+            status: 'approved'
+          }]);
+
+        if (error) throw error;
+
+        const worker = workers.find(w => w.id === assignmentData.workerId);
+        if (onSuccess) await onSuccess();
+        onClose();
+        alert(`${worker.name} assigned to ${assignmentData.position}`);
+      } catch (error) {
+        // Allow a retry: this specific attempt failed, so the guard should not
+        // permanently block a future attempt for this same assignment.
+        hasAssignedWithoutPaymentRef.current = false;
+        alert('Error creating assignment: ' + error.message);
+      }
+    };
+    assignWithoutPayment();
+  }, [paymentTrackingEnabled, open, assignmentData, selectedEvent, workers, onSuccess, onClose]);
+
+  useEffect(() => {
+    if (!paymentTrackingEnabled) return;
     if (assignmentData) {
       // Check if event has payment settings configured
       if (eventPaymentSettings[selectedEvent.id]) {
@@ -102,6 +120,7 @@ export default function PaymentCalculatorModal({
 
   // Auto-fetch miles: worker home location address → event address (fallback to warehouse)
   useEffect(() => {
+    if (!paymentTrackingEnabled) return;
     if (!open || !assignmentData || !selectedEvent) return;
     if (eventPaymentSettings[selectedEvent.id]?.miles > 0) return;
     const eventAddress = selectedEvent.address;
@@ -128,6 +147,7 @@ export default function PaymentCalculatorModal({
   }, [open, assignmentData, selectedEvent, workerHomeLocation, eventLocation]);
 
   useEffect(() => {
+    if (!paymentTrackingEnabled) return;
     if (assignmentData && hours > 0) {
       const calc = calculatePay(
         assignmentData.position,
@@ -249,7 +269,7 @@ export default function PaymentCalculatorModal({
     onClose();
   };
 
-  if (!open || !assignmentData) return null;
+  if (!open || !assignmentData || !paymentTrackingEnabled) return null;
 
   const worker = workers.find(w => w.id === assignmentData.workerId);
 
