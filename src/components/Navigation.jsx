@@ -7,7 +7,9 @@ import {
   FileText,
   DollarSign,
   Settings,
-  ClipboardList
+  ClipboardList,
+  MapPin,
+  ChevronDown
 } from 'lucide-react';
 
 export default function Navigation({
