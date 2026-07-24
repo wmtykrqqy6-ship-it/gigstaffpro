@@ -91,6 +91,7 @@ const GigStaffPro = () => {
 
   // Load workers from Supabase
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadWorkers();
     loadEvents();
     loadSettings();
@@ -101,7 +102,7 @@ const GigStaffPro = () => {
     loadTimeFormat();
     loadPendingReportsCount();
     loadLocations();
-  }, []);
+  }, [isAuthenticated]);
 
   const loadLocations = async () => {
     const { data } = await supabase
@@ -1157,6 +1158,17 @@ setAppPositions(storedPositions);
     setUserRole(null);
     setIsAuthenticated(false);
     setLoggedInWorker(null);
+    setWorkers([]);
+    setEvents([]);
+    setAssignments([]);
+    setPayRates({});
+    setBonuses({});
+    setTravelTiers([]);
+    setLocationPayRates({});
+    setEventPaymentSettings({});
+    setPositions([]);
+    setLocations([]);
+    setPendingReportsCount(0);
     sessionStorage.removeItem('userRole');
     sessionStorage.removeItem('userId');
     sessionStorage.removeItem('currentView');
