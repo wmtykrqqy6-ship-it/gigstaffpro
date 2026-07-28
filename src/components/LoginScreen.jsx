@@ -82,6 +82,46 @@ export default function LoginScreen({ onLogin }) {
     setLoading(true);
 
     try {
+      const isEmail = username.includes('@');
+
+      if (isEmail) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: username,
+          password,
+        });
+
+        if (authError || !authData?.user) {
+          setError('Invalid username or password.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const { data: adminProfile, error: profileError } = await supabase
+            .rpc('get_authenticated_admin_profile')
+            .single();
+
+          if (profileError || !adminProfile) {
+            await supabase.auth.signOut();
+            setError('Invalid username or password.');
+            setLoading(false);
+            return;
+          }
+
+          onLogin('admin', adminProfile);
+          setLoading(false);
+          return;
+        } catch (profileCatchError) {
+          // Sign-in succeeded but profile resolution threw (e.g. network
+          // failure) — never leave an unauthorized session active.
+          await supabase.auth.signOut();
+          setError('Invalid username or password.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Legacy flow — runs only when the entered value has no "@"
       const { data: admins, error: fetchError } = await supabase
         .from('admin_users')
         .select('*')
@@ -97,7 +137,7 @@ export default function LoginScreen({ onLogin }) {
 
       const admin = admins[0];
       const hashedPassword = await hashPin(password);
-      
+
       if (hashedPassword !== admin.password_hash) {
         setError('Invalid username or password.');
         setLoading(false);

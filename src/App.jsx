@@ -1154,29 +1154,85 @@ setAppPositions(storedPositions);
     sessionStorage.setItem('userId', user.id);
   };
 
-  const handleLogout = () => {
-    setUserRole(null);
-    setIsAuthenticated(false);
-    setLoggedInWorker(null);
-    setWorkers([]);
-    setEvents([]);
-    setAssignments([]);
-    setPayRates({});
-    setBonuses({});
-    setTravelTiers([]);
-    setLocationPayRates({});
-    setEventPaymentSettings({});
-    setPositions([]);
-    setLocations([]);
-    setPendingReportsCount(0);
-    sessionStorage.removeItem('userRole');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('currentView');
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      // Local logout must still complete even if the remote sign-out call
+      // fails — do not surface a technical error to the user.
+    } finally {
+      setUserRole(null);
+      setIsAuthenticated(false);
+      setLoggedInWorker(null);
+      setWorkers([]);
+      setEvents([]);
+      setAssignments([]);
+      setPayRates({});
+      setBonuses({});
+      setTravelTiers([]);
+      setLocationPayRates({});
+      setEventPaymentSettings({});
+      setPositions([]);
+      setLocations([]);
+      setPendingReportsCount(0);
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('userId');
+      sessionStorage.removeItem('currentView');
+    }
   };
 
   // Check for existing session on load
   useEffect(() => {
     const checkSession = async () => {
+      let session;
+      try {
+        const result = await supabase.auth.getSession();
+        session = result.data.session;
+      } catch (getSessionError) {
+        // Real Supabase session state is unknown — fail closed. Do not
+        // attempt legacy restore.
+        sessionStorage.removeItem('userRole');
+        sessionStorage.removeItem('userId');
+        sessionStorage.removeItem('currentView');
+        return;
+      }
+
+      if (session?.user) {
+        try {
+          const { data: adminProfile, error: profileError } = await supabase
+            .rpc('get_authenticated_admin_profile')
+            .single();
+
+          if (!profileError && adminProfile) {
+            setUserRole('admin');
+            setIsAuthenticated(true);
+            return;
+          }
+        } catch (profileCatchError) {
+          // Profile resolution threw (e.g. network failure) — treat the
+          // same as an unmapped session below; never fall through to
+          // legacy restore.
+        }
+
+        // Supabase session exists but does not map to an authorized admin,
+        // or profile resolution failed — terminal state. Never falls
+        // through to legacy restore.
+        try {
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          // Ignore — state is cleared unconditionally below regardless.
+        } finally {
+          setUserRole(null);
+          setIsAuthenticated(false);
+          setLoggedInWorker(null);
+          sessionStorage.removeItem('userRole');
+          sessionStorage.removeItem('userId');
+          sessionStorage.removeItem('currentView');
+        }
+        return;
+      }
+
+      // No Supabase session — legacy sessionStorage restore may run
       const storedRole = sessionStorage.getItem('userRole');
       const storedUserId = sessionStorage.getItem('userId');
 
