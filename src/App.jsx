@@ -79,6 +79,7 @@ const GigStaffPro = () => {
   const [timeFormat, setTimeFormat] = useState('12'); // '12' or '24' hour format
   const [workerTab, setWorkerTab] = useState('dashboard'); // 'dashboard' or 'profile'
   const [loggedInWorker, setLoggedInWorker] = useState(null); // Current logged in worker
+  const [workerAuthMode, setWorkerAuthMode] = useState(null); // null | 'legacy' | 'migrated'
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [selectedWorkerForPin, setSelectedWorkerForPin] = useState(null);
@@ -92,7 +93,18 @@ const GigStaffPro = () => {
   // Load workers from Supabase
   useEffect(() => {
     if (!isAuthenticated) return;
-    loadWorkers();
+
+    // A migrated worker must never receive the broad workers roster —
+    // only admins (full CRUD) and legacy workers (temporary, unchanged
+    // behavior) may load it. An unrecognized workerAuthMode fails closed
+    // rather than being treated as legacy.
+    const mayLoadWorkers =
+      userRole === 'admin' ||
+      (userRole === 'worker' && workerAuthMode === 'legacy');
+
+    if (mayLoadWorkers) {
+      loadWorkers();
+    }
     loadEvents();
     loadSettings();
     loadAssignments();
@@ -102,7 +114,7 @@ const GigStaffPro = () => {
     loadTimeFormat();
     loadPendingReportsCount();
     loadLocations();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userRole, workerAuthMode]);
 
   const loadLocations = async () => {
     const { data } = await supabase
@@ -765,22 +777,59 @@ setAppPositions(storedPositions);
 
   const reloadLoggedInWorker = async () => {
     if (!loggedInWorker?.id) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('workers')
-        .select('*')
-        .eq('id', loggedInWorker.id)
-        .single();
-      
-      if (error) throw error;
-      
-      if (data) {
+
+    if (userRole === 'worker' && workerAuthMode === 'migrated') {
+      // Migrated worker — narrow RPC only, never the workers table.
+      try {
+        const { data, error } = await supabase
+          .rpc('get_authenticated_worker_profile')
+          .maybeSingle();
+
+        if (error || !data) {
+          // Do not fall back to a direct workers query, and do not expose
+          // RPC error details — just fail silently, matching the existing
+          // failure behavior of this function (no sign-out on reload
+          // failure).
+          console.error('Error reloading worker profile.');
+          return;
+        }
+
         setLoggedInWorker(data);
+      } catch (rpcError) {
+        console.error('Error reloading worker profile.');
       }
-    } catch (error) {
-      console.error('Error reloading worker:', error);
+      return;
     }
+
+    if (userRole === 'worker' && workerAuthMode === 'legacy') {
+      // Legacy worker — existing direct query, unchanged.
+      try {
+        const { data, error } = await supabase
+          .from('workers')
+          .select('*')
+          .eq('id', loggedInWorker.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setLoggedInWorker(data);
+        }
+      } catch (error) {
+        console.error('Error reloading worker:', error);
+      }
+      return;
+    }
+
+    if (userRole === 'worker') {
+      // Worker role with a workerAuthMode that is neither 'legacy' nor
+      // 'migrated' — fail closed. Never query workers, never assume legacy.
+      console.error('Error reloading worker: unknown authentication mode.');
+    }
+
+    // Non-worker role (e.g. admin) — no worker lookup is introduced here;
+    // loggedInWorker is only ever populated for role === 'worker', so this
+    // path is unreachable in practice and intentionally does nothing.
   };
 
   const loadEvents = async () => {
@@ -1006,6 +1055,7 @@ setAppPositions(storedPositions);
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
+          workerAuthMode={workerAuthMode}
         />
       );
     }
@@ -1143,11 +1193,12 @@ setAppPositions(storedPositions);
     );
   };
 
-  const handleLogin = (role, user) => {
+  const handleLogin = (role, user, authMode = null) => {
     setUserRole(role);
     setIsAuthenticated(true);
     if (role === 'worker') {
       setLoggedInWorker(user);
+      setWorkerAuthMode(authMode || 'legacy');
     }
     // Store in sessionStorage to persist across page refreshes
     sessionStorage.setItem('userRole', role);
@@ -1164,6 +1215,7 @@ setAppPositions(storedPositions);
       setUserRole(null);
       setIsAuthenticated(false);
       setLoggedInWorker(null);
+      setWorkerAuthMode(null);
       setWorkers([]);
       setEvents([]);
       setAssignments([]);
@@ -1198,6 +1250,7 @@ setAppPositions(storedPositions);
       }
 
       if (session?.user) {
+        // Try admin first — exactly as before.
         try {
           const { data: adminProfile, error: profileError } = await supabase
             .rpc('get_authenticated_admin_profile')
@@ -1209,14 +1262,35 @@ setAppPositions(storedPositions);
             return;
           }
         } catch (profileCatchError) {
-          // Profile resolution threw (e.g. network failure) — treat the
-          // same as an unmapped session below; never fall through to
-          // legacy restore.
+          // Profile resolution threw (e.g. network failure) — not an
+          // admin session. Fall through to the worker check below rather
+          // than treating this as terminal.
         }
 
-        // Supabase session exists but does not map to an authorized admin,
-        // or profile resolution failed — terminal state. Never falls
-        // through to legacy restore.
+        // No admin profile found — not a terminal error. The session may
+        // still belong to a migrated worker; check before giving up.
+        try {
+          const { data: workerProfile, error: workerProfileError } = await supabase
+            .rpc('get_authenticated_worker_profile')
+            .maybeSingle();
+
+          if (!workerProfileError && workerProfile) {
+            setUserRole('worker');
+            setLoggedInWorker(workerProfile);
+            setWorkerAuthMode('migrated');
+            setIsAuthenticated(true);
+            sessionStorage.setItem('userRole', 'worker');
+            sessionStorage.setItem('userId', workerProfile.id);
+            return;
+          }
+        } catch (workerProfileCatchError) {
+          // Worker profile resolution threw — falls through to the
+          // terminal sign-out below, same as an admin resolution failure.
+        }
+
+        // Supabase session exists but maps to neither an authorized admin
+        // nor a migrated worker — terminal state. Never falls through to
+        // legacy restore.
         try {
           await supabase.auth.signOut();
         } catch (signOutError) {
@@ -1225,6 +1299,7 @@ setAppPositions(storedPositions);
           setUserRole(null);
           setIsAuthenticated(false);
           setLoggedInWorker(null);
+          setWorkerAuthMode(null);
           sessionStorage.removeItem('userRole');
           sessionStorage.removeItem('userId');
           sessionStorage.removeItem('currentView');
@@ -1246,6 +1321,7 @@ setAppPositions(storedPositions);
           if (data) {
             setLoggedInWorker(data);
             setUserRole('worker');
+            setWorkerAuthMode('legacy');
             setIsAuthenticated(true);
           }
         } else if (storedRole === 'admin') {

@@ -42,7 +42,8 @@ export default function WorkerPortalView({  loggedInWorker,
   getEffectiveRate,
   onReloadAssignments,
   onReloadWorker,
-  currentTab = 'dashboard'
+  currentTab = 'dashboard',
+  workerAuthMode
 }) {
     const currentWorker = loggedInWorker;
 
@@ -371,7 +372,7 @@ export default function WorkerPortalView({  loggedInWorker,
 
         {/* Tab Content */}
         {currentTab === 'profile' ? (
-          <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} assignments={assignments} events={events} />
+          <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} assignments={assignments} events={events} workerAuthMode={workerAuthMode} />
         ) : currentTab === 'history' ? (
           <HistoryView 
             worker={currentWorker}

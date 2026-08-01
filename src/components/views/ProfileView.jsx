@@ -3,7 +3,14 @@ import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Sa
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 
-export default function ProfileView({ worker, onProfileUpdate, assignments = [], events = [] }) {
+// workerAuthMode: accepted here for use in a later step (migration-aware
+// save/photo behavior) — not yet branched on.
+export default function ProfileView({ worker, onProfileUpdate, assignments = [], events = [], workerAuthMode }) {
+  // Only an exact 'migrated' match unlocks the narrow-RPC path — an
+  // unknown, missing, or otherwise invalid workerAuthMode always falls
+  // back to the existing legacy behavior below, never treated as migrated.
+  const isMigratedWorker = workerAuthMode === 'migrated';
+
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -380,17 +387,33 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('workers')
-        .update({
-          email: editData.email,
-          phone: editData.phone,
-          address: editData.address,
-          shirt_size: editData.shirt_size
-        })
-        .eq('id', worker.id);
+      if (isMigratedWorker) {
+        // Migrated worker — narrow RPC only. Identity is resolved
+        // server-side via auth.uid(), so no worker ID is sent. Only email
+        // and address are ever included; phone and shirt size are not
+        // editable through this path during the pilot.
+        const { error: rpcError } = await supabase.rpc('update_authenticated_worker_profile', {
+          p_email: editData.email,
+          p_address: editData.address,
+        });
 
-      if (error) throw error;
+        if (rpcError) {
+          // Do not surface raw Supabase/database error details.
+          throw new Error('Please try again.');
+        }
+      } else {
+        const { error } = await supabase
+          .from('workers')
+          .update({
+            email: editData.email,
+            phone: editData.phone,
+            address: editData.address,
+            shirt_size: editData.shirt_size
+          })
+          .eq('id', worker.id);
+
+        if (error) throw error;
+      }
 
       // Call parent callback to reload worker data
       if (onProfileUpdate) {
@@ -436,26 +459,31 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
                 )}
               </div>
               
-              {/* Upload Photo Button */}
-              <label 
-                htmlFor="photo-upload"
-                className="absolute bottom-0 right-0 bg-white text-red-900 rounded-full p-2 cursor-pointer hover:bg-gray-100 transition-colors shadow-lg"
-                title="Change profile photo"
-              >
-                {uploadingPhoto ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900"></div>
-                ) : (
-                  <Camera size={20} />
-                )}
-              </label>
-              <input
-                id="photo-upload"
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                disabled={uploadingPhoto}
-                className="hidden"
-              />
+              {/* Upload Photo Button — hidden entirely for migrated workers;
+                  handlePhotoUpload is not reachable without this control. */}
+              {!isMigratedWorker && (
+                <>
+                  <label
+                    htmlFor="photo-upload"
+                    className="absolute bottom-0 right-0 bg-white text-red-900 rounded-full p-2 cursor-pointer hover:bg-gray-100 transition-colors shadow-lg"
+                    title="Change profile photo"
+                  >
+                    {uploadingPhoto ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-900"></div>
+                    ) : (
+                      <Camera size={20} />
+                    )}
+                  </label>
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    disabled={uploadingPhoto}
+                    className="hidden"
+                  />
+                </>
+              )}
             </div>
             
             <div>
@@ -526,13 +554,26 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
               <span>Phone</span>
             </label>
             {isEditing ? (
-              <input
-                type="tel"
-                value={editData.phone}
-                onChange={(e) => setEditData({...editData, phone: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="(555) 123-4567"
-              />
+              isMigratedWorker ? (
+                <div>
+                  <input
+                    type="tel"
+                    value={editData.phone}
+                    disabled
+                    readOnly
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Contact an administrator to change your phone number.</p>
+                </div>
+              ) : (
+                <input
+                  type="tel"
+                  value={editData.phone}
+                  onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="(555) 123-4567"
+                />
+              )
             ) : (
               <p className="text-base text-gray-900 pl-6">{worker.phone}</p>
             )}
@@ -563,7 +604,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
               <Shirt size={16} className="text-gray-400" />
               <span>Shirt Size</span>
             </label>
-            {isEditing ? (
+            {isEditing && !isMigratedWorker ? (
               <select
                 value={editData.shirt_size}
                 onChange={(e) => setEditData({...editData, shirt_size: e.target.value})}

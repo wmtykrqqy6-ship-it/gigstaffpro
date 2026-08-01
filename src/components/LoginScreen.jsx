@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Settings, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { hashPin } from '../utils/authHelpers';
+import { normalizeUsPhoneToE164, deriveSyntheticWorkerEmail } from '../utils/workerAuth';
 import { UI } from '../constants';
 
 export default function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin', 'signup'
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState('');
+  // Migration-status lookup for the phone currently entered above.
+  // phase: 'unknown' | 'checking' | 'resolved' | 'error'
+  const [workerLoginStatus, setWorkerLoginStatus] = useState({
+    phase: 'unknown',
+    normalizedPhone: null,
+    migrated: null,
+  });
+  const workerLoginStatusRequestRef = useRef(0);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,14 +29,187 @@ export default function LoginScreen({ onLogin }) {
   const [signupPin, setSignupPin] = useState('');
   const [signupPinConfirm, setSignupPinConfirm] = useState('');
 
+  // Fully resets worker-login-specific state: phone, PIN, migration-status
+  // cache, and any in-flight status check. Used on every login-mode switch
+  // so a migration result (or PIN) from one visit to the worker form can
+  // never leak into or affect a later one.
+  const resetWorkerLoginState = () => {
+    workerLoginStatusRequestRef.current += 1; // invalidate any in-flight status check
+    setWorkerLoginStatus({ phase: 'unknown', normalizedPhone: null, migrated: null });
+    setPhoneNumber('');
+    setPin('');
+  };
+
+  const switchMode = (newMode) => {
+    resetWorkerLoginState();
+    setError('');
+    setMode(newMode);
+  };
+
+  // Checks migration status for the phone currently entered, caching the
+  // result against its normalized form. Triggered on phone-field blur only
+  // — never on every keystroke. Safe against duplicate in-flight requests
+  // and against a stale response arriving after the phone has changed
+  // again (guarded by workerLoginStatusRequestRef).
+  const checkWorkerMigrationStatus = async () => {
+    const normalizedPhone = normalizeUsPhoneToE164(phoneNumber);
+
+    if (!normalizedPhone) {
+      setWorkerLoginStatus({ phase: 'unknown', normalizedPhone: null, migrated: null });
+      return;
+    }
+
+    // Already resolved or already in flight for this exact phone — do not
+    // issue a duplicate request.
+    if (
+      (workerLoginStatus.phase === 'resolved' || workerLoginStatus.phase === 'checking') &&
+      workerLoginStatus.normalizedPhone === normalizedPhone
+    ) {
+      return;
+    }
+
+    const requestId = ++workerLoginStatusRequestRef.current;
+    setError('');
+    setWorkerLoginStatus({ phase: 'checking', normalizedPhone, migrated: null });
+
+    try {
+      const statusRes = await fetch('/api/worker-auth-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber }),
+      });
+
+      // A newer check superseded this one (phone changed again) — discard.
+      if (workerLoginStatusRequestRef.current !== requestId) return;
+
+      if (!statusRes.ok) {
+        setWorkerLoginStatus({ phase: 'error', normalizedPhone, migrated: null });
+        setError('Login temporarily unavailable. Please try again.');
+        return;
+      }
+
+      const statusResult = await statusRes.json();
+
+      if (workerLoginStatusRequestRef.current !== requestId) return;
+
+      if (typeof statusResult?.migrated !== 'boolean') {
+        setWorkerLoginStatus({ phase: 'error', normalizedPhone, migrated: null });
+        setError('Login temporarily unavailable. Please try again.');
+        return;
+      }
+
+      setWorkerLoginStatus({ phase: 'resolved', normalizedPhone, migrated: statusResult.migrated });
+
+      // Legacy resolves to a shorter maximum than the permissive default
+      // used while status was unknown/checking (6). Trim any already-typed
+      // overlength PIN so it isn't left invisibly too long to ever submit.
+      // Migrated resolves to the same 6-digit cap already in effect, so no
+      // equivalent trim is needed in that branch.
+      if (statusResult.migrated === false) {
+        setPin(prevPin => (prevPin.length > UI.PIN_LENGTH ? prevPin.slice(0, UI.PIN_LENGTH) : prevPin));
+      }
+    } catch (statusFetchError) {
+      if (workerLoginStatusRequestRef.current !== requestId) return;
+      setWorkerLoginStatus({ phase: 'error', normalizedPhone, migrated: null });
+      setError('Login temporarily unavailable. Please try again.');
+    }
+  };
+
+  // Phone field onChange — resets any resolved/in-flight migration status
+  // the moment the phone no longer matches what that status was checked
+  // against, so a stale result (or a stale PIN length) can never be reused
+  // under a different phone number.
+  const handlePhoneChange = (e) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhoneNumber(formatted);
+
+    const newNormalized = normalizeUsPhoneToE164(formatted);
+    if (workerLoginStatus.phase !== 'unknown' && newNormalized !== workerLoginStatus.normalizedPhone) {
+      workerLoginStatusRequestRef.current += 1; // invalidate any in-flight/stale check
+      setWorkerLoginStatus({ phase: 'unknown', normalizedPhone: null, migrated: null });
+      setPin('');
+      setError('');
+    }
+  };
+
   const handleWorkerLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
+      // Step 1: normalize the current phone.
+      const normalizedPhone = normalizeUsPhoneToE164(phoneNumber);
+
+      if (!normalizedPhone) {
+        setError('Please enter a valid phone number.');
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: require an already-resolved status for this exact phone.
+      // The status endpoint is never called from here — only from the
+      // phone-blur handler. A missing, stale, checking, or errored status
+      // stops submission before any Supabase Auth or workers-table access.
+      if (
+        workerLoginStatus.phase !== 'resolved' ||
+        workerLoginStatus.normalizedPhone !== normalizedPhone ||
+        typeof workerLoginStatus.migrated !== 'boolean'
+      ) {
+        setError('Login temporarily unavailable. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (workerLoginStatus.migrated === true) {
+        // Step 4: migrated-worker branch. Every failure path below
+        // terminates here — never falls through to the legacy query.
+        if (!/^\d{6}$/.test(pin)) {
+          setError('Incorrect PIN. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        const syntheticEmail = deriveSyntheticWorkerEmail(normalizedPhone);
+
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: syntheticEmail,
+          password: pin,
+        });
+
+        if (authError || !authData?.user) {
+          setError('Incorrect phone number or PIN. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const { data: workerProfile, error: profileError } = await supabase
+            .rpc('get_authenticated_worker_profile')
+            .maybeSingle();
+
+          if (profileError || !workerProfile) {
+            await supabase.auth.signOut();
+            setError('Login failed. Please try again.');
+            setLoading(false);
+            return;
+          }
+
+          onLogin('worker', workerProfile, 'migrated');
+          setLoading(false);
+          return;
+        } catch (profileCatchError) {
+          await supabase.auth.signOut();
+          setError('Login failed. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Step 5: migrated === false — existing legacy worker login flow,
+      // unchanged.
       const cleanPhone = phoneNumber.replace(/\D/g, '');
-      
+
       let { data: workers, error: fetchError } = await supabase
         .from('workers')
         .select('*')
@@ -61,7 +243,7 @@ export default function LoginScreen({ onLogin }) {
       }
 
       const hashedPin = await hashPin(pin);
-      
+
       if (hashedPin !== worker.pin_hash) {
         setError('Incorrect PIN. Please try again.');
         setLoading(false);
@@ -221,6 +403,20 @@ export default function LoginScreen({ onLogin }) {
     return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
   };
 
+  // Migrated workers use a permanent 6-digit PIN; legacy workers keep the
+  // existing UI.PIN_LENGTH. Before a status is resolved, the input stays
+  // permissive (6) so typing isn't cut short — the submit button, not the
+  // maxLength, is what actually gates submission in that case.
+  const workerPinMaxLength = (workerLoginStatus.phase === 'resolved' && workerLoginStatus.migrated === false)
+    ? UI.PIN_LENGTH
+    : 6;
+
+  const workerPinLengthValid = workerLoginStatus.phase === 'resolved'
+    ? (workerLoginStatus.migrated ? pin.length === 6 : pin.length === UI.PIN_LENGTH)
+    : false;
+
+  const canSubmitWorkerLogin = !loading && workerPinLengthValid;
+
   // ============================================
   // SELECT LOGIN TYPE SCREEN
   // ============================================
@@ -237,7 +433,7 @@ export default function LoginScreen({ onLogin }) {
             <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Select Login Type</h2>
             
             <button
-              onClick={() => { setMode('worker'); setError(''); }}
+              onClick={() => switchMode('worker')}
               className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 font-semibold text-lg flex items-center justify-center space-x-2"
             >
               <User size={24} />
@@ -245,7 +441,7 @@ export default function LoginScreen({ onLogin }) {
             </button>
 
             <button
-              onClick={() => { setMode('admin'); setError(''); }}
+              onClick={() => switchMode('admin')}
               className="w-full bg-red-900 text-white px-6 py-4 rounded-lg hover:bg-red-800 font-semibold text-lg flex items-center justify-center space-x-2"
             >
               <Settings size={24} />
@@ -254,7 +450,7 @@ export default function LoginScreen({ onLogin }) {
 
             <div className="pt-2 border-t border-gray-100 text-center">
               <button
-                onClick={() => { setMode('signup'); setError(''); }}
+                onClick={() => switchMode('signup')}
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center space-x-1 mx-auto"
               >
                 <UserPlus size={15} />
@@ -280,7 +476,7 @@ export default function LoginScreen({ onLogin }) {
           </div>
 
           <div className="bg-white rounded-lg shadow-xl p-8">
-            <button onClick={() => setMode('select')} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
+            <button onClick={() => switchMode('select')} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Worker Login</h2>
 
@@ -290,7 +486,8 @@ export default function LoginScreen({ onLogin }) {
                 <input
                   type="tel"
                   value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
+                  onChange={handlePhoneChange}
+                  onBlur={checkWorkerMigrationStatus}
                   placeholder="(555) 123-4567"
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -299,23 +496,26 @@ export default function LoginScreen({ onLogin }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">PIN (4 digits)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">PIN</label>
                 <input
                   type="password"
                   value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, UI.PIN_LENGTH))}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, workerPinMaxLength))}
                   placeholder="••••"
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-2xl tracking-widest"
-                  maxLength={UI.PIN_LENGTH}
+                  maxLength={workerPinMaxLength}
                 />
+                {workerLoginStatus.phase === 'checking' && (
+                  <p className="mt-1 text-xs text-gray-500">Checking login information…</p>
+                )}
               </div>
 
               {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
               <button
                 type="submit"
-                disabled={loading || pin.length !== UI.PIN_LENGTH}
+                disabled={!canSubmitWorkerLogin}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
               >
                 {loading ? 'Logging in...' : 'Login'}
@@ -324,7 +524,7 @@ export default function LoginScreen({ onLogin }) {
 
             <div className="mt-4 text-center space-y-2">
               <p className="text-xs text-gray-500">Forgot your PIN? Contact your manager.</p>
-              <button onClick={() => { setMode('signup'); setError(''); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center space-x-1 mx-auto">
+              <button onClick={() => switchMode('signup')} className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center space-x-1 mx-auto">
                 <UserPlus size={14} />
                 <span>New worker? Sign up here</span>
               </button>
@@ -348,7 +548,7 @@ export default function LoginScreen({ onLogin }) {
           </div>
 
           <div className="bg-white rounded-lg shadow-xl p-8">
-            <button onClick={() => { setMode('select'); setError(''); }} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
+            <button onClick={() => switchMode('select')} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Worker Sign Up</h2>
             <p className="text-sm text-gray-500 mb-6">Create your account to view events and manage your schedule.</p>
@@ -427,7 +627,7 @@ export default function LoginScreen({ onLogin }) {
               </button>
             </form>
 
-            <p className="text-xs text-gray-400 mt-4 text-center">Already have an account? <button onClick={() => { setMode('worker'); setError(''); }} className="text-blue-600 hover:underline">Log in here</button></p>
+            <p className="text-xs text-gray-400 mt-4 text-center">Already have an account? <button onClick={() => switchMode('worker')} className="text-blue-600 hover:underline">Log in here</button></p>
           </div>
         </div>
       </div>
@@ -447,7 +647,7 @@ export default function LoginScreen({ onLogin }) {
           </div>
 
           <div className="bg-white rounded-lg shadow-xl p-8">
-            <button onClick={() => setMode('select')} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
+            <button onClick={() => switchMode('select')} className="text-sm text-gray-600 hover:text-gray-900 mb-4">← Back</button>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Admin Login</h2>
 
