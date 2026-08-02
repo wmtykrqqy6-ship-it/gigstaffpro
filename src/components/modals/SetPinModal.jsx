@@ -441,7 +441,7 @@ export default function SetPinModal({
               type={migrationStatus === 'migrated' || isMigrateAction ? 'password' : 'text'}
               value={newPin}
               onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, pinLength))}
-              placeholder="••••"
+              placeholder={'•'.repeat(pinLength)}
               required
               maxLength={pinLength}
               disabled={!statusKnown}
