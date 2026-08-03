@@ -83,6 +83,7 @@ const GigStaffPro = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [selectedWorkerForPin, setSelectedWorkerForPin] = useState(null);
+  const [adminAuthMessage, setAdminAuthMessage] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedEventForInvite, setSelectedEventForInvite] = useState(null);
   const [locations, setLocations] = useState([]);
@@ -1194,6 +1195,7 @@ setAppPositions(storedPositions);
   };
 
   const handleLogin = (role, user, authMode = null) => {
+    setAdminAuthMessage(null);
     setUserRole(role);
     setIsAuthenticated(true);
     if (role === 'worker') {
@@ -1230,6 +1232,42 @@ setAppPositions(storedPositions);
       sessionStorage.removeItem('userRole');
       sessionStorage.removeItem('userId');
       sessionStorage.removeItem('currentView');
+    }
+  };
+
+  // Centralized handler for a protected admin action discovering that the
+  // Supabase session is missing or rejected (401) — distinct from a normal,
+  // user-triggered handleLogout: this one also resets the Set PIN modal and
+  // sets a transient message for the login screen to display. Neither
+  // function calls the other, so normal logout can never show this message
+  // and this handler never produces the plain, message-free logout UX.
+  const handleAdminSessionExpired = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      // Best-effort sign-out. Local cleanup must still run.
+    } finally {
+      setUserRole(null);
+      setIsAuthenticated(false);
+      setLoggedInWorker(null);
+      setWorkerAuthMode(null);
+      setWorkers([]);
+      setEvents([]);
+      setAssignments([]);
+      setPayRates({});
+      setBonuses({});
+      setTravelTiers([]);
+      setLocationPayRates({});
+      setEventPaymentSettings({});
+      setPositions([]);
+      setLocations([]);
+      setPendingReportsCount(0);
+      setShowSetPinModal(false);
+      setSelectedWorkerForPin(null);
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('userId');
+      sessionStorage.removeItem('currentView');
+      setAdminAuthMessage('Your admin session has expired. Please log in again.');
     }
   };
 
@@ -1339,7 +1377,7 @@ setAppPositions(storedPositions);
 
   // Show login screen if not authenticated
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} authMessage={adminAuthMessage} />;
   }
 
   return (
@@ -1412,6 +1450,7 @@ setAppPositions(storedPositions);
           setSelectedWorkerForPin(null);
         }}
         onSuccess={loadWorkers}
+        onSessionExpired={handleAdminSessionExpired}
       />
       <EditWorkerModal
         open={showEditWorker}

@@ -56,7 +56,8 @@ export default function SetPinModal({
   open,
   worker,
   onClose,
-  onSuccess
+  onSuccess,
+  onSessionExpired
 }) {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -186,7 +187,8 @@ export default function SetPinModal({
         const token = sessionData?.session?.access_token;
 
         if (sessionError || !token) {
-          throw new Error('Your admin session has expired. Please log in again.');
+          await onSessionExpired();
+          return;
         }
 
         const res = await fetch('/api/admin-set-worker-pin', {
@@ -197,6 +199,11 @@ export default function SetPinModal({
           },
           body: JSON.stringify({ workerId: worker.id, pin: newPin }),
         });
+
+        if (res.status === 401) {
+          await onSessionExpired();
+          return;
+        }
 
         const result = await res.json().catch(() => null);
 
@@ -236,7 +243,8 @@ export default function SetPinModal({
         const token = sessionData?.session?.access_token;
 
         if (sessionError || !token) {
-          throw new Error('Your admin session has expired. Please log in again.');
+          await onSessionExpired();
+          return;
         }
 
         const res = await fetch('/api/admin-set-worker-pin', {
@@ -247,6 +255,11 @@ export default function SetPinModal({
           },
           body: JSON.stringify({ workerId: worker.id, pin: newPin }),
         });
+
+        if (res.status === 401) {
+          await onSessionExpired();
+          return;
+        }
 
         const result = await res.json().catch(() => null);
 

@@ -5,7 +5,7 @@ import { hashPin } from '../utils/authHelpers';
 import { normalizeUsPhoneToE164, deriveSyntheticWorkerEmail } from '../utils/workerAuth';
 import { UI } from '../constants';
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, authMessage }) {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin', 'signup'
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState('');
@@ -20,7 +20,7 @@ export default function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => authMessage || '');
 
   // Signup form state
   const [signupName, setSignupName] = useState('');
