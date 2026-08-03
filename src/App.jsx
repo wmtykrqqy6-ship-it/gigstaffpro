@@ -1325,8 +1325,12 @@ setAppPositions(storedPositions);
             setIsAuthenticated(true);
           }
         } else if (storedRole === 'admin') {
-          setUserRole('admin');
-          setIsAuthenticated(true);
+          // No live Supabase session — this stale marker can never be
+          // restored from (see the removed branch above). Clear it so it
+          // doesn't linger and get re-read on every future load.
+          sessionStorage.removeItem('userRole');
+          sessionStorage.removeItem('userId');
+          sessionStorage.removeItem('currentView');
         }
       }
     };
