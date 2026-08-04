@@ -20,7 +20,7 @@ export default function LoginScreen({ onLogin, authMessage }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(() => authMessage || '');
+  const [error, setError] = useState('');
 
   // Signup form state
   const [signupName, setSignupName] = useState('');
@@ -410,7 +410,13 @@ export default function LoginScreen({ onLogin, authMessage }) {
 
           <div className="bg-white rounded-lg shadow-xl p-8 space-y-4">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Select Login Type</h2>
-            
+
+            {authMessage && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {authMessage}
+              </div>
+            )}
+
             <button
               onClick={() => switchMode('worker')}
               className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 font-semibold text-lg flex items-center justify-center space-x-2"
