@@ -59,13 +59,44 @@
 
 ## 5. Authentication & Roles
 
-This is a **fully custom, non-Supabase-Auth** authentication system:
+Admin authentication was migrated to Supabase Auth in Phase C (development branch only — see Production note below). Worker authentication remains a separate, only-partially-migrated system. The two are documented independently below.
 
-- **Admin**: `admin_users` table, username + password. Password checked via SHA-256 digest (Web Crypto `hashPin` in `utils/authHelpers.js` — no salt, no bcrypt/argon2) compared against a stored `password_hash`.
-- **Worker**: `workers` table, phone number + 4-digit PIN, same unsalted SHA-256 hashing against `pin_hash`.
-- Both flows `SELECT * FROM admin_users/workers WHERE ...` **directly from the browser using the anon key**, then compare hashes client-side.
-- Session state (`role`, `userId`) is kept in `sessionStorage` only — re-validated on load by re-querying Supabase, with no server-issued/verified session token.
-- A `rank` field (1–5) on workers drives progressive event-visibility windows (`RANK_ACCESS_DAYS`), and this field is writable directly from the admin client with no visible server-side authorization gate.
+### 5.1 Admin login (current, post-Phase C)
+
+- Supabase Auth email/password is the **only** admin login path (`LoginScreen.jsx handleAdminLogin`). A bare, non-email username (e.g. `admin`) is rejected before any Supabase call is made.
+- The former client-side login — querying `admin_users` and comparing an unsalted SHA-256 `password_hash` in the browser — has been removed entirely. `admin_users.password_hash` is no longer read or compared anywhere in the frontend.
+- A successful login requires, in order: `supabase.auth.signInWithPassword`, then a successful `get_authenticated_admin_profile()` RPC call resolving a real admin profile. Dashboard access (`isAuthenticated`/`userRole`) is granted only after both succeed; a sign-in that succeeds but fails profile resolution is signed back out immediately.
+
+### 5.2 Backend admin authorization
+
+- Protected admin routes verify the caller through `api/_lib/verifyAdmin.js` (`verifyAdminRequest`): extracts the Bearer token, revalidates it against the Supabase Auth server (`supabaseAdmin.auth.getUser(token)` — not the local/cached `getSession()`), then resolves the Supabase Auth user through `admin_auth_links` to a linked `admin_users` record (explicit column allow-list — `id, username` only, never `password_hash`).
+- This bearer-token verification currently gates `api/admin-set-worker-pin.js`. **It does not gate every admin-facing endpoint** — see Open Items below.
+
+### 5.3 Session restoration
+
+- `App.jsx checkSession()` restores admin access only through a real Supabase session whose `get_authenticated_admin_profile()` call succeeds.
+- `sessionStorage` alone can no longer restore admin access. A stale `sessionStorage` admin marker found with no live Supabase session is detected and cleared, not trusted.
+
+### 5.4 Logout and session expiration
+
+- Normal admin logout (`handleLogout`) signs out of Supabase and clears local authentication and application state.
+- A separate, centralized handler (`handleAdminSessionExpired`) fires when a protected action finds no session/token, or the backend returns HTTP 401. It performs the same cleanup, additionally resets the Set PIN modal state, and returns the admin to the login screen showing exactly: `Your admin session has expired. Please log in again.`
+- HTTP 403, HTTP 500, validation failures, and network failures do **not** trigger this forced-logout flow — they surface a generic, non-specific in-modal error instead, without forcing the admin out of the dashboard.
+
+### 5.5 Worker authentication (unchanged by Phase C — documented for contrast)
+
+- Workers are migrated individually, not all at once. Migrated workers authenticate via Supabase Auth using a synthetic email derived from their phone number, plus a permanent 6-digit PIN (`worker_auth_links` table).
+- Non-migrated workers still use the original legacy flow during the pilot period: phone number + 4-digit PIN, checked via unsalted SHA-256 against `workers.pin_hash`, compared client-side against a direct anon-key `SELECT` from `workers`.
+- This legacy worker flow is a separate system from the removed legacy admin login and was intentionally left untouched — Phase C was scoped to admin authentication only.
+- A `rank` field (1–5) on workers drives progressive event-visibility windows (`RANK_ACCESS_DAYS`) and remains writable directly from the admin client with no visible server-side authorization gate — unaffected by Phase C.
+
+### 5.6 Open items (not addressed by Phase C)
+
+- `api/send-email.js` has no `verifyAdminRequest` (or any) bearer-token check, despite being called only from admin-only UI (`ApplicationsView.jsx`, `BulkInviteModal.jsx`, `InviteWorkersModal.jsx`).
+- Most admin dashboard writes (workers, events, pay settings, etc.) go directly from the browser to Supabase via the anon key, with no backend authorization gate at all — their protection, if any, depends entirely on RLS.
+- RLS policies are not tracked anywhere in this repo and have not received a dedicated verification pass (see §8, item 2).
+- Preview and Production may currently point at the same Supabase project: `src/supabaseClient.js` hardcodes fallback literals for `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, so any Vercel environment missing one of those variables silently falls back to the same project used everywhere else in this repo (see §8, item 1).
+- **Production has not received any Phase C change.** `main`/`origin/main` remain untouched by this work; the legacy admin login, the unverified `sessionStorage` admin restoration, and pre-Phase-C session behavior are all still live in Production until this branch is explicitly merged and deployed.
 
 ---
 
@@ -104,8 +135,8 @@ This is a **fully custom, non-Supabase-Auth** authentication system:
 ### Security concerns (ranked by severity)
 
 1. **Hardcoded live Supabase project URL + anon key** appear as fallback literals directly in source across **6 files**: `src/supabaseClient.js`, `api/invite-respond.js`, `api/calendar-event.js`, `api/send-reminders.js`, `api/send-shift-reminders.js`, `api/send-availability-notifications.js`. These should be sourced exclusively from environment variables — the key is already committed to git history regardless of what `.env` currently holds, so it should be treated as already public and ideally rotated.
-2. **No RLS policies are visible in the repo** (no migrations tracked at all), yet the app's own client code directly `SELECT`s from `admin_users`/`workers` with the anon key and reads `password_hash`/`pin_hash` client-side to compare against a locally computed hash. Unless RLS on the live database explicitly blocks anon `SELECT` on those columns (unverifiable from this repo), anyone holding the anon key (trivially extracted from the deployed JS bundle) could dump all password/PIN hashes directly via the Supabase REST API.
-3. **Weak hashing**: unsalted SHA-256 for both admin passwords and 4-digit worker PINs. A 4-digit PIN space (10,000 values) is trivially brute-forced offline if hashes are ever exposed, which risk #2 makes plausible.
+2. **No RLS policies are visible in the repo** (no migrations tracked at all). Post-Phase C, admin login no longer reads `admin_users.password_hash` client-side — the only read of `admin_users` is a backend, service-role query in `verifyAdminRequest` using an explicit safe-column allow-list (`id, username`, never `password_hash`). This risk remains fully live for **workers**: the legacy (non-migrated) worker login still directly `SELECT`s from `workers` with the anon key and reads `pin_hash` client-side to compare against a locally computed hash. Unless RLS on the live database explicitly blocks anon `SELECT` on that column (unverifiable from this repo), anyone holding the anon key (trivially extracted from the deployed JS bundle) could dump all worker PIN hashes directly via the Supabase REST API.
+3. **Weak hashing**: unsalted SHA-256 for 4-digit worker PINs (`workers.pin_hash`, legacy/non-migrated workers only — migrated workers authenticate through Supabase Auth instead). A 4-digit PIN space (10,000 values) is trivially brute-forced offline if hashes are ever exposed, which risk #2 makes plausible. Admin passwords are no longer hashed or compared client-side as of Phase C — see §5.
 4. **Client-side writes to sensitive fields with no server-side check**: `EditWorkerModal.jsx`/`AddWorkerModal.jsx` write `workers.rank` directly, and `ReportsView.jsx` writes `workers.reliability` directly — both fields drive access windows and trust signals elsewhere, so a modified/compromised client session could self-promote or fabricate ratings absent RLS/RPC enforcement.
 5. **Unauthenticated public endpoints**: `api/send-shift-reminders.js`, `api/send-availability-notifications.js`, `api/invite-respond.js`, `api/calendar-event.js` have no shared-secret or auth-header check — anyone who discovers the URL can invoke them (partially mitigated by dedup logic, but there's no rate limiting or token gating on the trigger itself).
 6. `.env` is correctly gitignored and **not** tracked in git — good practice already in place. It currently holds only a Google Places browser key (`VITE_GOOGLE_PLACES_KEY`), which is inherently public once bundled — worth confirming it's HTTP-referrer-restricted in Google Cloud Console, but that's outside what this repo can show.
@@ -145,6 +176,6 @@ Confirmed: current branch is `development/claude-code`, up to date with `origin/
 
 1. **Get Supabase credentials out of source and lock down data access.** Remove the hardcoded URL/key fallbacks from all 6 files, rotate the anon key, bring RLS policies and schema into version-controlled migrations, and verify the anon role cannot read `password_hash`/`pin_hash` or write `rank`/`reliability` directly.
 2. **Fix the live crash bugs before anything else ships**: `Navigation.jsx`'s missing icon imports (breaks with 2+ locations), `PaymentCalculatorModal.jsx`'s hook-order violation, and the unguarded `reliability.toFixed()` call.
-3. **Replace the homegrown auth scheme.** Move to Supabase Auth or, at minimum, salted bcrypt/argon2 behind a server-side RPC — current unsalted SHA-256 (especially for 4-digit PINs) is not defensible once combined with the RLS gap above.
+3. **Replace the remaining homegrown auth scheme.** Admin authentication now runs on Supabase Auth (Phase C — see §5), on the `development/claude-code` branch only. The legacy worker PIN scheme (unsalted SHA-256, non-migrated workers) still needs the same treatment: either complete the phone/PIN-to-Supabase-Auth migration for all workers, or move remaining legacy PINs to a salted hash behind a server-side RPC. Phase C also still needs to reach Production via merge/deploy.
 4. **De-duplicate the highest-drift-risk logic** — `getPayRateKey` (5+ copies), the `AddEventModal`/`EditEventModal` pair, and the branded email template — before adding new features on top of them, since bugs fixed in one copy silently persist in the others.
 5. **Stand up a minimal safety net**: no tests, no lint, no CI check on the build currently exist, so every change is unverified until a human manually clicks through the app. Even a smoke-test build step in CI plus basic lint would catch bugs like #2 automatically going forward.
