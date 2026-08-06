@@ -36,7 +36,7 @@ const getPayRateKey = (position) => {
   return p.replace(/\s+/g, '_');
 };
 
-export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments, defaultPosition = null }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments, defaultPosition = null, onSessionExpired }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -238,6 +238,16 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       expiresAt.setHours(expiresAt.getHours() + windowHours);
       const expiresStr = expiresAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+      // Obtained once for the whole batch — every email in this send reuses
+      // the same accessToken rather than re-checking the session per worker.
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        await onSessionExpired();
+        return;
+      }
+
       const emailPromises = confirmSend.workerIds.map(async workerId => {
         const worker = workers.find(w => w.id === workerId);
         if (!worker?.email) return null;
@@ -325,18 +335,31 @@ ${invitePayHtml}
 <p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
 </div></div></body></html>`;
 
-        return fetch('/api/send-email', {
+        const emailRes = await fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             to: worker.email,
             subject: `You're invited: ${event.name}`,
             html
           })
         });
+
+        return { sessionExpired: emailRes.status === 401 };
       }).filter(Boolean);
 
-      await Promise.allSettled(emailPromises);
+      const emailResults = await Promise.allSettled(emailPromises);
+      const batchSessionExpired = emailResults.some(
+        result => result.status === 'fulfilled' && result.value?.sessionExpired === true
+      );
+
+      if (batchSessionExpired) {
+        await onSessionExpired();
+        return;
+      }
 
       setSelectedWorkers(new Set());
       setConfirmSend(null);
@@ -440,11 +463,27 @@ ${riDetailsHtml}
 ${reInvitePayHtml}
 <p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
 </div></div></body></html>`;
-        await fetch('/api/send-email', {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+
+        if (sessionError || !accessToken) {
+          await onSessionExpired();
+          return;
+        }
+
+        const emailRes = await fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({ to: worker.email, subject: `Re-invite: ${event.name}`, html })
         });
+
+        if (emailRes.status === 401) {
+          await onSessionExpired();
+          return;
+        }
       }
 
       await loadInvitations();
@@ -489,15 +528,31 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
 <p class="ft">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
 </div></div></body></html>`;
 
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (sessionError || !token) {
+        await onSessionExpired();
+        return;
+      }
+
       const emailRes = await fetch('/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           to: worker.email,
           subject: `⏰ Reminder: Please respond to your ${event.name} invite`,
           html
         })
       });
+
+      if (emailRes.status === 401) {
+        await onSessionExpired();
+        return;
+      }
 
       if (emailRes.ok) {
         // Stamp reminder_sent_at so auto-cron won't double-send

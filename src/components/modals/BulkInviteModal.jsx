@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Copy, Check, Clock } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
-export default function BulkInviteModal({ open, onClose }) {
+export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [note, setNote] = useState('');
@@ -52,17 +52,40 @@ export default function BulkInviteModal({ open, onClose }) {
         </div>
       </div>
     `;
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    if (sessionError || !token) {
+      await onSessionExpired();
+      const sessionExpiredError = new Error('Session expired');
+      sessionExpiredError.sessionExpired = true;
+      throw sessionExpiredError;
+    }
+
     const res = await fetch('/api/send-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         to: toEmail,
         subject: 'You\'re invited to join the Vegas on Wheels staff portal',
         html
       })
     });
+
+    if (res.status === 401) {
+      await onSessionExpired();
+      const sessionExpiredError = new Error('Session expired');
+      sessionExpiredError.sessionExpired = true;
+      throw sessionExpiredError;
+    }
+
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Failed to send email');
+    // Never surface backend/provider-supplied text — status codes and
+    // internal outcomes must not reach the UI.
+    if (!data.success) throw new Error('Failed to send email');
   };
 
   const handleSend = async () => {
@@ -84,7 +107,11 @@ export default function BulkInviteModal({ open, onClose }) {
           await sendInviteEmail(contact.trim(), name.trim());
           alert(`✓ Invite logged and email sent to ${contact.trim()}!`);
         } catch (emailErr) {
-          alert(`✓ Invite logged, but email failed: ${emailErr.message}\n\nShare the link manually: ${PORTAL_URL}`);
+          // A session-expiry redirect is already in progress — the
+          // App-level flow shows its own message, so don't also alert here.
+          if (!emailErr.sessionExpired) {
+            alert(`✓ Invite logged, but email failed: ${emailErr.message}\n\nShare the link manually: ${PORTAL_URL}`);
+          }
         }
       }
 

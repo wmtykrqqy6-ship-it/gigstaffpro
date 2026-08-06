@@ -9,7 +9,8 @@ export default function ApplicationsView({
   workers,
   events,
   timeFormat,
-  onReloadAssignments
+  onReloadAssignments,
+  onSessionExpired
 }) {
   const [filter, setFilter] = useState('pending'); // 'all', 'pending', 'approved', 'rejected'
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,11 +75,27 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
 <p class="ft">View your schedule in the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
 </div></div></body></html>`;
 
-      await fetch('/api/send-email', {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (sessionError || !token) {
+        await onSessionExpired();
+        return;
+      }
+
+      const res = await fetch('/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ to: worker.email, subject: `✅ Confirmed: ${event.name}`, html })
       });
+
+      if (res.status === 401) {
+        await onSessionExpired();
+        return;
+      }
     } catch (_) {
       // Non-critical — approval already saved
     }

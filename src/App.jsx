@@ -1151,6 +1151,7 @@ setAppPositions(storedPositions);
           events={events}
           timeFormat={timeFormat}
           onReloadAssignments={loadAssignments}
+          onSessionExpired={handleAdminSessionExpired}
         />
       );
     }
@@ -1427,6 +1428,7 @@ setAppPositions(storedPositions);
         getEffectiveRate={getEffectiveRate}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={loadAssignments}
+        onSessionExpired={handleAdminSessionExpired}
       />
      <AddWorkerModal
   open={showAddWorker}
@@ -1441,6 +1443,7 @@ setAppPositions(storedPositions);
         positions={positions}
         onClose={() => setShowBulkInvite(false)}
         onSuccess={null}
+        onSessionExpired={handleAdminSessionExpired}
       />
       <SetPinModal
         open={showSetPinModal}

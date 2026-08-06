@@ -1,9 +1,17 @@
 // api/send-email.js
 // Vercel serverless function to send emails using Resend
+// Admin-only: every call must carry a valid Supabase Auth admin bearer token.
+
+import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const adminCheck = await verifyAdminRequest(req);
+  if (!adminCheck.ok) {
+    return res.status(adminCheck.status).json({ error: adminCheck.error });
   }
 
   const apiKey = process.env.RESEND_API_KEY;
