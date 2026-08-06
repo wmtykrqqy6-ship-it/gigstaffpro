@@ -4,6 +4,23 @@
 
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '256kb',
+    },
+  },
+};
+
+// Mirrors src/constants.js's UI.EMAIL_REGEX — kept as an independent copy
+// here since api/ functions are separate Vercel functions, not bundled
+// through Vite, matching the existing api/_lib/workerAuth.js convention.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const MAX_RECIPIENT_LENGTH = 254;
+const MAX_SUBJECT_LENGTH = 300;
+const MAX_HTML_LENGTH = 200000;
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -14,15 +31,64 @@ export default async function handler(req, res) {
     return res.status(adminCheck.status).json({ error: adminCheck.error });
   }
 
+  const body = req.body;
+
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid email request',
+    });
+  }
+
+  const { to, subject, html } = body;
+
+  const trimmedTo = typeof to === 'string' ? to.trim() : '';
+  const recipientInvalid =
+    typeof to !== 'string' ||
+    trimmedTo.length === 0 ||
+    trimmedTo.length > MAX_RECIPIENT_LENGTH ||
+    /[\r\n]/.test(trimmedTo) ||
+    trimmedTo.includes(',') ||
+    trimmedTo.includes(';') ||
+    !EMAIL_REGEX.test(trimmedTo);
+
+  if (recipientInvalid) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid recipient email address',
+    });
+  }
+
+  const trimmedSubject = typeof subject === 'string' ? subject.trim() : '';
+  const subjectInvalid =
+    typeof subject !== 'string' ||
+    trimmedSubject.length === 0 ||
+    trimmedSubject.length > MAX_SUBJECT_LENGTH ||
+    /[\r\n]/.test(trimmedSubject);
+
+  if (subjectInvalid) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid email subject',
+    });
+  }
+
+  const htmlInvalid =
+    typeof html !== 'string' ||
+    html.trim().length === 0 ||
+    html.length > MAX_HTML_LENGTH ||
+    /<script\b/i.test(html);
+
+  if (htmlInvalid) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid email content',
+    });
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'Email service not configured' });
-  }
-
-  const { to, subject, html } = req.body;
-
-  if (!to || !subject || !html) {
-    return res.status(400).json({ error: 'Missing required parameters' });
   }
 
   try {
@@ -34,8 +100,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: 'Vegas on Wheels <noreply@gigstaffpro.com>',
-        to: [to],
-        subject,
+        to: [trimmedTo],
+        subject: trimmedSubject,
         html
       })
     });
