@@ -248,9 +248,9 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         return;
       }
 
-      const emailPromises = confirmSend.workerIds.map(async workerId => {
+      const sendInviteEmailToWorker = async workerId => {
         const worker = workers.find(w => w.id === workerId);
-        if (!worker?.email) return null;
+        if (!worker?.email) return { outcome: 'skipped' };
 
         // Fetch the token for this worker's invite
         const { data: inviteRows } = await supabase
@@ -348,13 +348,36 @@ ${invitePayHtml}
           })
         });
 
-        return { sessionExpired: emailRes.status === 401 };
-      }).filter(Boolean);
+        if (emailRes.status === 401) return { outcome: 'sessionExpired' };
+        return { outcome: emailRes.ok ? 'sent' : 'failed' };
+      };
 
-      const emailResults = await Promise.allSettled(emailPromises);
-      const batchSessionExpired = emailResults.some(
-        result => result.status === 'fulfilled' && result.value?.sessionExpired === true
-      );
+      // Send in fixed-size chunks (max 10 concurrent at a time) instead of
+      // all at once, so a large invite batch doesn't fire every request in
+      // the same instant. The next chunk only starts after the previous one
+      // has fully settled, and a 401 in any chunk halts the batch immediately.
+      const CHUNK_SIZE = 10;
+      let sentCount = 0;
+      let skippedCount = 0;
+      let failedCount = 0;
+      let batchSessionExpired = false;
+
+      for (let i = 0; i < confirmSend.workerIds.length; i += CHUNK_SIZE) {
+        const chunk = confirmSend.workerIds.slice(i, i + CHUNK_SIZE);
+        const chunkResults = await Promise.allSettled(chunk.map(sendInviteEmailToWorker));
+
+        batchSessionExpired = chunkResults.some(
+          result => result.status === 'fulfilled' && result.value?.outcome === 'sessionExpired'
+        );
+        if (batchSessionExpired) break;
+
+        for (const result of chunkResults) {
+          const outcome = result.status === 'fulfilled' ? result.value?.outcome : 'failed';
+          if (outcome === 'sent') sentCount += 1;
+          else if (outcome === 'skipped') skippedCount += 1;
+          else failedCount += 1;
+        }
+      }
 
       if (batchSessionExpired) {
         await onSessionExpired();
@@ -365,6 +388,13 @@ ${invitePayHtml}
       setConfirmSend(null);
       await loadInvitations();
       setActiveTab('responses');
+
+      if (failedCount > 0 || skippedCount > 0) {
+        const parts = [`${sentCount} invite${sentCount !== 1 ? 's' : ''} sent`];
+        if (skippedCount > 0) parts.push(`${skippedCount} skipped (no email on file)`);
+        if (failedCount > 0) parts.push(`${failedCount} failed to send`);
+        alert(parts.join(', ') + '.');
+      }
     } catch (err) { alert('Error sending invites: ' + err.message); }
     finally { setSending(false); }
   };
