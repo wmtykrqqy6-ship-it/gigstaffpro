@@ -21,6 +21,44 @@ const MAX_RECIPIENT_LENGTH = 254;
 const MAX_SUBJECT_LENGTH = 300;
 const MAX_HTML_LENGTH = 200000;
 
+const RATE_LIMIT_MAX = 200;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_AGE_MS = RATE_LIMIT_WINDOW_MS * 2;
+
+// In-memory, per-instance, best-effort only — not shared across concurrent
+// serverless instances, and reset by cold starts, instance recycling, or a
+// new deployment. This provides no globally reliable ceiling and must not
+// be treated as complete abuse protection; it only helps when the same
+// instance happens to see the repeated traffic from one admin account.
+const rateLimitBuckets = new Map();
+
+function isRateLimited(adminUserId) {
+  const now = Date.now();
+
+  // Opportunistic cleanup, run inline on a real request — never a timer —
+  // so this Map doesn't grow unbounded across a long-lived instance.
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (now - bucket.windowStart >= RATE_LIMIT_MAX_AGE_MS) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+
+  const bucket = rateLimitBuckets.get(adminUserId);
+
+  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateLimitBuckets.set(adminUserId, { count: 1, windowStart: now });
+    return { limited: false };
+  }
+
+  bucket.count += 1;
+  if (bucket.count > RATE_LIMIT_MAX) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.windowStart + RATE_LIMIT_WINDOW_MS - now) / 1000));
+    return { limited: true, retryAfterSeconds };
+  }
+
+  return { limited: false };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -29,6 +67,15 @@ export default async function handler(req, res) {
   const adminCheck = await verifyAdminRequest(req);
   if (!adminCheck.ok) {
     return res.status(adminCheck.status).json({ error: adminCheck.error });
+  }
+
+  const rateLimit = isRateLimited(adminCheck.adminUserId);
+  if (rateLimit.limited) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    return res.status(429).json({
+      success: false,
+      error: 'Too many requests. Please wait a moment and try again.',
+    });
   }
 
   const body = req.body;
