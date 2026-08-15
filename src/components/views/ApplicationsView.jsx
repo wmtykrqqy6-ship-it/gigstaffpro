@@ -218,8 +218,6 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
                  getPositionLabel(a.position) === getPositionLabel(app.position);
         }).length;
 
-        console.log(`Approve check: "${app.position}" | approved: ${currentApproved} | max: ${maxCount}`);
-
         if (currentApproved >= maxCount) {
           // Position is full — caller should have used handleApproveToStandby instead
           return;
@@ -268,9 +266,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
                    a.position === positionDef.name ||
                    getPositionKey(a.position) === getPositionKey(app.position);
           }).length;
-          
-          console.log(`Position check: ${app.position} | Approved: ${currentApproved} | Max: ${maxCount}`);
-          
+
           // If position is now full, convert all pending applications to standby
           if (currentApproved >= maxCount) {
             const pendingApps = (freshAssignments || []).filter(a => {
@@ -290,8 +286,6 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
               
               if (standbyError) {
                 console.error('Error converting to standby:', standbyError);
-              } else {
-                console.log(`✅ Auto-converted ${pendingApps.length} pending applications to standby`);
               }
             }
           }

@@ -133,11 +133,6 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey))
           );
           
-          // DEBUG: Show which positions/skills are being compared
-          positionKeys.forEach(posKey => {
-            const matches = workerSkillKeys.some(skillKey => positionMatches(skillKey, posKey));
-            });
-          
           if (!hasMatchingSkill) {
               return false;
           }

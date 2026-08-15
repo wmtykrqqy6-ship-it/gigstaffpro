@@ -95,8 +95,6 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
         const change = record.rating_change ?? 0;
         const newRating = Math.min(5.0, Math.max(0.0, parseFloat(currentRating) + parseFloat(change)));
 
-        console.log(`Updating ${worker.name}: ${currentRating} + ${change} = ${newRating}`);
-
         // Update worker reliability
         const { error: updateError } = await supabase
           .from('workers')

@@ -236,14 +236,10 @@ export default function PaymentCalculatorModal({
             
             if (pendingApps.length > 0) {
               // Convert all pending to standby
-              const { error: standbyError } = await supabase
+              await supabase
                 .from('assignments')
                 .update({ status: 'standby' })
                 .in('id', pendingApps.map(a => a.id));
-              
-              if (!standbyError) {
-                console.log(`✅ Auto-converted ${pendingApps.length} pending applications to standby`);
-              }
             }
           }
         }
