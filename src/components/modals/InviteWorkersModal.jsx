@@ -349,18 +349,24 @@ ${invitePayHtml}
         });
 
         if (emailRes.status === 401) return { outcome: 'sessionExpired' };
+        if (emailRes.status === 429) return { outcome: 'rateLimited' };
         return { outcome: emailRes.ok ? 'sent' : 'failed' };
       };
 
       // Send in fixed-size chunks (max 10 concurrent at a time) instead of
       // all at once, so a large invite batch doesn't fire every request in
       // the same instant. The next chunk only starts after the previous one
-      // has fully settled, and a 401 in any chunk halts the batch immediately.
+      // has fully settled. A 401 in any chunk halts the batch immediately
+      // (checked first, so it always wins over a same-chunk 429). A 429 lets
+      // the current chunk finish and is tallied, but no further chunk is
+      // started — nothing here is ever retried automatically.
       const CHUNK_SIZE = 10;
       let sentCount = 0;
       let skippedCount = 0;
       let failedCount = 0;
+      let rateLimitedCount = 0;
       let batchSessionExpired = false;
+      let batchRateLimited = false;
 
       for (let i = 0; i < confirmSend.workerIds.length; i += CHUNK_SIZE) {
         const chunk = confirmSend.workerIds.slice(i, i + CHUNK_SIZE);
@@ -371,12 +377,19 @@ ${invitePayHtml}
         );
         if (batchSessionExpired) break;
 
+        batchRateLimited = chunkResults.some(
+          result => result.status === 'fulfilled' && result.value?.outcome === 'rateLimited'
+        );
+
         for (const result of chunkResults) {
           const outcome = result.status === 'fulfilled' ? result.value?.outcome : 'failed';
           if (outcome === 'sent') sentCount += 1;
           else if (outcome === 'skipped') skippedCount += 1;
+          else if (outcome === 'rateLimited') rateLimitedCount += 1;
           else failedCount += 1;
         }
+
+        if (batchRateLimited) break;
       }
 
       if (batchSessionExpired) {
@@ -389,7 +402,13 @@ ${invitePayHtml}
       await loadInvitations();
       setActiveTab('responses');
 
-      if (failedCount > 0 || skippedCount > 0) {
+      if (batchRateLimited) {
+        const parts = [`Sent invite emails to ${sentCount} worker${sentCount !== 1 ? 's' : ''}.`];
+        if (skippedCount > 0) parts.push(`${skippedCount} skipped (no email on file).`);
+        if (failedCount > 0) parts.push(`${failedCount} failed to send.`);
+        parts.push('The sending limit was reached, so some invitation emails were not sent. Wait a few minutes, then use Nudge on the Responses tab for any pending workers who still need their invite email.');
+        alert(parts.join(' '));
+      } else if (failedCount > 0 || skippedCount > 0) {
         const parts = [`${sentCount} invite${sentCount !== 1 ? 's' : ''} sent`];
         if (skippedCount > 0) parts.push(`${skippedCount} skipped (no email on file)`);
         if (failedCount > 0) parts.push(`${failedCount} failed to send`);
@@ -514,6 +533,16 @@ ${reInvitePayHtml}
           await onSessionExpired();
           return;
         }
+
+        if (emailRes.status === 429) {
+          alert('The sending limit was reached. Wait a few minutes and try again.');
+          return;
+        }
+
+        if (!emailRes.ok) {
+          alert('Failed to send re-invite email. Please try again.');
+          return;
+        }
       }
 
       await loadInvitations();
@@ -581,6 +610,11 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
 
       if (emailRes.status === 401) {
         await onSessionExpired();
+        return;
+      }
+
+      if (emailRes.status === 429) {
+        alert('The sending limit was reached. Wait a few minutes and try again.');
         return;
       }
 
