@@ -295,10 +295,6 @@ export default function EventsView({
         )}
       </div>
 
-      {/* DEBUG - remove after testing */}
-      <div className="text-xs text-gray-400 p-2 bg-yellow-50 border border-yellow-200 rounded mb-2">
-        Debug: {events.length} total | {scopedEvents.length} scoped | {filteredEvents.length} filtered | {sortedEvents.length} sorted | status: {statusFilter} | date: {dateRangeFilter} | search: "{searchTerm}"
-      </div>
       {scopedEvents.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <Calendar size={48} className="mx-auto text-gray-300 mb-4" />

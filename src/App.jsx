@@ -975,7 +975,7 @@ setAppPositions(storedPositions);
       // Find events that are in the past and not already archived
       const pastEvents = events.filter(event => {
         if (event.status === 'archived') return false;
-        const eventDate = new Date(event.date);
+        const eventDate = parseDateSafe(event.date);
         eventDate.setHours(0, 0, 0, 0);
         return eventDate < today;
       });
