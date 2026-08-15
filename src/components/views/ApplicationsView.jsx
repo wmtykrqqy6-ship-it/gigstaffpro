@@ -1,8 +1,36 @@
 import React, { useState } from 'react';
 import { Clock, CheckCircle, FileText, XCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel, getPositionKey } from '../../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, isAssignmentFilled } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
+
+// Find the position definition on an event that corresponds to an application's position value
+const findPositionDef = (event, position) => {
+  if (!event?.positions) return null;
+  return event.positions.find(p => {
+    const pKey = p.key || p.name;
+    return pKey === position ||
+           p.name === position ||
+           p.key === position ||
+           getPositionKey(p.name || p.key) === getPositionKey(position) ||
+           getPositionLabel(p.key) === position ||
+           getPositionLabel(p.name) === position;
+  }) || null;
+};
+
+// Count assignments currently occupying a position's slots for an event
+const countFilledForPosition = (assignmentsList, eventId, positionDef, position, excludeId = null) => {
+  return assignmentsList.filter(a => {
+    if (a.event_id !== eventId) return false;
+    if (excludeId && a.id === excludeId) return false;
+    if (!isAssignmentFilled(a.status)) return false;
+    return a.position === position ||
+           a.position === positionDef.key ||
+           a.position === positionDef.name ||
+           getPositionKey(a.position) === getPositionKey(position) ||
+           getPositionLabel(a.position) === getPositionLabel(position);
+  }).length;
+};
 
 export default function ApplicationsView({
   assignments,
@@ -104,22 +132,10 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
   // Helper: check if a position is full for a given app
   const isPositionFull = (app) => {
     const event = events.find(e => e.id === app.event_id);
-    if (!event?.positions) return false;
-    const positionDef = event.positions.find(p =>
-      p.key === app.position || p.name === app.position ||
-      getPositionKey(p.name || p.key) === getPositionKey(app.position) ||
-      getPositionLabel(p.key) === app.position
-    );
+    const positionDef = findPositionDef(event, app.position);
     if (!positionDef) return false;
     const maxCount = positionDef.count || 1;
-    const currentApproved = assignments.filter(a => {
-      if (a.event_id !== app.event_id) return false;
-      if (a.id === app.id) return false;
-      if (['standby','pending','rejected','cancelled'].includes(a.status)) return false;
-      return a.position === app.position ||
-             a.position === positionDef.key ||
-             getPositionKey(a.position) === getPositionKey(app.position);
-    }).length;
+    const currentApproved = countFilledForPosition(assignments, app.event_id, positionDef, app.position, app.id);
     return currentApproved >= maxCount;
   };
 
@@ -191,32 +207,11 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     // (admin is intentionally promoting someone from the standby list)
     const event = events.find(e => e.id === app.event_id);
     if (!isStandbyPromotion && event && event.positions && Array.isArray(event.positions)) {
-      const positionDef = event.positions.find(p => {
-        const pKey = p.key || p.name;
-        return pKey === app.position ||
-               p.name === app.position ||
-               p.key === app.position ||
-               getPositionKey(p.name || p.key) === getPositionKey(app.position) ||
-               getPositionLabel(p.key) === app.position ||
-               getPositionLabel(p.name) === app.position;
-      });
+      const positionDef = findPositionDef(event, app.position);
 
       if (positionDef) {
         const maxCount = positionDef.count || 1;
-        const currentApproved = assignments.filter(a => {
-          if (a.event_id !== app.event_id) return false;
-          if (a.id === applicationId) return false;
-          // Exclude standby workers from count
-          if (a.status === 'standby') return false;
-          // Admin-assigned directly = null/undefined status. Count anything NOT pending/rejected/cancelled.
-          const s = a.status;
-          if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
-          return a.position === app.position ||
-                 a.position === positionDef.key ||
-                 a.position === positionDef.name ||
-                 getPositionKey(a.position) === getPositionKey(app.position) ||
-                 getPositionLabel(a.position) === getPositionLabel(app.position);
-        }).length;
+        const currentApproved = countFilledForPosition(assignments, app.event_id, positionDef, app.position, applicationId);
 
         if (currentApproved >= maxCount) {
           // Position is full — caller should have used handleApproveToStandby instead
@@ -239,33 +234,19 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       // ✅ AUTO-CONVERT: Check if position is now full, convert pending to standby
       const event = events.find(e => e.id === app.event_id);
       if (event && event.positions) {
-        const positionDef = event.positions.find(p => {
-          const pKey = p.key || p.name;
-          return pKey === app.position ||
-                 p.name === app.position ||
-                 p.key === app.position ||
-                 getPositionKey(p.name || p.key) === getPositionKey(app.position);
-        });
-        
+        const positionDef = findPositionDef(event, app.position);
+
         if (positionDef) {
           const maxCount = positionDef.count || 1;
-          
+
           // Fetch FRESH assignments data (we just updated one!)
           const { data: freshAssignments } = await supabase
             .from('assignments')
             .select('*')
             .eq('event_id', app.event_id);
-          
-          // Count currently approved workers (excluding standby)
-          const currentApproved = (freshAssignments || []).filter(a => {
-            if (a.status === 'standby') return false;
-            const s = a.status;
-            if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
-            return a.position === app.position ||
-                   a.position === positionDef.key ||
-                   a.position === positionDef.name ||
-                   getPositionKey(a.position) === getPositionKey(app.position);
-          }).length;
+
+          // Count currently filled slots (includes this app's own now-'approved' row)
+          const currentApproved = countFilledForPosition(freshAssignments || [], app.event_id, positionDef, app.position);
 
           // If position is now full, convert all pending applications to standby
           if (currentApproved >= maxCount) {
