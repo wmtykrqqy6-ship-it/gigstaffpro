@@ -2,6 +2,7 @@
 // Vercel serverless function to send emails using Resend
 // Admin-only: every call must carry a valid Supabase Auth admin bearer token.
 
+import { createClient } from '@supabase/supabase-js';
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 
 export const config = {
@@ -29,6 +30,45 @@ export default async function handler(req, res) {
   const adminCheck = await verifyAdminRequest(req);
   if (!adminCheck.ok) {
     return res.status(adminCheck.status).json({ error: adminCheck.error });
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ success: false, error: 'Unable to process email request.' });
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+  // Persistent, cross-instance rate limit — replaces the reverted in-memory
+  // version. .single() both simplifies the response shape (one object
+  // instead of a one-element array) and, per PostgREST's own semantics,
+  // turns a 0-or-multiple-row result into an error rather than silently
+  // picking a row — that error path is treated as fail-closed below along
+  // with every other unexpected-error case, since check_email_rate_limit
+  // always returns exactly one row per call by design.
+  const { data: rateLimitResult, error: rateLimitError } = await supabaseAdmin
+    .rpc('check_email_rate_limit', {
+      p_admin_user_id: adminCheck.adminUserId,
+      p_environment: process.env.VERCEL_ENV || 'unknown',
+    })
+    .single();
+
+  if (rateLimitError || !rateLimitResult) {
+    // Security middleware: an unexpected failure here must never be treated
+    // as "allowed". Fail closed and never reach the Resend call below.
+    console.error('Rate limit check failed:', rateLimitError);
+    return res.status(500).json({ success: false, error: 'Unable to process email request.' });
+  }
+
+  if (rateLimitResult.allowed === false) {
+    const retryAfterSeconds = Math.max(1, Number(rateLimitResult.retry_after_seconds) || 1);
+    res.setHeader('Retry-After', String(retryAfterSeconds));
+    return res.status(429).json({
+      success: false,
+      error: 'Too many requests. Please wait a moment and try again.',
+    });
   }
 
   const body = req.body;
