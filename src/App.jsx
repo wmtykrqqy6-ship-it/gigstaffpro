@@ -8,7 +8,8 @@ import {
   setPositions as setAppPositions,
   getPositionLabel,
   getPositionKey,
-  positionMatches
+  positionMatches,
+  isAssignmentFilled
 } from './utils/positionHelpers';
 import {
   RANK_ACCESS_DAYS,
@@ -249,7 +250,7 @@ const saveDismissedNotificationIds = (ids) => {
           const posKey = pos.key || pos.name;
           const filled = assignments.filter(a =>
             a.event_id === event.id &&
-            !['standby', 'rejected', 'cancelled', 'pending'].includes(a.status) &&
+            isAssignmentFilled(a.status) &&
             (a.position === posKey || a.position === pos.key || a.position === pos.name)
           ).length;
           const open = (pos.count || 1) - filled;
@@ -992,8 +993,6 @@ setAppPositions(storedPositions);
       
       // Reload events to show updated status
       await loadEvents();
-      
-      console.log(`Auto-archived ${pastEvents.length} past event(s)`);
     } catch (error) {
       console.error('Error auto-archiving events:', error);
     }

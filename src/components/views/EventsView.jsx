@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown, AlertCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionKey, getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionKey, getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
 
 export default function EventsView({
@@ -57,10 +57,10 @@ export default function EventsView({
   const getEventStaffingStatus = (event) => {
     if (!event.positions || event.positions.length === 0) return { filled: 0, total: 0, percentage: 0 };
     
-    // Count all assignments EXCEPT those with status='standby'
-    const eventAssignments = assignments.filter(a => 
-      a.event_id === event.id && 
-      a.status !== 'standby'
+    // Count assignments that represent a confirmed/filled slot (see isAssignmentFilled)
+    const eventAssignments = assignments.filter(a =>
+      a.event_id === event.id &&
+      isAssignmentFilled(a.status)
     );
     const total = event.positions.reduce((sum, p) => sum + p.count, 0);
     const filled = eventAssignments.length;
@@ -436,7 +436,7 @@ export default function EventsView({
                         const posKey = pos.key || pos.name;
                         const filled = assignments.filter(a =>
                           a.event_id === event.id &&
-                          !['standby','rejected','cancelled','pending'].includes(a.status) &&
+                          isAssignmentFilled(a.status) &&
                           (a.position === posKey || a.position === pos.key || a.position === pos.name)
                         ).length;
                         return (pos.count || 1) - filled > 0;
@@ -457,7 +457,7 @@ export default function EventsView({
                               const posKey = p.key || p.name;
                               const filled = assignments.filter(a =>
                                 a.event_id === event.id &&
-                                !['standby','rejected','cancelled','pending'].includes(a.status) &&
+                                isAssignmentFilled(a.status) &&
                                 (a.position === posKey || a.position === p.key || a.position === p.name)
                               ).length;
                               const open = (p.count || 1) - filled;

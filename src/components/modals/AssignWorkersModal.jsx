@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, CheckCircle, Trash2, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionKey, getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import { getPositionKey, getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 
 const isLakeGenevaZip = (address) => {
@@ -156,10 +156,9 @@ export default function AssignWorkersModal({
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
   
   const getPositionAssignments = (position) => {
-    // Count approved/assigned (legacy) assignments only - exclude standby, pending, rejected, cancelled
-    const filtered = eventAssignments.filter(a => 
-      a.position === position && 
-      (a.status === 'approved' || a.status === 'assigned' || a.status === null || a.status === undefined)
+    const filtered = eventAssignments.filter(a =>
+      a.position === position &&
+      isAssignmentFilled(a.status)
     );
     return filtered;
   };
@@ -605,10 +604,10 @@ export default function AssignWorkersModal({
                                         <button
                                           onClick={async () => {
                                             // Check for time conflicts before promoting
-                                            const workerOtherAssignments = assignments.filter(a => 
-                                              a.worker_id === worker.id && 
+                                            const workerOtherAssignments = assignments.filter(a =>
+                                              a.worker_id === worker.id &&
                                               a.event_id !== event.id &&
-                                              (a.status === 'approved' || !a.status) // Only approved
+                                              isAssignmentFilled(a.status)
                                             );
                                             
                                             let hasConflict = false;

@@ -3,7 +3,7 @@ import {
   Calendar, Users, AlertCircle, Plus, Clock, 
   MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList, UserPlus
 } from 'lucide-react';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { formatTime } from '../../utils/dateHelpers';
 
 // --- Inline Schedule Section ---
@@ -179,7 +179,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
               {dayEvents.map(event => {
                 const eventAssignments = assignments.filter(a => a.event_id === event.id);
                 const total = event.positions?.reduce((s, p) => s + (p.count || 1), 0) || 0;
-                const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
+                const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
                 return (
                   <div key={event.id} className="border rounded-lg p-3 hover:shadow-sm transition-shadow">
                     <div className="flex items-start justify-between mb-2">
@@ -290,7 +290,7 @@ export default function DashboardView({
         const posKey = pos.key || pos.name;
         const filled = assignments.filter(a =>
           a.event_id === event.id &&
-          !['standby', 'rejected', 'cancelled', 'pending'].includes(a.status) &&
+          isAssignmentFilled(a.status) &&
           (a.position === posKey || a.position === pos.key || a.position === pos.name)
         ).length;
         const open = (pos.count || 1) - filled;
@@ -320,7 +320,7 @@ export default function DashboardView({
     if (eventDate < today) return false;
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
     const totalNeeded = e.positions?.reduce((sum, p) => sum + (p.count || 1), 0) || 0;
-    const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
+    const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
     return filled < totalNeeded && totalNeeded > 0;
   }).length;
 
@@ -573,7 +573,7 @@ export default function DashboardView({
                 {weekEvents.map(event => {
                   const eventAssignments = assignments.filter(a => a.event_id === event.id);
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + (p.count || 1), 0) || 0;
-                  const filled = eventAssignments.filter(a => ['approved','assigned'].includes(a.status)).length;
+                  const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
                   const eventDate = new Date(event.date);
                   const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));

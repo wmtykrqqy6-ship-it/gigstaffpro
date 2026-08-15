@@ -56,6 +56,13 @@ export const getPositionKey = (keyOrLabel) => {
   return String(keyOrLabel).toLowerCase().replace(/\s+/g, '_');
 };
 
+// Assignment statuses that do NOT count as filling a position slot.
+// Everything else (approved, confirmed, legacy null/undefined admin-assigned, etc.)
+// counts as filled — this is the single source of truth for "is this slot taken".
+const UNFILLED_ASSIGNMENT_STATUSES = ['standby', 'pending', 'rejected', 'cancelled'];
+
+export const isAssignmentFilled = (status) => !UNFILLED_ASSIGNMENT_STATUSES.includes(status);
+
 // Check if worker skill matches position
 export const positionMatches = (workerSkillKey, positionKey) => {
   // Direct key match
