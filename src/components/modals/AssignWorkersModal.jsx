@@ -543,7 +543,6 @@ export default function AssignWorkersModal({
                             <p className="text-sm font-medium text-gray-700 mb-2">Assigned:</p>
                             <div className="space-y-2">
                               {posAssignments
-                                .filter(assignment => assignment.status !== 'standby') // Only non-standby
                                 .map(assignment => {
                                 const worker = workers.find(w => w.id === assignment.worker_id);
                                 if (!worker) return null;
@@ -666,9 +665,8 @@ export default function AssignWorkersModal({
                                             
                                             if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
                                               // Check if position is still full
-                                              const currentFilled = posAssignments.filter(a => a.status !== 'standby').length;
-                                              if (currentFilled >= needed) {
-                                                alert(`⛔ Cannot promote — the ${getPositionLabel(pos.key || pos.name)} position is still full (${currentFilled}/${needed}).\n\nRemove an assigned worker first, then promote from standby.`);
+                                              if (isFull) {
+                                                alert(`⛔ Cannot promote — the ${getPositionLabel(pos.key || pos.name)} position is still full (${filled}/${needed}).\n\nRemove an assigned worker first, then promote from standby.`);
                                                 return;
                                               }
                                               // Update assignment to change status from 'standby' to 'approved'
@@ -691,7 +689,7 @@ export default function AssignWorkersModal({
                                             }
                                           }}
                                           className={`px-3 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700 ${
-                                            posAssignments.filter(a => a.status !== 'standby').length >= needed ? 'hidden' : ''
+                                            isFull ? 'hidden' : ''
                                           }`}
                                           title="Promote to assigned"
                                         >
