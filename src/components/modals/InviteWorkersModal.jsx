@@ -3,6 +3,7 @@ import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle,
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
+import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 
 const fmtDate = (d) => {
   if (!d) return d;
@@ -836,7 +837,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
                             {rankWorkers.map(worker => {
                               const isSelected = selectedWorkers.has(worker.id);
                               const reliability = worker.reliability ?? 5.0;
-                              const reliabilityColor = reliability >= 4.5 ? 'text-green-700' : reliability >= 3.5 ? 'text-yellow-600' : 'text-red-600';
+                              const reliabilityColor = reliability >= RELIABILITY_THRESHOLDS.EXCELLENT ? 'text-green-700' : reliability >= RELIABILITY_THRESHOLDS.GOOD ? 'text-yellow-600' : 'text-red-600';
                               return (
                                 <div key={worker.id} onClick={() => toggleWorker(worker.id)}
                                   className={`flex items-center space-x-3 px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-red-50' : 'hover:bg-gray-50'}`}>

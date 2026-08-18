@@ -32,14 +32,6 @@ export const RANK_ACCESS_DAYS = {
   5: 14   // Rank 5: Can see events 14 days before
 };
 
-export const RANK_LABELS = {
-  1: 'Elite',
-  2: 'Senior',
-  3: 'Experienced',
-  4: 'Standard',
-  5: 'New'
-};
-
 // ============================================
 // WORKER DEFAULTS
 // ============================================
@@ -50,23 +42,6 @@ export const WORKER_DEFAULTS = {
   TOTAL_GIGS: 0,
   NO_SHOWS: 0,
   IS_ACTIVE: true
-};
-
-// ============================================
-// NOTIFICATION SETTINGS
-// ============================================
-
-export const NOTIFICATIONS = {
-  // Hours before event to send reminders
-  REMINDER_48_HOURS: 48,
-  REMINDER_24_HOURS: 24,
-  REMINDER_4_HOURS: 4,
-  
-  // How long to show notifications (for auto-dismiss)
-  DISPLAY_DURATION_MS: 5000,
-  
-  // Max notifications to show in badge
-  MAX_BADGE_COUNT: 9
 };
 
 // ============================================
@@ -141,28 +116,6 @@ export const STATUS = {
 };
 
 // ============================================
-// RELIABILITY RATINGS
-// ============================================
-
-export const RELIABILITY = {
-  MIN: 0.0,
-  MAX: 5.0,
-  EXCELLENT_THRESHOLD: 4.5,
-  GOOD_THRESHOLD: 4.0,
-  WARNING_THRESHOLD: 3.0
-};
-
-// ============================================
-// CSV EXPORT SETTINGS
-// ============================================
-
-export const EXPORT = {
-  CSV_DELIMITER: ',',
-  CSV_LINE_BREAK: '\n',
-  DATE_FORMAT: 'en-US' // for toLocaleDateString
-};
-
-// ============================================
 // VALIDATION RULES
 // ============================================
 
@@ -178,81 +131,6 @@ export const VALIDATION = {
   
   // Minimum password length
   MIN_PASSWORD_LENGTH: 8
-};
-
-// ============================================
-// DEFAULT POSITION STRUCTURE
-// ============================================
-// Note: Actual positions are stored in database settings
-// This is the fallback if database is unavailable
-
-export const DEFAULT_POSITIONS = [
-  { key: 'blackjack_dealer', label: 'Blackjack Dealer' },
-  { key: 'poker_dealer', label: 'Poker Dealer' },
-  { key: 'roulette_dealer', label: 'Roulette Dealer' },
-  { key: 'craps_dealer', label: 'Craps Dealer' },
-  { key: 'baccarat_dealer', label: 'Baccarat Dealer' },
-  { key: 'dealer', label: 'Dealer' },
-  { key: 'host', label: 'Host' },
-  { key: 'bartender', label: 'Bartender' },
-  { key: 'server', label: 'Server' },
-  { key: 'cashier', label: 'Cashier' }
-];
-
-// ============================================
-// COLOR THEME (Tailwind classes)
-// ============================================
-
-export const COLORS = {
-  PRIMARY: 'red-900',      // Main brand color
-  SECONDARY: 'black',      // Secondary brand color
-  SUCCESS: 'green-600',    // Success states
-  WARNING: 'yellow-600',   // Warning states
-  DANGER: 'red-600',       // Error/danger states
-  INFO: 'blue-600',        // Info states
-  
-  // Rank colors
-  RANK_1: 'yellow',        // Gold for elite
-  RANK_2: 'blue',          // Blue for senior
-  RANK_3: 'purple',        // Purple for experienced
-  RANK_4: 'gray',          // Gray for standard
-  RANK_5: 'slate'          // Slate for new
-};
-
-// ============================================
-// FEATURE FLAGS
-// ============================================
-
-export const FEATURES = {
-  // Enable/disable features (can be toggled without code changes)
-  PAYMENT_TRACKING_DEFAULT: false,
-  AUTO_REMINDERS_DEFAULT: false,
-  
-  // Development mode features
-  DEV_MODE: import.meta.env.DEV || false,
-  SHOW_DEBUG_INFO: false
-};
-
-// ============================================
-// API / DATABASE SETTINGS
-// ============================================
-
-export const DATABASE = {
-  // Table names (in case we ever need to reference them)
-  TABLES: {
-    WORKERS: 'workers',
-    EVENTS: 'events',
-    ASSIGNMENTS: 'assignments',
-    ADMIN_USERS: 'admin_users',
-    SETTINGS: 'settings',
-    PAY_RATES: 'pay_rates',
-    TRAVEL_TIERS: 'travel_tiers',
-    BONUSES: 'bonuses'
-  },
-  
-  // Query limits
-  DEFAULT_LIMIT: 1000,
-  MAX_BATCH_SIZE: 100
 };
 
 // ============================================

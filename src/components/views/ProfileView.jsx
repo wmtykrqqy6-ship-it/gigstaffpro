@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
+import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 
 // workerAuthMode: accepted here for use in a later step (migration-aware
 // save/photo behavior) — not yet branched on.
@@ -769,29 +770,27 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
 
         {/* Rating bar */}
         <div className="mb-6">
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div
-              className={`h-3 rounded-full transition-all ${
-                (worker.reliability ?? 5.0) >= 4.5 ? 'bg-green-500' :
-                (worker.reliability ?? 5.0) >= 3.5 ? 'bg-yellow-500' :
-                (worker.reliability ?? 5.0) >= 2.0 ? 'bg-orange-500' : 'bg-red-500'
-              }`}
-              style={{ width: `${((worker.reliability ?? 5.0) / 5.0) * 100}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>0.0</span>
-            <span className={`font-medium ${
-              (worker.reliability ?? 5.0) >= 4.5 ? 'text-green-600' :
-              (worker.reliability ?? 5.0) >= 3.5 ? 'text-yellow-600' :
-              (worker.reliability ?? 5.0) >= 2.0 ? 'text-orange-600' : 'text-red-600'
-            }`}>
-              {(worker.reliability ?? 5.0) >= 4.5 ? 'Excellent' :
-               (worker.reliability ?? 5.0) >= 3.5 ? 'Good' :
-               (worker.reliability ?? 5.0) >= 2.0 ? 'Fair' : 'Needs Improvement'}
-            </span>
-            <span>5.0</span>
-          </div>
+          {(() => {
+            const reliabilityTier = getReliabilityTier(worker.reliability);
+            const barColor = { excellent: 'bg-green-500', good: 'bg-yellow-500', fair: 'bg-orange-500', poor: 'bg-red-500' }[reliabilityTier];
+            const textColor = { excellent: 'text-green-600', good: 'text-yellow-600', fair: 'text-orange-600', poor: 'text-red-600' }[reliabilityTier];
+            const label = { excellent: 'Excellent', good: 'Good', fair: 'Fair', poor: 'Needs Improvement' }[reliabilityTier];
+            return (
+              <>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className={`h-3 rounded-full transition-all ${barColor}`}
+                    style={{ width: `${((worker.reliability ?? 5.0) / 5.0) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>0.0</span>
+                  <span className={`font-medium ${textColor}`}>{label}</span>
+                  <span>5.0</span>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {loadingLog ? (

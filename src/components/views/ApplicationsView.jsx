@@ -3,6 +3,7 @@ import { Clock, CheckCircle, FileText, XCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, getPositionKey, isAssignmentFilled } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
+import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 
 // Find the position definition on an event that corresponds to an application's position value
 const findPositionDef = (event, position) => {
@@ -539,7 +540,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
                       Rank {app.worker.rank}
                     </span>
                   )}
-                  {(app.worker.reliability ?? 0) >= 4.5 && (
+                  {(app.worker.reliability ?? 0) >= RELIABILITY_THRESHOLDS.EXCELLENT && (
                     <span className="text-sm text-yellow-600">⭐ {(app.worker.reliability ?? 0).toFixed(1)}</span>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
+import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { supabase } from '../../supabaseClient';
 
 
@@ -132,10 +133,12 @@ export default function StaffView({
     // Reliability filter
     if (reliabilityFilter !== 'all') {
       const rating = worker.reliability ?? 5.0;
-      if (reliabilityFilter === 'excellent' && rating < 4.5) return false;
-      if (reliabilityFilter === 'good' && (rating < 3.5 || rating >= 4.5)) return false;
-      if (reliabilityFilter === 'fair' && (rating < 2.0 || rating >= 3.5)) return false;
-      if (reliabilityFilter === 'poor' && rating >= 2.0) return false;
+      const tier = getReliabilityTier(rating);
+      if (reliabilityFilter === 'excellent' && tier !== 'excellent') return false;
+      if (reliabilityFilter === 'good' && tier !== 'good') return false;
+      if (reliabilityFilter === 'fair' && tier !== 'fair') return false;
+      if (reliabilityFilter === 'poor' && tier !== 'poor') return false;
+      // Intentionally separate from the tier ladder above — a quick "needs attention" cutoff, not a tier boundary
       if (reliabilityFilter === 'below4' && rating >= 4.0) return false;
     }
 
