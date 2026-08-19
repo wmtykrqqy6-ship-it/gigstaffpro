@@ -838,7 +838,61 @@ setAppPositions(storedPositions);
     // path is unreachable in practice and intentionally does nothing.
   };
 
+  // When an event's assigned location changes, its stored travel mileage
+  // (event_payment_settings.miles) was computed against the OLD location and
+  // is now wrong. Recompute it against the new location's address so future
+  // pay calculations use a correct distance instead of a stale one.
+  const recalculateMilesForLocationChanges = async (previousEvents, newEvents) => {
+    const prevLocationById = {};
+    previousEvents.forEach(e => { prevLocationById[e.id] = e.location_id || null; });
+
+    for (const event of newEvents) {
+      const prevLocationId = prevLocationById[event.id];
+      if (prevLocationId === undefined) continue; // new event, nothing to compare against
+      if (prevLocationId === (event.location_id || null)) continue; // location didn't change
+      if (!eventPaymentSettings[event.id]) continue; // no settings on file yet — autoCreatePaymentSettings will handle it
+      if (!event.address) continue;
+
+      try {
+        let travelOrigin = null;
+        if (event.location_id) {
+          const { data: locData } = await supabase
+            .from('locations')
+            .select('address')
+            .eq('id', event.location_id)
+            .maybeSingle();
+          travelOrigin = locData?.address || null;
+        }
+        if (!travelOrigin) continue;
+
+        const res = await fetch(`/api/get-distance?origin=${encodeURIComponent(travelOrigin)}&destination=${encodeURIComponent(event.address)}`);
+        const distanceData = await res.json();
+        if (distanceData.miles == null) continue;
+
+        const existingSettings = eventPaymentSettings[event.id];
+        const { error: upsertError } = await supabase.from('event_payment_settings').upsert({
+          event_id: event.id,
+          hours: existingSettings.hours,
+          miles: distanceData.miles,
+          is_lake_geneva: existingSettings.isLakeGeneva,
+          is_holiday: existingSettings.isHoliday,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'event_id' });
+
+        if (!upsertError) {
+          setEventPaymentSettings(prev => ({
+            ...prev,
+            [event.id]: { ...prev[event.id], miles: distanceData.miles }
+          }));
+        }
+      } catch (_) {
+        // Best-effort — leave the existing (stale) miles in place if the lookup fails
+      }
+    }
+  };
+
   const loadEvents = async () => {
+    const previousEvents = events;
     try {
       const { data, error } = await supabase
         .from('events')
@@ -905,6 +959,9 @@ setAppPositions(storedPositions);
 
       // Auto-create payment settings for events that don't have them yet
       autoCreatePaymentSettings(migratedEvents);
+
+      // Recompute stored mileage for any event whose location changed
+      recalculateMilesForLocationChanges(previousEvents, migratedEvents);
     } catch (error) {
     }
   };
