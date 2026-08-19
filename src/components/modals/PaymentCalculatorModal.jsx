@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { useToast } from '../ui/Toast';
 
 export default function PaymentCalculatorModal({
   open,
@@ -18,6 +19,7 @@ export default function PaymentCalculatorModal({
   onClose,
   onSuccess
 }) {
+  const notify = useToast();
   const [hours, setHours] = useState(0);
   const [miles, setMiles] = useState(0);
   const [isLakeGeneva, setIsLakeGeneva] = useState(false);
@@ -86,12 +88,12 @@ export default function PaymentCalculatorModal({
         const worker = workers.find(w => w.id === assignmentData.workerId);
         if (onSuccess) await onSuccess();
         onClose();
-        alert(`${worker.name} assigned to ${assignmentData.position}`);
+        notify(`${worker.name} assigned to ${assignmentData.position}`);
       } catch (error) {
         // Allow a retry: this specific attempt failed, so the guard should not
         // permanently block a future attempt for this same assignment.
         hasAssignedWithoutPaymentRef.current = false;
-        alert('Error creating assignment: ' + error.message);
+        notify('Error creating assignment: ' + error.message);
       }
     };
     assignWithoutPayment();
@@ -165,7 +167,7 @@ export default function PaymentCalculatorModal({
     if (!assignmentData || !calculation) return;
     
     if (hours <= 0) {
-      alert('Hours must be greater than 0');
+      notify('Hours must be greater than 0');
       return;
     }
 
@@ -250,9 +252,9 @@ export default function PaymentCalculatorModal({
       if (onSuccess) await onSuccess();
       onClose();
       
-      alert(`✓ ${worker.name} assigned to ${assignmentData.position}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
+      notify(`✓ ${worker.name} assigned to ${assignmentData.position}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
     } catch (error) {
-      alert('Error creating assignment: ' + error.message);
+      notify('Error creating assignment: ' + error.message);
     }
   };
 

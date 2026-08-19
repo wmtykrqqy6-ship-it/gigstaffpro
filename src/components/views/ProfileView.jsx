@@ -3,10 +3,12 @@ import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Sa
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
+import { useToast } from '../ui/Toast';
 
 // workerAuthMode: accepted here for use in a later step (migration-aware
 // save/photo behavior) — not yet branched on.
 export default function ProfileView({ worker, onProfileUpdate, assignments = [], events = [], workerAuthMode }) {
+  const notify = useToast();
   // Only an exact 'migrated' match unlocks the narrow-RPC path — an
   // unknown, missing, or otherwise invalid workerAuthMode always falls
   // back to the existing legacy behavior below, never treated as migrated.
@@ -138,7 +140,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
 
   const generateMileageReport = async () => {
     if (!worker.address) {
-      alert('This worker has no home address saved. Please add their address first.');
+      notify('This worker has no home address saved. Please add their address first.');
       return;
     }
     setGeneratingReport(true);
@@ -155,7 +157,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
       });
 
       if (yearAssignments.length === 0) {
-        alert(`No approved assignments found for ${worker.name} in ${reportYear}.`);
+        notify(`No approved assignments found for ${worker.name} in ${reportYear}.`);
         setGeneratingReport(false);
         return;
       }
@@ -323,7 +325,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
 
       doc.save(`mileage-report-${worker.name.replace(/\s+/g, '-').toLowerCase()}-${reportYear}.pdf`);
     } catch (err) {
-      alert('Error generating report: ' + err.message);
+      notify('Error generating report: ' + err.message);
     } finally {
       setGeneratingReport(false);
     }
@@ -335,13 +337,13 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
 
     // Check file type
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file');
+      notify('Please upload an image file');
       return;
     }
 
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be less than 5MB');
+      notify('Image must be less than 5MB');
       return;
     }
 
@@ -377,9 +379,9 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         await onProfileUpdate();
       }
 
-      alert('✅ Profile photo updated!');
+      notify('✅ Profile photo updated!');
     } catch (error) {
-      alert('Error uploading photo: ' + error.message);
+      notify('Error uploading photo: ' + error.message);
     } finally {
       setUploadingPhoto(false);
     }
@@ -422,9 +424,9 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
       }
 
       setIsEditing(false);
-      alert('✅ Profile updated successfully!');
+      notify('✅ Profile updated successfully!');
     } catch (error) {
-      alert('Error updating profile: ' + error.message);
+      notify('Error updating profile: ' + error.message);
     } finally {
       setSaving(false);
     }

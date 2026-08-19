@@ -3,6 +3,8 @@ import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, Tog
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
 import AddressAutocomplete from '../AddressAutocomplete';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -232,6 +234,8 @@ export default function SettingsView({
   onUpdatePositions,
   onPayRatesChanged
 }) {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [activeTab, setActiveTab] = useState('venues');
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
   const [hostLabelSaved, setHostLabelSaved] = useState(false);
@@ -293,7 +297,7 @@ export default function SettingsView({
   // Save by position label — upsert if no matching row exists yet
   const savePayRateByPosition = async (positionLabel, newRate) => {
     const rate = parseFloat(newRate);
-    if (isNaN(rate) || rate < 0) { alert('Enter a valid rate'); return; }
+    if (isNaN(rate) || rate < 0) { notify('Enter a valid rate'); return; }
     const key = getPayRateKey(positionLabel);
     const existing = payRatesMap[key] || payRatesMap[positionLabel];
     if (existing) {
@@ -313,7 +317,7 @@ export default function SettingsView({
   const savePayRate = async (id, newRate) => {
     setSavingPayRate(id);
     const rate = parseFloat(newRate);
-    if (isNaN(rate) || rate < 0) { alert('Enter a valid rate'); setSavingPayRate(null); return; }
+    if (isNaN(rate) || rate < 0) { notify('Enter a valid rate'); setSavingPayRate(null); return; }
     await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', id);
     setSavingPayRate(null);
     loadPayRatesData();
@@ -330,7 +334,7 @@ export default function SettingsView({
 
   const saveLocationBonus = async () => {
     const { name, zip, bonus_amount } = newLocationBonus;
-    if (!name || !zip || !bonus_amount) { alert('Fill in all fields'); return; }
+    if (!name || !zip || !bonus_amount) { notify('Fill in all fields'); return; }
     await supabase.from('bonuses').insert({ bonus_name: name, bonus_amount: parseFloat(bonus_amount), zip_code: zip });
     setNewLocationBonus({ name: '', zip: '', bonus_amount: '' });
     setAddingLocationBonus(false);
@@ -339,7 +343,7 @@ export default function SettingsView({
   };
 
   const deleteLocationBonus = async (id) => {
-    if (!confirm('Delete this location bonus?')) return;
+    if (!(await confirm('Delete this location bonus?'))) return;
     await supabase.from('bonuses').delete().eq('id', id);
     loadPayRatesData();
     if (onPayRatesChanged) onPayRatesChanged();
@@ -469,7 +473,7 @@ export default function SettingsView({
 
   const saveVenue = async () => {
     if (!venueForm.name.trim()) {
-      alert('Venue name is required.');
+      notify('Venue name is required.');
       return;
     }
     setSavingVenue(true);
@@ -496,7 +500,7 @@ export default function SettingsView({
       setEditingVenue(null);
       resetVenueForm();
     } catch (err) {
-      alert('Error saving venue: ' + err.message);
+      notify('Error saving venue: ' + err.message);
     } finally {
       setSavingVenue(false);
     }
@@ -508,18 +512,18 @@ export default function SettingsView({
       if (error) throw error;
       await loadVenues();
     } catch (err) {
-      alert('Error updating venue: ' + err.message);
+      notify('Error updating venue: ' + err.message);
     }
   };
 
   const deleteVenue = async (venue) => {
-    if (!confirm(`Delete "${venue.name}"? This cannot be undone.`)) return;
+    if (!(await confirm(`Delete "${venue.name}"? This cannot be undone.`))) return;
     try {
       const { error } = await supabase.from('venues').delete().eq('id', venue.id);
       if (error) throw error;
       await loadVenues();
     } catch (err) {
-      alert('Error deleting venue: ' + err.message);
+      notify('Error deleting venue: ' + err.message);
     }
   };
 
@@ -582,7 +586,7 @@ export default function SettingsView({
   };
 
   const saveClient = async () => {
-    if (!clientForm.name.trim()) { alert('Client name is required.'); return; }
+    if (!clientForm.name.trim()) { notify('Client name is required.'); return; }
     setSavingClient(true);
     try {
       const payload = {
@@ -606,20 +610,20 @@ export default function SettingsView({
       setEditingClient(null);
       resetClientForm();
     } catch (err) {
-      alert('Error saving client: ' + err.message);
+      notify('Error saving client: ' + err.message);
     } finally {
       setSavingClient(false);
     }
   };
 
   const deleteClient = async (client) => {
-    if (!confirm(`Delete "${client.name}"? Their events will not be deleted.`)) return;
+    if (!(await confirm(`Delete "${client.name}"? Their events will not be deleted.`))) return;
     try {
       const { error } = await supabase.from('clients').delete().eq('id', client.id);
       if (error) throw error;
       await loadClients();
     } catch (err) {
-      alert('Error deleting client: ' + err.message);
+      notify('Error deleting client: ' + err.message);
     }
   };
 
@@ -681,7 +685,7 @@ export default function SettingsView({
 
   const saveLocation = async () => {
     if (!locationForm.name.trim()) {
-      alert('Location name is required.');
+      notify('Location name is required.');
       return;
     }
     setSavingLocation(true);
@@ -713,7 +717,7 @@ export default function SettingsView({
       resetLocationForm();
       if (onPayRatesChanged) onPayRatesChanged();
     } catch (err) {
-      alert('Error saving location: ' + err.message);
+      notify('Error saving location: ' + err.message);
     } finally {
       setSavingLocation(false);
     }
@@ -728,16 +732,16 @@ export default function SettingsView({
       if (error) throw error;
       await loadLocations();
     } catch (err) {
-      alert('Error updating location: ' + err.message);
+      notify('Error updating location: ' + err.message);
     }
   };
 
   const deleteLocation = async (loc) => {
     if (loc.name === 'Main') {
-      alert('The default "Main" location cannot be deleted.');
+      notify('The default "Main" location cannot be deleted.');
       return;
     }
-    if (!confirm(`Delete "${loc.name}"? This cannot be undone. Events linked to this location will lose their location.`)) return;
+    if (!(await confirm(`Delete "${loc.name}"? This cannot be undone. Events linked to this location will lose their location.`))) return;
     try {
       const { error } = await supabase
         .from('locations')
@@ -746,7 +750,7 @@ export default function SettingsView({
       if (error) throw error;
       await loadLocations();
     } catch (err) {
-      alert('Error deleting location: ' + err.message);
+      notify('Error deleting location: ' + err.message);
     }
   };
 
@@ -805,9 +809,9 @@ export default function SettingsView({
       }
 
       setPaymentTrackingEnabled(enabled);
-      alert(enabled ? 'Payment tracking enabled!' : 'Payment tracking disabled!');
+      notify(enabled ? 'Payment tracking enabled!' : 'Payment tracking disabled!');
     } catch (error) {
-      alert('Error saving setting: ' + error.message);
+      notify('Error saving setting: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -995,9 +999,9 @@ export default function SettingsView({
       }
 
       onUpdatePositions(sortedPositions);
-      alert('Positions updated successfully!');
+      notify('Positions updated successfully!');
     } catch (error) {
-      alert('Error saving positions: ' + error.message);
+      notify('Error saving positions: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -1005,7 +1009,7 @@ export default function SettingsView({
 
   const handleAddPosition = async () => {
     if (!newPosition.trim()) {
-      alert('Please enter a position name');
+      notify('Please enter a position name');
       return;
     }
     
@@ -1013,7 +1017,7 @@ export default function SettingsView({
     const newLabel = newPosition.trim();
     
     if (positions.some(p => p.key === newKey)) {
-      alert('This position already exists');
+      notify('This position already exists');
       return;
     }
     
@@ -1024,7 +1028,7 @@ export default function SettingsView({
 
   const handleDeletePosition = async (position) => {
     const label = position.label || position;
-    if (!confirm(`Are you sure you want to delete "${label}"?`)) return;
+    if (!(await confirm(`Are you sure you want to delete "${label}"?`))) return;
     
     const posKey = position.key || position;
     const updatedPositions = positions.filter(p => p.key !== posKey);
@@ -1038,7 +1042,7 @@ export default function SettingsView({
 
   const handleSaveEdit = async () => {
     if (!editValue.trim()) {
-      alert('Position name cannot be empty');
+      notify('Position name cannot be empty');
       return;
     }
     
@@ -1987,9 +1991,9 @@ export default function SettingsView({
                   } else {
                     await supabase.from('settings').insert([{ setting_key: 'payment_tracking_enabled', setting_value: paymentTrackingEnabled.toString() }]);
                   }
-                  alert('All settings saved!');
+                  notify('All settings saved!');
                 } catch (err) {
-                  alert('Error saving: ' + err.message);
+                  notify('Error saving: ' + err.message);
                 } finally {
                   setSaving(false);
                 }

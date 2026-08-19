@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
+import { useConfirm } from './ui/ConfirmDialog';
+import { useToast } from './ui/Toast';
 
 const getPayRateKey = (position) => {
   const p = String(position || '').toLowerCase().trim();
@@ -21,6 +23,8 @@ const getPayRateKey = (position) => {
 };
 
 const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, onReloadAssignments }) => {
+    const confirm = useConfirm();
+    const notify = useToast();
     const [applying, setApplying] = useState(false);
     const [eventDistances, setEventDistances] = useState({}); // { eventId: miles } from worker address (for display)
     const [travelPayDistances, setTravelPayDistances] = useState({}); // { eventId: miles } from worker home location (for pay calc)
@@ -231,7 +235,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
 
 
           if (currentApproved >= maxCount) {
-            const joinStandby = confirm(
+            const joinStandby = await confirm(
               `⚠️ POSITION FULL!\n\n` +
               `Sorry, the ${position} position for "${event.name}" has already been filled.\n\n` +
               `${currentApproved}/${maxCount} spots taken.\n\n` +
@@ -278,7 +282,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               }
               
               if (hasConflict) {
-                alert(
+                notify(
                   `⚠️ TIME CONFLICT!\n\n` +
                   `You're already confirmed for:\n"${conflictEventName}"\n\n` +
                   `You cannot join standby for an event that conflicts with your confirmed assignments.\n\n` +
@@ -305,10 +309,10 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                 if (error) throw error;
                 
                 onReloadAssignments();
-                alert(`✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
+                notify(`✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
               } catch (error) {
                 console.error('Error joining standby:', error);
-                alert('Error joining standby: ' + error.message);
+                notify('Error joining standby: ' + error.message);
               } finally {
                 setApplying(false);
               }
@@ -357,7 +361,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       }
       
       if (hasTimeConflict && conflictEvent) {
-        alert(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${formatTime(conflictEvent.time, timeFormat)} - ${formatTime(conflictEvent.end_time, timeFormat)}\n\nThis conflicts with:\n${event.name}\n${formatTime(event.time, timeFormat)} - ${formatTime(event.end_time, timeFormat)}\n\nPlease contact admin if you need to change assignments.`);
+        notify(`⚠️ TIME CONFLICT!\n\nYou're already assigned/applied to:\n${conflictEvent.name}\n${formatTime(conflictEvent.time, timeFormat)} - ${formatTime(conflictEvent.end_time, timeFormat)}\n\nThis conflicts with:\n${event.name}\n${formatTime(event.time, timeFormat)} - ${formatTime(event.end_time, timeFormat)}\n\nPlease contact admin if you need to change assignments.`);
         return;
       }
       
@@ -382,9 +386,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         
         if (nonCombinableExisting.length > 0) {
           const existingPosition = getPositionLabel(nonCombinableExisting[0].position);
-          const statusText = nonCombinableExisting[0].status === 'approved' ? 'assigned to' : 
+          const statusText = nonCombinableExisting[0].status === 'approved' ? 'assigned to' :
                             nonCombinableExisting[0].status === 'standby' ? 'on standby for' : 'applied for';
-          alert(
+          notify(
             `⚠️ ALREADY ${statusText.toUpperCase()}!\n\n` +
             `You are already ${statusText} "${existingPosition}" at this event.\n\n` +
             `Workers can only work ONE position per event.`
@@ -392,8 +396,8 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           return;
         }
       }
-      
-      if (!confirm(`Apply for ${position} position at ${event.name}?`)) return;
+
+      if (!(await confirm(`Apply for ${position} position at ${event.name}?`))) return;
       
       setApplying(true);
       try {
@@ -413,10 +417,10 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         if (error) throw error;
         
         onReloadAssignments();
-        alert(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+        notify(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
       } catch (error) {
         console.error('Error applying:', error);
-        alert('Error submitting application: ' + error.message);
+        notify('Error submitting application: ' + error.message);
       } finally {
         setApplying(false);
       }

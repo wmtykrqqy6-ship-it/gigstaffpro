@@ -4,6 +4,8 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, getPositionKey, isAssignmentFilled } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 // Find the position definition on an event that corresponds to an application's position value
 const findPositionDef = (event, position) => {
@@ -44,6 +46,8 @@ export default function ApplicationsView({
   const [filter, setFilter] = useState('pending'); // 'all', 'pending', 'approved', 'rejected'
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState(null);
+  const confirm = useConfirm();
+  const notify = useToast();
 
   // Send confirmation email with calendar link when a worker is approved
   const sendConfirmationEmail = async (app) => {
@@ -141,7 +145,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
   };
 
   const handleApproveToStandby = async (applicationId) => {
-    if (!confirm('Position is full — add this applicant to the standby list?')) return;
+    if (!(await confirm('Position is full — add this applicant to the standby list?'))) return;
     setProcessingId(applicationId);
     try {
       const { error } = await supabase
@@ -151,7 +155,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       if (error) throw error;
       onReloadAssignments();
     } catch (error) {
-      alert('Error adding to standby: ' + error.message);
+      notify('Error adding to standby: ' + error.message);
     } finally {
       setProcessingId(null);
     }
@@ -221,7 +225,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       }
     }
 
-    if (!confirm('Approve this application?')) return;
+    if (!(await confirm('Approve this application?'))) return;
     
     setProcessingId(applicationId);
     try {
@@ -277,7 +281,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       onReloadAssignments();
       await sendConfirmationEmail(app);
     } catch (error) {
-      alert('Error approving application: ' + error.message);
+      notify('Error approving application: ' + error.message);
     } finally {
       setProcessingId(null);
     }
@@ -287,7 +291,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     const pendingApps = filteredApplications.filter(app => app.status === 'pending');
     
     if (pendingApps.length === 0) {
-      alert('No pending applications to approve.');
+      notify('No pending applications to approve.');
       return;
     }
 
@@ -325,17 +329,17 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     // Warn about overfilled positions
     if (overfilledApps.length > 0) {
       const names = overfilledApps.map(a => `• ${a.worker?.name} - ${a.position} @ ${a.event?.name}`).join('\n');
-      const proceed = confirm(
+      const proceed = await confirm(
         `⚠️ ${overfilledApps.length} application(s) cannot be approved - position already full:\n\n${names}\n\n` +
         `Approve the remaining ${approvableApps.length} application(s)?`
       );
       if (!proceed) return;
     } else {
-      if (!confirm(`Approve ${approvableApps.length} pending application(s)?`)) return;
+      if (!(await confirm(`Approve ${approvableApps.length} pending application(s)?`))) return;
     }
 
     if (approvableApps.length === 0) {
-      alert('No applications could be approved - all positions are full.');
+      notify('No applications could be approved - all positions are full.');
       return;
     }
     
@@ -351,16 +355,16 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       if (error) throw error;
       
       onReloadAssignments();
-      alert(`✓ ${approvableApps.length} application(s) approved!${overfilledApps.length > 0 ? `\n${overfilledApps.length} skipped (position full).` : ''}`);
+      notify(`✓ ${approvableApps.length} application(s) approved!${overfilledApps.length > 0 ? `\n${overfilledApps.length} skipped (position full).` : ''}`);
     } catch (error) {
-      alert('Error bulk approving: ' + error.message);
+      notify('Error bulk approving: ' + error.message);
     } finally {
       setProcessingId(null);
     }
   };
 
   const handleReject = async (applicationId) => {
-    if (!confirm('Reject this application? This will remove the assignment.')) return;
+    if (!(await confirm('Reject this application? This will remove the assignment.'))) return;
     
     setProcessingId(applicationId);
     try {
@@ -372,9 +376,9 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       if (error) throw error;
       
       onReloadAssignments();
-      alert('Application rejected and removed.');
+      notify('Application rejected and removed.');
     } catch (error) {
-      alert('Error rejecting application: ' + error.message);
+      notify('Error rejecting application: ' + error.message);
     } finally {
       setProcessingId(null);
     }

@@ -3,6 +3,8 @@ import { DollarSign, CheckCircle, Clock, Filter, Download, AlertCircle } from 'l
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel } from '../../utils/positionHelpers';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 export default function PaymentsView({
   assignments,
@@ -12,6 +14,8 @@ export default function PaymentsView({
   paymentTrackingEnabled,
   onReloadAssignments
 }) {
+    const confirm = useConfirm();
+    const notify = useToast();
     const [filterStatus, setFilterStatus] = useState('all'); // all, pending, paid
     const [filterWorker, setFilterWorker] = useState('all');
     const [filterEvent, setFilterEvent] = useState('all');
@@ -99,8 +103,8 @@ export default function PaymentsView({
       .reduce((sum, a) => sum + (a.total_pay || 0), 0);
 
     const markAsPaid = async (assignmentId) => {
-      if (!confirm('Mark this payment as paid?')) return;
-      
+      if (!(await confirm('Mark this payment as paid?'))) return;
+
       try {
         const { error } = await supabase
           .from('assignments')
@@ -109,19 +113,19 @@ export default function PaymentsView({
             paid_at: new Date().toISOString()
           })
           .eq('id', assignmentId);
-        
+
         if (error) throw error;
-        
+
         onReloadAssignments();
-        alert('Payment marked as paid!');
+        notify('Payment marked as paid!');
       } catch (error) {
-        alert('Error updating payment status: ' + error.message);
+        notify('Error updating payment status: ' + error.message);
       }
     };
 
     const markAsPending = async (assignmentId) => {
-      if (!confirm('Mark this payment as pending (unpaid)?')) return;
-      
+      if (!(await confirm('Mark this payment as pending (unpaid)?'))) return;
+
       try {
         const { error } = await supabase
           .from('assignments')
@@ -130,13 +134,13 @@ export default function PaymentsView({
             paid_at: null
           })
           .eq('id', assignmentId);
-        
+
         if (error) throw error;
-        
+
         onReloadAssignments();
-        alert('Payment marked as pending!');
+        notify('Payment marked as pending!');
       } catch (error) {
-        alert('Error updating payment status: ' + error.message);
+        notify('Error updating payment status: ' + error.message);
       }
     };
 
@@ -165,11 +169,11 @@ export default function PaymentsView({
 
     const bulkMarkAsPaid = async () => {
       if (selectedAssignments.length === 0) {
-        alert('Please select assignments to mark as paid');
+        notify('Please select assignments to mark as paid');
         return;
       }
 
-      if (!confirm(`Mark ${selectedAssignments.length} assignments as paid?`)) return;
+      if (!(await confirm(`Mark ${selectedAssignments.length} assignments as paid?`))) return;
 
       setBulkActionLoading(true);
       try {
@@ -180,14 +184,14 @@ export default function PaymentsView({
             paid_at: new Date().toISOString()
           })
           .in('id', selectedAssignments);
-        
+
         if (error) throw error;
-        
+
         setSelectedAssignments([]);
         onReloadAssignments();
-        alert(`${selectedAssignments.length} payments marked as paid!`);
+        notify(`${selectedAssignments.length} payments marked as paid!`);
       } catch (error) {
-        alert('Error updating payments: ' + error.message);
+        notify('Error updating payments: ' + error.message);
       } finally {
         setBulkActionLoading(false);
       }
@@ -195,11 +199,11 @@ export default function PaymentsView({
 
     const bulkMarkAsPending = async () => {
       if (selectedAssignments.length === 0) {
-        alert('Please select assignments to mark as pending');
+        notify('Please select assignments to mark as pending');
         return;
       }
 
-      if (!confirm(`Mark ${selectedAssignments.length} assignments as pending?`)) return;
+      if (!(await confirm(`Mark ${selectedAssignments.length} assignments as pending?`))) return;
 
       setBulkActionLoading(true);
       try {
@@ -210,14 +214,14 @@ export default function PaymentsView({
             paid_at: null
           })
           .in('id', selectedAssignments);
-        
+
         if (error) throw error;
-        
+
         setSelectedAssignments([]);
         onReloadAssignments();
-        alert(`${selectedAssignments.length} payments marked as pending!`);
+        notify(`${selectedAssignments.length} payments marked as pending!`);
       } catch (error) {
-        alert('Error updating payments: ' + error.message);
+        notify('Error updating payments: ' + error.message);
       } finally {
         setBulkActionLoading(false);
       }

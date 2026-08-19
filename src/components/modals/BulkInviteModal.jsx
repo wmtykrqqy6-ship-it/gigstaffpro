@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Copy, Check, Clock } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [note, setNote] = useState('');
@@ -89,7 +93,7 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
   };
 
   const handleSend = async () => {
-    if (!name.trim()) { alert('Please enter a name.'); return; }
+    if (!name.trim()) { notify('Please enter a name.'); return; }
     setSaving(true);
     const isEmail = contact.trim().includes('@');
     try {
@@ -105,12 +109,12 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
       if (isEmail) {
         try {
           await sendInviteEmail(contact.trim(), name.trim());
-          alert(`✓ Invite logged and email sent to ${contact.trim()}!`);
+          notify(`✓ Invite logged and email sent to ${contact.trim()}!`);
         } catch (emailErr) {
           // A session-expiry redirect is already in progress — the
           // App-level flow shows its own message, so don't also alert here.
           if (!emailErr.sessionExpired) {
-            alert(`✓ Invite logged, but email failed: ${emailErr.message}\n\nShare the link manually: ${PORTAL_URL}`);
+            notify(`✓ Invite logged, but email failed: ${emailErr.message}\n\nShare the link manually: ${PORTAL_URL}`);
           }
         }
       }
@@ -119,9 +123,9 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
       await loadInvites();
     } catch (err) {
       if (err.message?.includes('relation') || err.message?.includes('does not exist')) {
-        alert(`Run the invite migration SQL first.\n\nShare this link manually:\n${PORTAL_URL}`);
+        notify(`Run the invite migration SQL first.\n\nShare this link manually:\n${PORTAL_URL}`);
       } else {
-        alert('Error: ' + err.message);
+        notify('Error: ' + err.message);
       }
     } finally { setSaving(false); }
   };
@@ -136,15 +140,15 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
     try {
       await supabase.from('worker_invites').update({ status: 'joined' }).eq('id', invite.id);
       await loadInvites();
-    } catch (err) { alert('Error: ' + err.message); }
+    } catch (err) { notify('Error: ' + err.message); }
   };
 
   const deleteInvite = async (id) => {
-    if (!confirm('Remove this invite record?')) return;
+    if (!(await confirm('Remove this invite record?'))) return;
     try {
       await supabase.from('worker_invites').delete().eq('id', id);
       await loadInvites();
-    } catch (err) { alert('Error: ' + err.message); }
+    } catch (err) { notify('Error: ' + err.message); }
   };
 
   if (!open) return null;

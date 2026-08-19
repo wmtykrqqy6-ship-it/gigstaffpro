@@ -8,6 +8,8 @@ import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
 import HistoryView from './HistoryView';
 import PostEventReportModal from '../modals/PostEventReportModal';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 const getPayRateKey = (position) => {
   const p = String(position || '').toLowerCase().trim();
@@ -46,6 +48,8 @@ export default function WorkerPortalView({  loggedInWorker,
   workerAuthMode
 }) {
     const currentWorker = loggedInWorker;
+    const confirm = useConfirm();
+    const notify = useToast();
 
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -148,7 +152,7 @@ export default function WorkerPortalView({  loggedInWorker,
       
       // Check if within 7 days
       if (daysUntil < 7) {
-        alert(
+        notify(
           `⚠️ Cannot Cancel\n\n` +
           `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
           `Events within 7 days cannot be cancelled online.\n` +
@@ -156,28 +160,28 @@ export default function WorkerPortalView({  loggedInWorker,
         );
         return;
       }
-      
-      if (!confirm(
+
+      if (!(await confirm(
         `Cancel your assignment to "${assignment.event.name}"?\n\n` +
         `Position: ${getPositionLabel(assignment.position)}\n` +
         `Date: ${parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}\n\n` +
         `This will remove you from the event.`
-      )) {
+      ))) {
         return;
       }
-      
+
       try {
         const { error } = await supabase
           .from('assignments')
           .delete()
           .eq('id', assignment.id);
-        
+
         if (error) throw error;
-        
+
         onReloadAssignments();
-        alert('✓ Assignment cancelled successfully.');
+        notify('✓ Assignment cancelled successfully.');
       } catch (error) {
-        alert('Error cancelling assignment: ' + error.message);
+        notify('Error cancelling assignment: ' + error.message);
       }
     };
 
@@ -188,7 +192,7 @@ export default function WorkerPortalView({  loggedInWorker,
       
       // Check if within 7 days
       if (daysUntil < 7) {
-        alert(
+        notify(
           `⚠️ Cannot Switch Position\n\n` +
           `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
           `Position changes within 7 days require admin approval.\n` +
@@ -196,31 +200,31 @@ export default function WorkerPortalView({  loggedInWorker,
         );
         return;
       }
-      
+
       const newPositionLabel = getPositionLabel(newPositionKey);
       const currentPositionLabel = getPositionLabel(assignment.position);
-      
-      if (!confirm(
+
+      if (!(await confirm(
         `Switch position for "${assignment.event.name}"?\n\n` +
         `From: ${currentPositionLabel}\n` +
         `To: ${newPositionLabel}\n\n` +
         `This change will take effect immediately.`
-      )) {
+      ))) {
         return;
       }
-      
+
       try {
         const { error } = await supabase
           .from('assignments')
           .update({ position: newPositionKey })
           .eq('id', assignment.id);
-        
+
         if (error) throw error;
-        
+
         onReloadAssignments();
-        alert(`✓ Position switched to ${newPositionLabel}!`);
+        notify(`✓ Position switched to ${newPositionLabel}!`);
       } catch (error) {
-        alert('Error switching position: ' + error.message);
+        notify('Error switching position: ' + error.message);
       }
     };
 
@@ -263,7 +267,7 @@ export default function WorkerPortalView({  loggedInWorker,
         if (error) throw error;
         setCheckIns(prev => ({ ...prev, [assignmentId]: data }));
         setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: false }));
-      } catch (err) { alert('Check-in failed: ' + err.message); }
+      } catch (err) { notify('Check-in failed: ' + err.message); }
       finally { setCheckingIn(prev => ({ ...prev, [assignmentId]: false })); }
     };
 
@@ -350,7 +354,7 @@ export default function WorkerPortalView({  loggedInWorker,
         setPendingInvites(prev => prev.filter(i => i.id !== invitation.id));
         if (onReloadAssignments) onReloadAssignments();
       } catch (err) {
-        alert('Error responding to invite: ' + err.message);
+        notify('Error responding to invite: ' + err.message);
       } finally {
         setRespondingInvite(null);
       }
@@ -654,12 +658,12 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                       <button
                         onClick={async () => {
-                          if (!confirm('Remove yourself from the standby list for this event?')) return;
+                          if (!(await confirm('Remove yourself from the standby list for this event?'))) return;
                           try {
                             await supabase.from('assignments').delete().eq('id', assignment.id);
                             onReloadAssignments();
                           } catch (e) {
-                            alert('Error removing from standby: ' + e.message);
+                            notify('Error removing from standby: ' + e.message);
                           }
                         }}
                         className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors p-1"

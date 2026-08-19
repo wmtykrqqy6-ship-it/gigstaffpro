@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { useToast } from '../ui/Toast';
 
 export default function AddWorkerModal({
   open,
@@ -8,6 +9,7 @@ export default function AddWorkerModal({
   onClose,
   onSaveWorker
 }) {
+  const notify = useToast();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,7 +27,7 @@ export default function AddWorkerModal({
     e.preventDefault();
 
     if (formData.skills.length === 0) {
-      alert('Please select at least one skill');
+      notify('Please select at least one skill');
       return;
     }
 

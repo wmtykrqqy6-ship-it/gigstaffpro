@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
+import { useToast } from '../ui/Toast';
 
 const fmtDate = (d) => {
   if (!d) return d;
@@ -57,6 +58,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const [confirmSend, setConfirmSend] = useState(null); // holds {workerIds, rank} when awaiting confirmation
   const [reInviting, setReInviting] = useState(null);
   const [nudging, setNudging] = useState(null); // invite id being nudged
+  const notify = useToast();
 
   useEffect(() => {
     if (open && event) {
@@ -408,14 +410,14 @@ ${invitePayHtml}
         if (skippedCount > 0) parts.push(`${skippedCount} skipped (no email on file).`);
         if (failedCount > 0) parts.push(`${failedCount} failed to send.`);
         parts.push('The sending limit was reached, so some invitation emails were not sent. Wait a few minutes, then use Nudge on the Responses tab for any pending workers who still need their invite email.');
-        alert(parts.join(' '));
+        notify(parts.join(' '));
       } else if (failedCount > 0 || skippedCount > 0) {
         const parts = [`${sentCount} invite${sentCount !== 1 ? 's' : ''} sent`];
         if (skippedCount > 0) parts.push(`${skippedCount} skipped (no email on file)`);
         if (failedCount > 0) parts.push(`${failedCount} failed to send`);
-        alert(parts.join(', ') + '.');
+        notify(parts.join(', ') + '.');
       }
-    } catch (err) { alert('Error sending invites: ' + err.message); }
+    } catch (err) { notify('Error sending invites: ' + err.message); }
     finally { setSending(false); }
   };
 
@@ -536,18 +538,18 @@ ${reInvitePayHtml}
         }
 
         if (emailRes.status === 429) {
-          alert('The sending limit was reached. Wait a few minutes and try again.');
+          notify('The sending limit was reached. Wait a few minutes and try again.');
           return;
         }
 
         if (!emailRes.ok) {
-          alert('Failed to send re-invite email. Please try again.');
+          notify('Failed to send re-invite email. Please try again.');
           return;
         }
       }
 
       await loadInvitations();
-    } catch (err) { alert('Error re-inviting worker: ' + err.message); }
+    } catch (err) { notify('Error re-inviting worker: ' + err.message); }
     finally { setReInviting(null); }
   };
 
@@ -555,7 +557,7 @@ ${reInvitePayHtml}
     setNudging(inv.id);
     try {
       const worker = workers.find(w => w.id === inv.worker_id);
-      if (!worker?.email) { alert('Worker has no email address.'); return; }
+      if (!worker?.email) { notify('Worker has no email address.'); return; }
 
       const positionLabel = getPositionLabel(inv.position_key) || inv.position_key;
       const expiresAt = new Date(inv.expires_at);
@@ -615,7 +617,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       }
 
       if (emailRes.status === 429) {
-        alert('The sending limit was reached. Wait a few minutes and try again.');
+        notify('The sending limit was reached. Wait a few minutes and try again.');
         return;
       }
 
@@ -627,10 +629,10 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
           .eq('id', inv.id);
         await loadInvitations();
       } else {
-        alert('Failed to send reminder. Please try again.');
+        notify('Failed to send reminder. Please try again.');
       }
     } catch (err) {
-      alert('Error sending reminder: ' + err.message);
+      notify('Error sending reminder: ' + err.message);
     } finally {
       setNudging(null);
     }
@@ -645,7 +647,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       if (otherAccepted.length > 0) await supabase.from('invitations').update({ status: 'standby' }).in('id', otherAccepted.map(i => i.id));
       await loadInvitations();
       if (onReloadAssignments) onReloadAssignments();
-    } catch (err) { alert('Error confirming worker: ' + err.message); }
+    } catch (err) { notify('Error confirming worker: ' + err.message); }
     finally { setConfirming(null); }
   };
 

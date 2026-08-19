@@ -4,6 +4,8 @@ import { supabase } from '../../supabaseClient';
 import { hashPin } from '../../utils/authHelpers';
 import { normalizeUsPhoneToE164 } from '../../utils/workerAuth';
 import { UI, SUCCESS_MESSAGES } from '../../constants';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 // Masks a normalized E.164 phone down to its last 4 digits for display in
 // the migration confirmation dialog — the full number is never placed in
@@ -59,6 +61,8 @@ export default function SetPinModal({
   onSuccess,
   onSessionExpired
 }) {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [settingPin, setSettingPin] = useState(false);
@@ -133,7 +137,7 @@ export default function SetPinModal({
     // if this somehow fires despite the disabled submit button (e.g. Enter
     // key). Never falls back to a legacy write in this case.
     if (!statusKnown) {
-      alert('Unable to confirm this worker\'s login status. Please close and try again.');
+      notify('Unable to confirm this worker\'s login status. Please close and try again.');
       return;
     }
 
@@ -143,15 +147,15 @@ export default function SetPinModal({
     // on failure — the modal simply stays open with a generic message.
     if (isMigrateAction) {
       if (newPin.length !== 6 || confirmPin.length !== 6) {
-        alert('Please enter a valid PIN.');
+        notify('Please enter a valid PIN.');
         return;
       }
       if (newPin !== confirmPin) {
-        alert('PINs do not match.');
+        notify('PINs do not match.');
         return;
       }
     } else if (newPin.length !== pinLength) {
-      alert('Please enter a valid PIN.');
+      notify('Please enter a valid PIN.');
       return;
     }
 
@@ -164,7 +168,7 @@ export default function SetPinModal({
       const normalizedPhone = normalizeUsPhoneToE164(worker.phone);
       const maskedPhone = maskPhoneForDisplay(normalizedPhone);
 
-      const confirmed = confirm(
+      const confirmed = await confirm(
         `Migrate ${worker.name} to the new login?\n\n` +
         `Phone: ${maskedPhone}\n\n` +
         `After migration:\n` +
@@ -220,7 +224,7 @@ export default function SetPinModal({
         setNewPin('');
         setConfirmPin('');
 
-        alert('Worker PIN updated successfully.');
+        notify('Worker PIN updated successfully.');
 
         if (onSuccess) {
           await onSuccess();
@@ -290,12 +294,12 @@ export default function SetPinModal({
           // than the generic endpoint-failure text. Submission is disabled
           // by the resulting 'error' status until the modal is reopened.
           setMigrationStatus('error');
-          alert('The login was updated, but the status could not be refreshed. Close this window and check again.');
+          notify('The login was updated, but the status could not be refreshed. Close this window and check again.');
           return;
         }
 
         setMigrationStatus('migrated');
-        alert('Worker login updated successfully.');
+        notify('Worker login updated successfully.');
 
         if (onSuccess) {
           await onSuccess();
@@ -324,7 +328,7 @@ export default function SetPinModal({
 
       if (requestIdRef.current !== requestId) return;
 
-      alert(
+      notify(
         `✅ PIN set successfully for ${worker.name}!\n\n` +
         `Their login info:\n` +
         `Phone: ${worker.phone}\n` +
@@ -348,7 +352,7 @@ export default function SetPinModal({
       // hashing failures, or anything else) — every failure funneling
       // through this catch shows only the fixed generic message.
       if (requestIdRef.current === requestId) {
-        alert('Unable to update this PIN right now. Please try again.');
+        notify('Unable to update this PIN right now. Please try again.');
       }
     } finally {
       // Guarded: a superseded request must not re-enable controls in a

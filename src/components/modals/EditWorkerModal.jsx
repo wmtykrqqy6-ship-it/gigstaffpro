@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel } from '../../utils/hostLabelHelper';
+import { useToast } from '../ui/Toast';
 
 export default function EditWorkerModal({
   open,
@@ -21,6 +22,7 @@ export default function EditWorkerModal({
     is_host: false,
   });
   const [saving, setSaving] = useState(false);
+  const notify = useToast();
 
   useEffect(() => {
     if (worker) {
@@ -51,7 +53,7 @@ export default function EditWorkerModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.skills.length === 0) {
-      alert('Please select at least one skill');
+      notify('Please select at least one skill');
       return;
     }
     setSaving(true);
@@ -70,7 +72,7 @@ export default function EditWorkerModal({
 
     setSaving(false);
     if (error) {
-      alert('Error saving worker: ' + error.message);
+      notify('Error saving worker: ' + error.message);
     } else {
       if (onSuccess) onSuccess();
       onClose();

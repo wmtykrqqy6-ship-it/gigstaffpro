@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
+import { useToast } from '../ui/Toast';
 
 export default function EditEventModal({
   open,
@@ -48,6 +49,7 @@ export default function EditEventModal({
   const [savingVenue, setSavingVenue] = useState(false);
   const [venueSaved, setVenueSaved] = useState(false);
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
+  const notify = useToast();
 
   // Load active locations
   useEffect(() => {
@@ -207,7 +209,7 @@ export default function EditEventModal({
     e.preventDefault();
     
     if (formData.positions.length === 0) {
-      alert('Please specify at least one staff position needed');
+      notify('Please specify at least one staff position needed');
       return;
     }
     
@@ -234,10 +236,10 @@ export default function EditEventModal({
         return; // Don't close yet — let user respond to prompt
       }
 
-      alert(SUCCESS_MESSAGES.EVENT_SAVED);
+      notify(SUCCESS_MESSAGES.EVENT_SAVED);
       closeAndReset();
     } catch (error) {
-      alert(ERROR_MESSAGES.DATA.UPDATE_FAILED + ': ' + error.message);
+      notify(ERROR_MESSAGES.DATA.UPDATE_FAILED + ': ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -272,11 +274,11 @@ export default function EditEventModal({
       if (error) throw error;
       setVenueSaved(true);
       setTimeout(() => {
-        alert(SUCCESS_MESSAGES.EVENT_SAVED);
+        notify(SUCCESS_MESSAGES.EVENT_SAVED);
         closeAndReset();
       }, 800);
     } catch (err) {
-      alert('Venue save failed: ' + err.message);
+      notify('Venue save failed: ' + err.message);
     } finally {
       setSavingVenue(false);
     }
@@ -360,7 +362,7 @@ export default function EditEventModal({
                         {savingVenue ? 'Saving...' : 'Save to Library'}
                       </button>
                       <button
-                        onClick={() => { alert(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
+                        onClick={() => { notify(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
                         className="px-5 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50"
                       >
                         Skip, don't save

@@ -3,6 +3,8 @@ import { X, CheckCircle, XCircle, Clock, AlertTriangle, ChevronDown } from 'luci
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 const ATTENDANCE_OPTIONS = [
   {
@@ -71,6 +73,8 @@ export default function PostEventReportModal({
   onClose,
   onSuccess
 }) {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [attendance, setAttendance] = useState({});
   const [notes, setNotes] = useState({});
   const [reportNotes, setReportNotes] = useState('');
@@ -108,11 +112,11 @@ export default function PostEventReportModal({
 
   const handleSubmit = async () => {
     if (assignedWorkers.length === 0) {
-      alert('No assigned workers found for this event.');
+      notify('No assigned workers found for this event.');
       return;
     }
 
-    if (!confirm('Submit this post-event report? Rating changes will be pending admin review.')) return;
+    if (!(await confirm('Submit this post-event report? Rating changes will be pending admin review.'))) return;
 
     setSubmitting(true);
     try {
@@ -125,7 +129,7 @@ export default function PostEventReportModal({
         .maybeSingle();
 
       if (existing) {
-        alert('A report has already been submitted for this event.');
+        notify('A report has already been submitted for this event.');
         setSubmitting(false);
         if (onSuccess) await onSuccess();
         onClose();
@@ -172,9 +176,9 @@ export default function PostEventReportModal({
 
       if (onSuccess) await onSuccess();
       onClose();
-      alert('✅ Report submitted! Admin will review before ratings are applied.');
+      notify('✅ Report submitted! Admin will review before ratings are applied.');
     } catch (error) {
-      alert('Error submitting report: ' + error.message);
+      notify('Error submitting report: ' + error.message);
     } finally {
       setSubmitting(false);
     }

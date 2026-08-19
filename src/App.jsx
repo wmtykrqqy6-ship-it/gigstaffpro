@@ -42,8 +42,12 @@ import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
 import InviteWorkersModal from './components/modals/InviteWorkersModal';
+import { useConfirm } from './components/ui/ConfirmDialog';
+import { useToast } from './components/ui/Toast';
 
 const GigStaffPro = () => {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
   const [currentView, setCurrentView] = useState(() => sessionStorage.getItem('currentView') || 'dashboard');
   const [workers, setWorkers] = useState([]);
@@ -359,8 +363,8 @@ const handleDismissNotification = (id) => {
   setNotifications(prev => prev.filter(n => n.id !== id));
 };
 
-const handleClearAllNotifications = () => {
-  if (!confirm('Clear all notifications?')) return;
+const handleClearAllNotifications = async () => {
+  if (!(await confirm('Clear all notifications?'))) return;
 
   const idsToDismiss = notifications.map(n => n.id).filter(Boolean);
   const existing = loadDismissedNotificationIds();
@@ -381,12 +385,12 @@ const handleSaveWorker = async (formData) => {
 
     if (error) throw error;
 
-    alert('Worker added successfully!');
+    notify('Worker added successfully!');
     setShowAddWorker(false);
     await loadWorkers();
     return true;
   } catch (error) {
-    alert('Error adding worker: ' + error.message);
+    notify('Error adding worker: ' + error.message);
     return false;
   } finally {
     setSavingWorker(false);
@@ -420,7 +424,7 @@ const handleSaveWorker = async (formData) => {
       
       loadAssignments();
     } catch (error) {
-      alert('Error removing assignment: ' + error.message);
+      notify('Error removing assignment: ' + error.message);
     }
   };
 
@@ -999,36 +1003,36 @@ setAppPositions(storedPositions);
   };
 
   const deleteWorker = async (workerId) => {
-    if (!confirm('Are you sure you want to delete this worker?')) return;
-    
+    if (!(await confirm('Are you sure you want to delete this worker?'))) return;
+
     try {
       const { error } = await supabase
         .from('workers')
         .delete()
         .eq('id', workerId);
-      
+
       if (error) throw error;
-      
+
       loadWorkers();
     } catch (error) {
-      alert('Error deleting worker: ' + error.message);
+      notify('Error deleting worker: ' + error.message);
     }
   };
 
   const deleteEvent = async (eventId) => {
-    if (!confirm('Are you sure you want to delete this event?')) return;
-    
+    if (!(await confirm('Are you sure you want to delete this event?'))) return;
+
     try {
       const { error } = await supabase
         .from('events')
         .delete()
         .eq('id', eventId);
-      
+
       if (error) throw error;
-      
+
       loadEvents();
     } catch (error) {
-      alert('Error deleting event: ' + error.message);
+      notify('Error deleting event: ' + error.message);
     }
   };
 
@@ -1519,7 +1523,7 @@ setAppPositions(storedPositions);
             
             loadAssignments();
           } catch (error) {
-            alert('Error removing assignment: ' + error.message);
+            notify('Error removing assignment: ' + error.message);
           }
         }}
         onReloadAssignments={loadAssignments}

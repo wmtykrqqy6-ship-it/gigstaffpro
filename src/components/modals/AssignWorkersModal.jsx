@@ -3,6 +3,8 @@ import { X, Search, CheckCircle, Trash2, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey, getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 const isLakeGenevaZip = (address) => {
   if (!address) return false;
@@ -40,6 +42,8 @@ export default function AssignWorkersModal({
   const [expandedPositions, setExpandedPositions] = useState({});
   const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
   const [savingHost, setSavingHost] = useState(false);
+  const confirm = useConfirm();
+  const notify = useToast();
 
   const assignedWorkerIds = new Set(
     (assignments || [])
@@ -57,7 +61,7 @@ export default function AssignWorkersModal({
         .eq('id', event.id);
       setSelectedHostId(newHostId);
     } catch (error) {
-      alert('Error saving host: ' + error.message);
+      notify('Error saving host: ' + error.message);
     } finally {
       setSavingHost(false);
     }
@@ -138,7 +142,7 @@ export default function AssignWorkersModal({
 
   const saveEventPaymentSettings = () => {
     if (eventHours <= 0) {
-      alert('Hours must be greater than 0');
+      notify('Hours must be greater than 0');
       return;
     }
     
@@ -150,7 +154,7 @@ export default function AssignWorkersModal({
     });
     
     setShowEventPaymentSettings(false);
-    alert('Payment settings saved! All new assignments will use these settings.');
+    notify('Payment settings saved! All new assignments will use these settings.');
   };
 
   const eventAssignments = assignments.filter(a => a.event_id === event.id);
@@ -215,7 +219,7 @@ export default function AssignWorkersModal({
           const conflictEvent = events.find(e => e.id === conflicts[0].event_id);
           const conflictPosition = conflicts[0].position;
           
-          alert(
+          notify(
             `⚠️ Time Conflict!\n\n` +
             `${worker.name} is already assigned to:\n` +
             `"${conflictEvent.name}"\n` +
@@ -229,7 +233,7 @@ export default function AssignWorkersModal({
       
       // If worker is already assigned to a different position, confirm reassignment
       if (existingAssignment) {
-        if (!confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`)) {
+        if (!(await confirm(`${worker.name} is currently assigned to ${existingAssignment.position}. Move them to ${position} instead?`))) {
           return;
         }
         
@@ -243,7 +247,7 @@ export default function AssignWorkersModal({
 
       // Check if position is full
       if (isPositionFilled(position)) {
-        alert(`${position} is already fully staffed`);
+        notify(`${position} is already fully staffed`);
         return;
       }
 
@@ -264,12 +268,12 @@ export default function AssignWorkersModal({
       onAssign(workerId, position, existingAssignment, defaultHours);
 
     } catch (error) {
-      alert('Error in assignment process: ' + error.message);
+      notify('Error in assignment process: ' + error.message);
     }
   };
 
   const unassignWorker = async (assignmentId) => {
-    if (!confirm('Remove this worker assignment?')) return;
+    if (!(await confirm('Remove this worker assignment?'))) return;
     onUnassign(assignmentId);
   };
 
@@ -640,7 +644,7 @@ export default function AssignWorkersModal({
                                             }
                                             
                                             if (hasConflict) {
-                                              const shouldRemoveOther = confirm(
+                                              const shouldRemoveOther = await confirm(
                                                 `⚠️ TIME CONFLICT!\n\n` +
                                                 `${worker.name} is already assigned to:\n` +
                                                 `"${conflictEvent.name}"\n` +
@@ -663,10 +667,10 @@ export default function AssignWorkersModal({
                                               }
                                             }
                                             
-                                            if (confirm(`Promote ${worker.name} from standby to assigned?`)) {
+                                            if (await confirm(`Promote ${worker.name} from standby to assigned?`)) {
                                               // Check if position is still full
                                               if (isFull) {
-                                                alert(`⛔ Cannot promote — the ${getPositionLabel(pos.key || pos.name)} position is still full (${filled}/${needed}).\n\nRemove an assigned worker first, then promote from standby.`);
+                                                notify(`⛔ Cannot promote — the ${getPositionLabel(pos.key || pos.name)} position is still full (${filled}/${needed}).\n\nRemove an assigned worker first, then promote from standby.`);
                                                 return;
                                               }
                                               // Update assignment to change status from 'standby' to 'approved'
@@ -676,16 +680,16 @@ export default function AssignWorkersModal({
                                                 .eq('id', assignment.id)
                                                 .then(({ error }) => {
                                                   if (error) {
-                                                    alert('Error promoting worker: ' + error.message);
+                                                    notify('Error promoting worker: ' + error.message);
                                                   } else {
-                                                    alert(`${worker.name} promoted from standby!`);
+                                                    notify(`${worker.name} promoted from standby!`);
                                                     // Refresh assignments data instead of reloading page
                                                     if (onReloadAssignments) {
                                                       onReloadAssignments();
                                                     }
                                                   }
                                                 })
-                                                .catch(err => alert('Error: ' + err.message));
+                                                .catch(err => notify('Error: ' + err.message));
                                             }
                                           }}
                                           className={`px-3 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700 ${

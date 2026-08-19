@@ -3,6 +3,7 @@ import { X, Calendar, Clock } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
+import { useToast } from '../ui/Toast';
 
 export default function AddEventModal({
   open,
@@ -12,6 +13,7 @@ export default function AddEventModal({
   onClose,
   onSuccess
 }) {
+  const notify = useToast();
   const [formData, setFormData] = useState({
     name: '',
     client: '',
@@ -157,7 +159,7 @@ export default function AddEventModal({
     e.preventDefault();
     
     if (formData.positions.length === 0) {
-      alert('Please specify at least one staff position needed');
+      notify('Please specify at least one staff position needed');
       return;
     }
     
@@ -179,10 +181,10 @@ export default function AddEventModal({
         return;
       }
 
-      alert(SUCCESS_MESSAGES.EVENT_SAVED);
+      notify(SUCCESS_MESSAGES.EVENT_SAVED);
       closeAndReset();
     } catch (error) {
-      alert(ERROR_MESSAGES.DATA.SAVE_FAILED + ': ' + error.message);
+      notify(ERROR_MESSAGES.DATA.SAVE_FAILED + ': ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -217,11 +219,11 @@ export default function AddEventModal({
       if (error) throw error;
       setVenueSaved(true);
       setTimeout(() => {
-        alert(SUCCESS_MESSAGES.EVENT_SAVED);
+        notify(SUCCESS_MESSAGES.EVENT_SAVED);
         closeAndReset();
       }, 800);
     } catch (err) {
-      alert('Venue save failed: ' + err.message);
+      notify('Venue save failed: ' + err.message);
     } finally {
       setSavingVenue(false);
     }
@@ -290,7 +292,7 @@ export default function AddEventModal({
                       >
                         {savingVenue ? 'Saving...' : 'Save to Library'}
                       </button>
-                      <button onClick={() => { alert(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
+                      <button onClick={() => { notify(SUCCESS_MESSAGES.EVENT_SAVED); closeAndReset(); }}
                         className="px-5 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50"
                       >
                         Skip, don't save

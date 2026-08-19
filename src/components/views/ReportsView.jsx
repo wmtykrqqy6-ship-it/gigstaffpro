@@ -4,6 +4,8 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import PostEventReportModal from '../modals/PostEventReportModal';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 const RATING_CHANGES = {
   completed: 0.05,
@@ -22,6 +24,8 @@ const STATUS_LABELS = {
 };
 
 export default function ReportsView({ events, assignments, workers, timeFormat }) {
+  const confirm = useConfirm();
+  const notify = useToast();
   const [reports, setReports] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +65,7 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
   };
 
   const handleApproveReport = async (report) => {
-    if (!confirm('Approve this report? Reliability ratings will be applied to all workers.')) return;
+    if (!(await confirm('Approve this report? Reliability ratings will be applied to all workers.'))) return;
 
     setApprovingId(report.id);
     try {
@@ -69,7 +73,7 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
       const records = attendanceRecords.filter(r => r.report_id === report.id);
 
       if (records.length === 0) {
-        alert('No attendance records found for this report.');
+        notify('No attendance records found for this report.');
         setApprovingId(null);
         return;
       }
@@ -136,9 +140,9 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
         .eq('id', report.id);
 
       await loadReports();
-      alert('✅ Report approved! Reliability ratings have been updated.');
+      notify('✅ Report approved! Reliability ratings have been updated.');
     } catch (error) {
-      alert('Error approving report: ' + error.message);
+      notify('Error approving report: ' + error.message);
     } finally {
       setApprovingId(null);
     }
