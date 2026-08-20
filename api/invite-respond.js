@@ -53,7 +53,33 @@ export default async function handler(req, res) {
   }
 
   if (action === 'accepted') {
-    // 1. Create the assignment immediately
+    // 1. Atomically claim the invite: only proceed if THIS request is the one that
+    // actually flips status pending -> confirmed. This link is a plain GET, and email
+    // security scanners (Outlook Safe Links, Microsoft Defender, Proofpoint, etc.)
+    // routinely pre-fetch links in incoming mail to scan them before the recipient
+    // ever opens the message — which triggers this same handler. Without an atomic
+    // claim here, that scanner hit and the worker's real click can race (both read
+    // status='pending' before either write lands), creating two assignments and
+    // sending two confirmation emails for one accept. The WHERE status=eq.pending
+    // filter is enforced by Postgres itself, so only one concurrent request can ever
+    // match and update the row — everyone else gets zero rows back.
+    const claimRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}&status=eq.pending`,
+      {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify({ status: 'confirmed', responded_at: new Date().toISOString() })
+      }
+    );
+    const claimed = await claimRes.json();
+
+    if (!claimed || claimed.length === 0) {
+      // Another request (a scanner pre-fetch, a double-click, a retry) already
+      // claimed this invite. Don't create a second assignment or send a second email.
+      return res.status(200).send(alreadyRespondedPage('You already accepted this invitation!'));
+    }
+
+    // 2. Create the assignment — safe now, this request is the sole winner of the claim
     await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=minimal' },
@@ -63,12 +89,6 @@ export default async function handler(req, res) {
         position: invite.position_key,
         status: 'approved'
       })
-    });
-
-    // 2. Mark invite as confirmed
-    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ status: 'confirmed', responded_at: new Date().toISOString() })
     });
 
     // 3. Expire any other pending invites for this same event+position slot if now full
