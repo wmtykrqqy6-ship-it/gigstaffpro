@@ -192,8 +192,6 @@ export default async function handler(req, res) {
     const catchupMode = req.query?.catchup === 'true' || req.body?.catchup === true;
     const catchupEventId = req.query?.event_id || req.body?.event_id;
 
-    const notificationsToLog = [];
-
     // Filter to just the new event if in catchup mode
     const eventsToProcess = catchupMode && catchupEventId
       ? events.filter(e => String(e.id) === String(catchupEventId))
@@ -254,13 +252,22 @@ export default async function handler(req, res) {
             const ok = await sendEmail({ to: worker.email, subject, html });
             if (ok) {
               sentSet.add(sentKey);
-              notificationsToLog.push({
-                event_id: event.id,
-                worker_id: worker.id,
-                rank,
-                channel: 'email',
-              });
               results.sent++;
+              // Log immediately, not batched at the end of the run — if this
+              // function times out or crashes partway through a large worker
+              // list, sends already made still get recorded, so the next run
+              // (or an overlapping catchup call from AddEventModal) won't
+              // re-send to everyone already notified.
+              await fetch(`${SUPABASE_URL}/rest/v1/event_availability_notifications`, {
+                method: 'POST',
+                headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+                body: JSON.stringify([{
+                  event_id: event.id,
+                  worker_id: worker.id,
+                  rank,
+                  channel: 'email',
+                }]),
+              });
             } else {
               results.errors.push({ event: event.name, rank, worker: worker.name, error: 'Send failed' });
             }
@@ -269,15 +276,6 @@ export default async function handler(req, res) {
           }
         }
       }
-    }
-
-    // 6. Log all sent notifications in one batch
-    if (notificationsToLog.length > 0) {
-      await fetch(`${SUPABASE_URL}/rest/v1/event_availability_notifications`, {
-        method: 'POST',
-        headers: { ...sbHeaders(), Prefer: 'return=minimal' },
-        body: JSON.stringify(notificationsToLog),
-      });
     }
 
     return res.status(200).json(results);
