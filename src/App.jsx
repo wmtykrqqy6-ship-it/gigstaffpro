@@ -430,8 +430,10 @@ const handleSaveWorker = async (formData) => {
 
   // Handler for saving event payment settings
   const handleSaveEventPaymentSettings = async (eventId, settings) => {
-    // Update local state immediately
-    setEventPaymentSettings(prev => ({ ...prev, [eventId]: settings }));
+    // Update local state immediately. Merge rather than replace — settings
+    // here only carries {hours, miles, isLakeGeneva, isHoliday}, and a plain
+    // replace would silently drop locationId (set elsewhere) from the cache.
+    setEventPaymentSettings(prev => ({ ...prev, [eventId]: { ...prev[eventId], ...settings } }));
 
     // Persist to DB
     const { error: upsertError } = await supabase.from('event_payment_settings').upsert({
@@ -851,6 +853,16 @@ setAppPositions(storedPositions);
       if (prevLocationId === undefined) continue; // new event, nothing to compare against
       if (prevLocationId === (event.location_id || null)) continue; // location didn't change
       if (!eventPaymentSettings[event.id]) continue; // no settings on file yet — autoCreatePaymentSettings will handle it
+
+      // Keep the cached locationId in sync immediately — several consumers
+      // (InviteWorkersModal, AvailableEventsSection) read eventPaymentSettings[id].locationId
+      // to pick which location's pay rate applies. This doesn't depend on the
+      // mileage re-fetch below succeeding, so update it unconditionally.
+      setEventPaymentSettings(prev => ({
+        ...prev,
+        [event.id]: { ...prev[event.id], locationId: event.location_id || null }
+      }));
+
       if (!event.address) continue;
 
       try {

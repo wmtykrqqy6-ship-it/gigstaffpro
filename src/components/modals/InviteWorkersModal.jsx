@@ -96,7 +96,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
     // Hourly rate: use location override if available
     const rateKey = getPayRateKey(positionLabel);
-    const eventLocationId = settings.locationId || event?.location_id || null;
+    const eventLocationId = event?.location_id || settings.locationId || null;
     const hourlyRate = getEffectiveRate
       ? getEffectiveRate(positionLabel, eventLocationId)
       : (payRates[rateKey] || payRates[positionLabel] || 0);
@@ -270,7 +270,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         // Fetch live distance from worker's home location → event address
         let workerMiles = null;
-        const eventLocationId = eventPaymentSettings[event.id]?.locationId || event?.location_id || null;
+        const eventLocationId = event?.location_id || eventPaymentSettings[event.id]?.locationId || null;
         const workerHomeLocationId = worker.home_location_id || null;
         if (workerHomeLocationId && workerHomeLocationId === eventLocationId) {
           workerMiles = 0; // same location, no travel
@@ -450,7 +450,7 @@ ${invitePayHtml}
 
         // Live distance fetch for re-invite
         let reInviteWorkerMiles = null;
-        const riEventLocationId = eventPaymentSettings[event.id]?.locationId || event?.location_id || null;
+        const riEventLocationId = event?.location_id || eventPaymentSettings[event.id]?.locationId || null;
         if (worker.home_location_id && worker.home_location_id === riEventLocationId) {
           reInviteWorkerMiles = 0;
         } else if (worker.home_location_id && locations.length > 0 && event.address) {

@@ -546,7 +546,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                     // Travel miles from worker's home location → event
                     // travelPayDistances is fetched async; fall back to settings.miles if not ready
                     const workerHomeLocationId = currentWorker?.home_location_id || null;
-                    const eventLocationId = settings.locationId || event.location_id || null;
+                    const eventLocationId = event.location_id || settings.locationId || null;
                     let numMiles;
                     if (workerHomeLocationId) {
                       // Use home-location-based distance if available, otherwise show pending
@@ -559,7 +559,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
 
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
-                      const locationId = settings.locationId || event.location_id || null;
+                      const locationId = event.location_id || settings.locationId || null;
                       const hourlyRate = getEffectiveRate
                         ? getEffectiveRate(position, locationId)
                         : (payRates[rateKey] || payRates[position] || 0);
