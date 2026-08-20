@@ -22,6 +22,7 @@ export default function EditWorkerModal({
     is_host: false,
   });
   const [saving, setSaving] = useState(false);
+  const [isMigratedWorker, setIsMigratedWorker] = useState(false);
   const notify = useToast();
 
   useEffect(() => {
@@ -37,6 +38,44 @@ export default function EditWorkerModal({
       });
     }
   }, [worker]);
+
+  // Migrated workers log in via Supabase Auth, keyed off worker_auth_links.phone_e164
+  // — a separate record from workers.phone. Editing workers.phone here without also
+  // repointing that link would desync the two and lock the worker out (their old
+  // number is the only one the login system still recognizes). Until a proper
+  // re-migration flow exists, block editing the phone number for migrated workers
+  // instead of silently breaking their login. Best-effort: if the check itself
+  // fails (no session, network error), fail open rather than block the whole form —
+  // same as the pre-existing (unprotected) behavior.
+  useEffect(() => {
+    let cancelled = false;
+    setIsMigratedWorker(false);
+    if (!open || !worker?.id) return;
+
+    (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch('/api/admin-worker-migration-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ workerId: worker.id }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setIsMigratedWorker(!!data.migrated);
+      } catch (_) {
+        // Best-effort — leave the field editable rather than block the form
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [open, worker?.id]);
 
   const skillOptions = positions || [];
   const hostLabel = getHostLabel();
@@ -118,14 +157,29 @@ export default function EditWorkerModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-              <input
-                type="tel"
-                required
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="(555) 123-4567"
-              />
+              {isMigratedWorker ? (
+                <div>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This worker uses secure login — their phone number is linked to it and can't be changed here.
+                  </p>
+                </div>
+              ) : (
+                <input
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="(555) 123-4567"
+                />
+              )}
             </div>
 
             {/* Home Location */}
