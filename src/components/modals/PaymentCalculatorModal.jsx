@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
+import { isAssignmentFilled } from '../../utils/positionHelpers';
 
 export default function PaymentCalculatorModal({
   open,
@@ -216,12 +217,9 @@ export default function PaymentCalculatorModal({
             .select('*')
             .eq('event_id', selectedEvent.id);
           
-          // Count currently approved workers (excluding standby)
+          // Count currently filled slots (approved/confirmed/legacy null-status assignments)
           const currentApproved = (freshAssignments || []).filter(a => {
-            if (a.status === 'standby') return false;
-            const s = a.status;
-            if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
-            if (s !== 'approved' && s !== null && s !== undefined) return false;
+            if (!isAssignmentFilled(a.status)) return false;
             return a.position === assignmentData.position ||
                    a.position === positionDef.key ||
                    a.position === positionDef.name;

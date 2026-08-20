@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'; 
 import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw, Bell } from 'lucide-react';  
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import { getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 import { useToast } from '../ui/Toast';
@@ -65,7 +65,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
       loadInvitations();
       const positions = event.positions || [];
       for (const pos of positions) {
-        const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
+        const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key && isAssignmentFilled(a.status)).length;
         if (filled < pos.count) { setSelectedPosition(pos.key); break; }
       }
     }
@@ -153,7 +153,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const assignedWorkerIds = new Set((assignments || []).filter(a => a.event_id === event.id).map(a => a.worker_id));
   const positionConfig = positions.find(p => p.key === selectedPosition);
   const totalSlots = positionConfig?.count || 0;
-  const filledSlots = (assignments || []).filter(a => a.event_id === event.id && a.position === selectedPosition).length;
+  const filledSlots = (assignments || []).filter(a => a.event_id === event.id && a.position === selectedPosition && isAssignmentFilled(a.status)).length;
   const openSlots = Math.max(0, totalSlots - filledSlots);
 
   const positionInvites = invitations.filter(i => i.position_key === selectedPosition);
@@ -703,7 +703,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
           <div className="flex flex-wrap gap-2">
             {[...positions]
               .map(pos => {
-                const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key).length;
+                const filled = (assignments || []).filter(a => a.event_id === event.id && a.position === pos.key && isAssignmentFilled(a.status)).length;
                 const open = pos.count - filled;
                 return { ...pos, filled, open };
               })
