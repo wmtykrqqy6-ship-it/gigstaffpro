@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, DollarSign, Briefcase, TrendingUp, Award } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 
 export default function HistoryView({ worker, assignments, events, timeFormat, paymentTrackingEnabled }) {
   const [viewMode, setViewMode] = useState('recent'); // 'recent' or 'all'
@@ -19,7 +19,7 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
   today.setHours(0, 0, 0, 0);
 
   const pastAssignments = assignments
-    .filter(a => a.worker_id === worker.id && a.status === 'approved')
+    .filter(a => a.worker_id === worker.id && isAssignmentFilled(a.status))
     .map(assignment => {
       const event = events.find(e => e.id === assignment.event_id);
       return { ...assignment, event };

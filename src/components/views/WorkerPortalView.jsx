@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, ClipboardList, Send } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, Users, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, getPositionKey, positionMatches } from '../../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
@@ -53,6 +53,19 @@ export default function WorkerPortalView({  loggedInWorker,
 
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [expandedRoster, setExpandedRoster] = useState(new Set());
+
+    // Other confirmed/approved workers on the same event, excluding the current worker.
+    // Only surfaces once a worker's own spot is filled (isAssignmentFilled) — someone
+    // still pending or on standby shouldn't see the confirmed roster of an event they
+    // aren't actually working yet.
+    const getEventTeam = (eventId) => {
+      return assignments
+        .filter(a => a.event_id === eventId && a.worker_id !== currentWorker.id && isAssignmentFilled(a.status))
+        .map(a => ({ ...a, worker: workers.find(w => w.id === a.worker_id) }))
+        .filter(a => a.worker)
+        .sort((a, b) => a.worker.name.localeCompare(b.worker.name));
+    };
     const [selectedEventModal, setSelectedEventModal] = useState(null);
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportEvent, setReportEvent] = useState(null);
@@ -86,7 +99,7 @@ export default function WorkerPortalView({  loggedInWorker,
     }
 
     const workerAssignments = assignments
-      .filter(a => a.worker_id === currentWorker.id && a.status === 'approved')
+      .filter(a => a.worker_id === currentWorker.id && isAssignmentFilled(a.status))
       .map(assignment => {
         const event = events.find(e => e.id === assignment.event_id);
         return { ...assignment, event };
@@ -982,6 +995,41 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     )}
 
+                    {/* Team roster — who else is confirmed for this event */}
+                    {(() => {
+                      const team = getEventTeam(assignment.event_id);
+                      if (team.length === 0) return null;
+                      const isExpanded = expandedRoster.has(assignment.id);
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <button
+                            onClick={() => setExpandedRoster(prev => {
+                              const next = new Set(prev);
+                              next.has(assignment.id) ? next.delete(assignment.id) : next.add(assignment.id);
+                              return next;
+                            })}
+                            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 hover:text-gray-900"
+                          >
+                            <span className="flex items-center space-x-2">
+                              <Users size={15} />
+                              <span>Who's Working ({team.length})</span>
+                            </span>
+                            <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-1.5">
+                              {team.map(a => (
+                                <div key={a.id} className="flex items-center justify-between text-sm bg-white border border-gray-200 rounded px-3 py-1.5">
+                                  <span className="text-gray-900 font-medium">{a.worker.name}{a.worker.is_host ? ' 🎯' : ''}</span>
+                                  <span className="text-gray-500 text-xs">{getPositionLabel(a.position)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {/* Check-in Button */}
                     {(() => {
                       const now = new Date();
@@ -1310,6 +1358,41 @@ export default function WorkerPortalView({  loggedInWorker,
                         )}
                       </div>
                     )}
+
+                    {/* Team roster — who else is confirmed for this event */}
+                    {(() => {
+                      const team = getEventTeam(assignment.event_id);
+                      if (team.length === 0) return null;
+                      const isExpanded = expandedRoster.has(assignment.id);
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <button
+                            onClick={() => setExpandedRoster(prev => {
+                              const next = new Set(prev);
+                              next.has(assignment.id) ? next.delete(assignment.id) : next.add(assignment.id);
+                              return next;
+                            })}
+                            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 hover:text-gray-900"
+                          >
+                            <span className="flex items-center space-x-2">
+                              <Users size={15} />
+                              <span>Who's Working ({team.length})</span>
+                            </span>
+                            <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-1.5">
+                              {team.map(a => (
+                                <div key={a.id} className="flex items-center justify-between text-sm bg-white border border-gray-200 rounded px-3 py-1.5">
+                                  <span className="text-gray-900 font-medium">{a.worker.name}{a.worker.is_host ? ' 🎯' : ''}</span>
+                                  <span className="text-gray-500 text-xs">{getPositionLabel(a.position)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Check-in Button */}
                     {(() => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { useToast } from '../ui/Toast';
 
@@ -111,7 +111,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
   today.setHours(0, 0, 0, 0);
   const totalGigs = assignments.filter(a => {
     if (a.worker_id !== worker.id) return false;
-    if (a.status !== 'approved' && a.status !== 'assigned') return false;
+    if (!isAssignmentFilled(a.status)) return false;
     const event = events.find(e => e.id === a.event_id);
     if (!event) return false;
     const eventDate = new Date(event.date);
@@ -150,7 +150,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
       // Get approved assignments for the selected year
       const yearAssignments = assignments.filter(a => {
         if (a.worker_id !== worker.id) return false;
-        if (a.status !== 'approved' && a.status !== 'assigned') return false;
+        if (!isAssignmentFilled(a.status)) return false;
         const ev = events.find(e => e.id === a.event_id);
         if (!ev) return false;
         return new Date(ev.date).getFullYear() === reportYear;
