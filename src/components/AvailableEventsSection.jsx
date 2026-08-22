@@ -151,12 +151,18 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             }
           }
 
-          // Not already assigned, applied, or on standby - hide all of these from available events
+          // Hide the event once the worker has an active or pending claim on it.
+          // Deliberately NOT hiding on 'standby': a standby assignment is a waiting
+          // spot, not a commitment, and the event must stay visible so the worker
+          // can see their "Standby #N" position (rendered per-position below) and
+          // still apply/standby for any other position they're also qualified for
+          // at the same event. Hiding on standby made the event vanish entirely
+          // right after joining standby, with no confirmation ever shown.
           const alreadyAssigned = assignments.some(a => {
             if (a.event_id !== event.id) return false;
             if (a.worker_id !== currentWorker.id) return false;
             const status = a.status;
-            return status === 'approved' || status === 'pending' || status === 'standby' || (!status);
+            return status === 'approved' || status === 'pending' || (!status);
           });
           
           if (alreadyAssigned) {
