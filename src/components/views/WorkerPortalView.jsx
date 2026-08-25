@@ -1043,6 +1043,19 @@ export default function WorkerPortalView({  loggedInWorker,
                       );
                     })()}
 
+                    {/* Pay & Travel Pay */}
+                    {paymentTrackingEnabled && assignment.total_pay > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">Your Pay:</span>
+                          <span className="text-lg font-bold text-green-600">${assignment.total_pay.toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Check-in Button */}
                     {(() => {
                       const now = new Date();

@@ -38,7 +38,7 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
     : pastAssignments;
 
   // Calculate summary stats
-  const totalEarnings = pastAssignments.reduce((sum, a) => sum + (a.payment || 0), 0);
+  const totalEarnings = pastAssignments.reduce((sum, a) => sum + (a.total_pay || 0), 0);
   const totalHours = pastAssignments.reduce((sum, a) => sum + (a.hours || 0), 0);
   const uniqueVenues = [...new Set(pastAssignments.map(a => a.event?.venue).filter(Boolean))].length;
 
@@ -144,11 +144,11 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
                   </div>
 
                   {/* Payment Info */}
-                  {paymentTrackingEnabled && assignment.payment > 0 && (
+                  {paymentTrackingEnabled && assignment.total_pay > 0 && (
                     <div className="mt-4 md:mt-0 md:ml-6 flex flex-col items-end">
                       <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
                         <p className="text-xs text-green-600 mb-1">Earned</p>
-                        <p className="text-2xl font-bold text-green-900">${assignment.payment.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-green-900">${assignment.total_pay.toFixed(2)}</p>
                         {assignment.hours > 0 && (
                           <p className="text-xs text-gray-600 mt-1">{assignment.hours} hours</p>
                         )}
