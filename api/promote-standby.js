@@ -78,6 +78,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ promoted: false, reason: 'race lost' });
     }
 
+    // Log the promotion so the admin dashboard can surface it as a
+    // notification — non-critical, promotion already happened.
+    fetch(`${SUPABASE_URL}/rest/v1/standby_promotions`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        event_id: eventId,
+        worker_id: candidate.worker_id,
+        assignment_id: candidate.id,
+        position,
+      })
+    }).catch(() => {});
+
     // Notify the promoted worker — non-critical, promotion already happened.
     try {
       const workerRes = await fetch(`${SUPABASE_URL}/rest/v1/workers?id=eq.${candidate.worker_id}&select=name,email&limit=1`, { headers });

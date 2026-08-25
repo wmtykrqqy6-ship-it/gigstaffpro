@@ -53,6 +53,58 @@ export default async function handler(req, res) {
   }
 
   if (action === 'accepted') {
+    // 0. Conflict check: does this worker already hold a filled assignment
+    // that overlaps this invite's event, on the same date? Self-apply and
+    // standby-join in the app both block on this; this one-click email link
+    // previously didn't, so a worker could double-book straight from their
+    // inbox with no warning. Best-effort (check-then-act, not atomic) — the
+    // atomic claim below still guarantees this invite itself can't be
+    // double-accepted.
+    const [inviteEventRes, workerAssignmentsRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=id,name,date,time,end_time`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?worker_id=eq.${invite.worker_id}&select=event_id,status`, { headers }),
+    ]);
+    const [inviteEvents, workerAssignments] = await Promise.all([inviteEventRes.json(), workerAssignmentsRes.json()]);
+    const inviteEvent = inviteEvents?.[0];
+
+    const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
+    const filledOtherEventIds = [...new Set(
+      (workerAssignments || [])
+        .filter(a => a.event_id !== invite.event_id && !UNFILLED.includes(a.status))
+        .map(a => a.event_id)
+    )];
+
+    if (inviteEvent?.date && inviteEvent?.time && filledOtherEventIds.length > 0) {
+      const otherEventsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/events?id=in.(${filledOtherEventIds.join(',')})&select=id,name,date,time,end_time`,
+        { headers }
+      );
+      const otherEvents = await otherEventsRes.json();
+
+      const parseTime = (t) => {
+        if (!t) return null;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + (m || 0);
+      };
+      const thisStart = parseTime(inviteEvent.time);
+      const thisEnd = parseTime(inviteEvent.end_time) ?? (thisStart + 8 * 60); // assume 8h if no end time on record
+
+      const conflict = (otherEvents || []).find(e => {
+        if (e.date !== inviteEvent.date) return false;
+        const otherStart = parseTime(e.time);
+        const otherEnd = parseTime(e.end_time) ?? (otherStart + 8 * 60);
+        if (otherStart == null) return false;
+        return thisStart < otherEnd && thisEnd > otherStart;
+      });
+
+      if (conflict) {
+        return res.status(200).send(errorPage(
+          `You're already confirmed for "${conflict.name}" on this same date, and the times overlap with "${inviteEvent.name}". ` +
+          `This invite hasn't been accepted — log in to the staff portal or contact your manager to sort out the conflict.`
+        ));
+      }
+    }
+
     // 1. Atomically claim the invite: only proceed if THIS request is the one that
     // actually flips status pending -> confirmed. This link is a plain GET, and email
     // security scanners (Outlook Safe Links, Microsoft Defender, Proofpoint, etc.)

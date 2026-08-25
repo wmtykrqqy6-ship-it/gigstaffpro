@@ -5,6 +5,7 @@ import { getPositionLabel, positionMatches, isAssignmentFilled } from '../../uti
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 import { useToast } from '../ui/Toast';
+import { useConfirm } from '../ui/ConfirmDialog';
 
 const fmtDate = (d) => {
   if (!d) return d;
@@ -59,6 +60,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
   const [reInviting, setReInviting] = useState(null);
   const [nudging, setNudging] = useState(null); // invite id being nudged
   const notify = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     if (open && event) {
@@ -640,6 +642,41 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
   };
 
   const handleConfirmWorker = async (invitation) => {
+    // Conflict check: does this worker already hold a filled assignment for
+    // another event on this same date whose time overlaps this event?
+    if (event?.date && event?.time) {
+      const parseTime = (t) => {
+        if (!t) return null;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + (m || 0);
+      };
+      const thisStart = parseTime(event.time);
+      const thisEnd = parseTime(event.end_time) ?? (thisStart + 8 * 60);
+
+      const conflictAssignment = (assignments || []).find(a => {
+        if (a.worker_id !== invitation.worker_id) return false;
+        if (a.event_id === event.id) return false;
+        if (!isAssignmentFilled(a.status)) return false;
+        const otherEvent = (events || []).find(e => e.id === a.event_id);
+        if (!otherEvent || otherEvent.date !== event.date) return false;
+        const otherStart = parseTime(otherEvent.time);
+        const otherEnd = parseTime(otherEvent.end_time) ?? (otherStart + 8 * 60);
+        if (otherStart == null) return false;
+        return thisStart < otherEnd && thisEnd > otherStart;
+      });
+
+      if (conflictAssignment) {
+        const conflictEvent = (events || []).find(e => e.id === conflictAssignment.event_id);
+        const proceed = await confirm(
+          `⚠️ TIME CONFLICT!\n\n${getWorkerName(invitation.worker_id)} is already confirmed for:\n"${conflictEvent?.name}"\n\n` +
+          `This conflicts with:\n"${event.name}"\n\n` +
+          `Remove them from "${conflictEvent?.name}" and confirm here instead?`
+        );
+        if (!proceed) return;
+        await supabase.from('assignments').delete().eq('id', conflictAssignment.id);
+      }
+    }
+
     setConfirming(invitation.id);
     try {
       await supabase.from('assignments').insert({ event_id: event.id, worker_id: invitation.worker_id, position: invitation.position_key, status: 'confirmed' });

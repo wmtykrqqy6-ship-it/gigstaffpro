@@ -54,6 +54,7 @@ const GigStaffPro = () => {
   const [events, setEvents] = useState([]);
   const [positions, setPositions] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [standbyPromotions, setStandbyPromotions] = useState([]);
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
@@ -120,6 +121,7 @@ const GigStaffPro = () => {
     loadTimeFormat();
     loadPendingReportsCount();
     loadLocations();
+    loadStandbyPromotions();
   }, [isAuthenticated, userRole, workerAuthMode]);
 
   const loadLocations = async () => {
@@ -160,7 +162,7 @@ const GigStaffPro = () => {
   // Generate notifications whenever assignments change
   useEffect(() => {
     generateNotifications();
-  }, [assignments, events, workers, userRole, loggedInWorker]);
+  }, [assignments, events, workers, userRole, loggedInWorker, standbyPromotions]);
 
   // Auto-archive past events when viewing Events tab
   useEffect(() => {
@@ -227,6 +229,24 @@ const saveDismissedNotificationIds = (ids) => {
             message: `${worker.name} created an account`,
             timestamp: worker.created_at,
             action: () => setCurrentView('staff')
+          });
+        }
+      });
+
+      // 2b. Standby auto-promotions (last 7 days) — surfaces promote-standby.js
+      // running unattended (e.g. a worker self-cancelling) so admins notice
+      // it happened instead of only finding out by spotting the roster change.
+      standbyPromotions.forEach(promo => {
+        const worker = workers.find(w => w.id === promo.worker_id);
+        const event = events.find(e => e.id === promo.event_id);
+        if (worker && event) {
+          newNotifications.push({
+            id: `standby-promo-${promo.id}`,
+            type: 'standby_promotion',
+            title: 'Standby Worker Auto-Promoted',
+            message: `${worker.name} was moved from standby to ${getPositionLabel(promo.position)} for ${event.name}`,
+            timestamp: promo.promoted_at,
+            action: () => setCurrentView('events')
           });
         }
       });
@@ -446,6 +466,7 @@ const handleSaveWorker = async (formData) => {
       .then(result => {
         if (result?.promoted) {
           loadAssignments();
+          loadStandbyPromotions();
           notify(result.workerName ? `${result.workerName} was auto-promoted from standby!` : 'A standby worker was auto-promoted.');
         }
       })
@@ -469,6 +490,20 @@ const handleSaveWorker = async (formData) => {
       updated_at: new Date().toISOString()
     }, { onConflict: 'event_id' });
     if (upsertError) console.error('Failed to persist payment settings:', upsertError);
+  };
+
+  const loadStandbyPromotions = async () => {
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('standby_promotions')
+        .select('*')
+        .gte('promoted_at', sevenDaysAgo)
+        .order('promoted_at', { ascending: false });
+      if (!error) setStandbyPromotions(data || []);
+    } catch (error) {
+      console.error('Error loading standby promotions:', error);
+    }
   };
 
   const loadPendingReportsCount = async () => {
