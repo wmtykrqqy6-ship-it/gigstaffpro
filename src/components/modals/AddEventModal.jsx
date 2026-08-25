@@ -167,8 +167,21 @@ export default function AddEventModal({
     try {
       const warehouseId = await assignNearestWarehouse(formData.address);
       const saveData = { ...formData, warehouse_id: warehouseId };
-      const { error } = await supabase.from('events').insert([saveData]);
+      const { data: inserted, error } = await supabase.from('events').insert([saveData]).select('id').single();
       if (error) throw error;
+
+      // Best-effort: notify workers of ranks whose access window is already
+      // open the moment this event exists, instead of waiting for the next
+      // hourly cron tick. The cron's normal mode only fires on the exact day
+      // a rank's window opens, so a rank whose window opened before this
+      // event was even created would otherwise never be notified.
+      if (inserted?.id) {
+        fetch('/api/send-availability-notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ catchup: true, event_id: inserted.id })
+        }).catch(() => {});
+      }
 
       // Check if venue is already in the library
       const venueName = formData.venue?.trim();
