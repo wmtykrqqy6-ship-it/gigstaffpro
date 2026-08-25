@@ -415,17 +415,41 @@ const handleSaveWorker = async (formData) => {
   // Handler for unassigning workers
   const handleUnassignWorker = async (assignmentId) => {
     try {
+      const removed = assignments.find(a => a.id === assignmentId);
+
       const { error } = await supabase
         .from('assignments')
         .delete()
         .eq('id', assignmentId);
-      
+
       if (error) throw error;
-      
+
       loadAssignments();
+      triggerStandbyPromotion(removed);
     } catch (error) {
       notify('Error removing assignment: ' + error.message);
     }
+  };
+
+  // Best-effort: after a filled assignment is removed, ask the server to
+  // promote the longest-waiting standby worker for that same event+position
+  // into the opened slot and email them. Never blocks or errors the caller —
+  // the unassign/cancel already succeeded by the time this runs.
+  const triggerStandbyPromotion = (removedAssignment) => {
+    if (!removedAssignment || !isAssignmentFilled(removedAssignment.status)) return;
+    fetch('/api/promote-standby', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: removedAssignment.event_id, position: removedAssignment.position })
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (result?.promoted) {
+          loadAssignments();
+          notify(result.workerName ? `${result.workerName} was auto-promoted from standby!` : 'A standby worker was auto-promoted.');
+        }
+      })
+      .catch(() => {});
   };
 
   // Handler for saving event payment settings
@@ -1583,14 +1607,17 @@ setAppPositions(storedPositions);
         }}
         onUnassign={async (assignmentId) => {
           try {
+            const removed = assignments.find(a => a.id === assignmentId);
+
             const { error } = await supabase
               .from('assignments')
               .delete()
               .eq('id', assignmentId);
-            
+
             if (error) throw error;
-            
+
             loadAssignments();
+            triggerStandbyPromotion(removed);
           } catch (error) {
             notify('Error removing assignment: ' + error.message);
           }

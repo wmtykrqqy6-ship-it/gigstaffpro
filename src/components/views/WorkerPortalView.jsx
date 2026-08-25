@@ -193,6 +193,19 @@ export default function WorkerPortalView({  loggedInWorker,
 
         onReloadAssignments();
         notify('✓ Assignment cancelled successfully.');
+
+        // Best-effort: promote the longest-waiting standby worker into the
+        // slot that just opened up. Never blocks the cancellation above.
+        fetch('/api/promote-standby', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: assignment.event_id, position: assignment.position })
+        })
+          .then(res => res.json())
+          .then(result => {
+            if (result?.promoted) onReloadAssignments();
+          })
+          .catch(() => {});
       } catch (error) {
         notify('Error cancelling assignment: ' + error.message);
       }
