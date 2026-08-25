@@ -488,6 +488,7 @@ export default function AssignWorkersModal({
                 // Get and sort qualified workers
                 const qualifiedWorkers = workers
                   .filter(worker => {
+                    if (worker.is_active === false) return false;
                     if (searchTerm && !worker.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
                     if (showOnlyAvailable && eventAssignments.some(a => a.worker_id === worker.id)) return false;
 

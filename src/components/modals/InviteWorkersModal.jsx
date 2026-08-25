@@ -166,6 +166,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
   const eligibleWorkers = (workers || [])
     .filter(w => {
+      if (w.is_active === false) return false;
       if (assignedWorkerIds.has(w.id)) return false;
       if (invitedWorkerIds.has(w.id)) return false;
       if (!w.skills || !Array.isArray(w.skills)) return false;

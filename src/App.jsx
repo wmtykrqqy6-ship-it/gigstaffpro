@@ -1112,6 +1112,30 @@ setAppPositions(storedPositions);
     }
   };
 
+  const toggleWorkerActive = async (worker) => {
+    const activating = worker.is_active === false;
+    const label = activating ? 'reactivate' : 'deactivate';
+    if (!(await confirm(
+      activating
+        ? `Reactivate ${worker.name}? They'll be able to log in and see shifts again.`
+        : `Deactivate ${worker.name}? They won't be able to log in or see open shifts until reactivated. Existing assignments are unaffected.`
+    ))) return;
+
+    try {
+      const { error } = await supabase
+        .from('workers')
+        .update({ is_active: activating })
+        .eq('id', worker.id);
+
+      if (error) throw error;
+
+      loadWorkers();
+      notify(`${worker.name} ${activating ? 'reactivated' : 'deactivated'}.`);
+    } catch (error) {
+      notify(`Error trying to ${label} worker: ` + error.message);
+    }
+  };
+
   const deleteEvent = async (eventId) => {
     if (!(await confirm('Are you sure you want to delete this event?'))) return;
 
@@ -1195,6 +1219,7 @@ setAppPositions(storedPositions);
             setShowEditWorker(true);
           }}
           onDeleteWorker={deleteWorker}
+          onToggleActive={toggleWorkerActive}
           onRetryLoad={loadWorkers}
         />
       );

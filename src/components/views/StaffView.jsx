@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck } from 'lucide-react';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
@@ -24,6 +24,7 @@ export default function StaffView({
   onSetPin,
   onEditWorker,
   onDeleteWorker,
+  onToggleActive,
   onRetryLoad
 }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,6 +33,7 @@ export default function StaffView({
   const [reliabilityFilter, setReliabilityFilter] = useState('all');
   const [hostFilter, setHostFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [sortBy, setSortBy] = useState('name');
   const [expandedCards, setExpandedCards] = useState({});
   const [showFilters, setShowFilters] = useState(false);
@@ -74,6 +76,7 @@ export default function StaffView({
     (reliabilityFilter !== 'all' ? 1 : 0) +
     (hostFilter !== 'all' ? 1 : 0) +
     (locationFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'active' ? 1 : 0) +
     (sortBy !== 'name' ? 1 : 0);
 
   if (loading) {
@@ -151,6 +154,12 @@ export default function StaffView({
       const workerLocs = workerLocationMap[worker.id] || [];
       if (!workerLocs.includes(locationFilter)) return false;
     }
+
+    // Status filter (active/inactive). Default view is active-only so a
+    // deactivated worker doesn't clutter the normal roster view.
+    const isActive = worker.is_active !== false;
+    if (statusFilter === 'active' && !isActive) return false;
+    if (statusFilter === 'inactive' && isActive) return false;
 
     return true;
   });
@@ -327,6 +336,20 @@ export default function StaffView({
               </select>
             </div>
 
+            {/* Status Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+                <option value="all">All Workers</option>
+              </select>
+            </div>
+
             {/* Sort By */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
@@ -351,6 +374,7 @@ export default function StaffView({
                   setReliabilityFilter('all');
                   setHostFilter('all');
                   setLocationFilter('all');
+                  setStatusFilter('active');
                   setSortBy('name');
                 }}
                 className="w-full px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors"
@@ -406,7 +430,7 @@ export default function StaffView({
             return (
               <div
                 key={worker.id}
-                style={{display:'flex',background:'white',border:'0.5px solid #e5e7eb',borderRadius:'12px',overflow:'hidden',transition:'border-color 0.15s'}}
+                style={{display:'flex',background:'white',border:'0.5px solid #e5e7eb',borderRadius:'12px',overflow:'hidden',transition:'border-color 0.15s',opacity:worker.is_active===false?0.6:1}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor='#d1d5db'}
                 onMouseLeave={e=>e.currentTarget.style.borderColor='#e5e7eb'}
               >
@@ -443,6 +467,8 @@ export default function StaffView({
                           })()}
                           {/* Host badge */}
                           {worker.is_host && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#FAECE7',color:'#993C1D',display:'inline-flex',alignItems:'center',gap:'2px',whiteSpace:'nowrap'}}><Shield size={10}/>{getHostLabel()}</span>}
+                          {/* Inactive badge */}
+                          {worker.is_active===false && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#F3F4F6',color:'#4B5563',whiteSpace:'nowrap'}}>Inactive</span>}
                           {/* New badge */}
                           {worker.created_at && (new Date()-new Date(worker.created_at))<7*24*60*60*1000 && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#EAF3DE',color:'#3B6D11',whiteSpace:'nowrap'}}>✦ New</span>}
                           {/* Rating badge: ≥4.5 green, ≥4.0 amber, ≥3.0 orange, <3.0 red */}
@@ -541,6 +567,13 @@ export default function StaffView({
                         <button onClick={(e)=>{e.stopPropagation();onEditWorker(worker);}}
                           style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #dbeafe',background:'#eff6ff',color:'#1e40af',fontSize:'11px',fontWeight:'500',cursor:'pointer'}}>
                           <Edit size={11}/>Edit
+                        </button>
+                        <button onClick={(e)=>{e.stopPropagation();onToggleActive(worker);}}
+                          title={worker.is_active===false ? 'Reactivate worker' : 'Deactivate worker'}
+                          style={worker.is_active===false
+                            ? {flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #d1fae5',background:'#f0fdf4',color:'#065f46',fontSize:'11px',fontWeight:'500',cursor:'pointer'}
+                            : {flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #fde68a',background:'#fffbeb',color:'#92400e',fontSize:'11px',fontWeight:'500',cursor:'pointer'}}>
+                          {worker.is_active===false ? <><UserCheck size={11}/>Reactivate</> : <><UserX size={11}/>Deactivate</>}
                         </button>
                         <button onClick={(e)=>{e.stopPropagation();onDeleteWorker(worker.id);}}
                           style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #fee2e2',background:'#fff1f2',color:'#9f1239',fontSize:'11px',fontWeight:'500',cursor:'pointer'}}>

@@ -195,6 +195,13 @@ export default function LoginScreen({ onLogin, authMessage }) {
             return;
           }
 
+          if (workerProfile.is_active === false) {
+            await supabase.auth.signOut();
+            setError('This account has been deactivated. Contact your manager.');
+            setLoading(false);
+            return;
+          }
+
           onLogin('worker', workerProfile, 'migrated');
           setLoading(false);
           return;
