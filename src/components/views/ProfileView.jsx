@@ -367,12 +367,13 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         .getPublicUrl(filePath);
 
       // Update worker record with photo URL
-      const { error: updateError } = await supabase
-        .from('workers')
-        .update({ photo_url: publicUrl })
-        .eq('id', worker.id);
-
-      if (updateError) throw updateError;
+      const profileRes = await fetch('/api/worker-update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workerId: worker.id, updates: { photo_url: publicUrl } })
+      });
+      const profileResult = await profileRes.json();
+      if (!profileResult.ok) throw new Error(profileResult.error || 'Failed to save photo');
 
       // Reload worker data
       if (onProfileUpdate) {
@@ -405,17 +406,21 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           throw new Error('Please try again.');
         }
       } else {
-        const { error } = await supabase
-          .from('workers')
-          .update({
-            email: editData.email,
-            phone: editData.phone,
-            address: editData.address,
-            shirt_size: editData.shirt_size
+        const res = await fetch('/api/worker-update-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workerId: worker.id,
+            updates: {
+              email: editData.email,
+              phone: editData.phone,
+              address: editData.address,
+              shirt_size: editData.shirt_size
+            }
           })
-          .eq('id', worker.id);
-
-        if (error) throw error;
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || 'Please try again.');
       }
 
       // Call parent callback to reload worker data

@@ -184,28 +184,16 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const { error } = await supabase
-          .from('assignments')
-          .delete()
-          .eq('id', assignment.id);
-
-        if (error) throw error;
+        const res = await fetch('/api/worker-cancel-assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id })
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || 'Cancel failed');
 
         onReloadAssignments();
         notify('✓ Assignment cancelled successfully.');
-
-        // Best-effort: promote the longest-waiting standby worker into the
-        // slot that just opened up. Never blocks the cancellation above.
-        fetch('/api/promote-standby', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventId: assignment.event_id, position: assignment.position })
-        })
-          .then(res => res.json())
-          .then(result => {
-            if (result?.promoted) onReloadAssignments();
-          })
-          .catch(() => {});
       } catch (error) {
         notify('Error cancelling assignment: ' + error.message);
       }
@@ -240,12 +228,13 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const { error } = await supabase
-          .from('assignments')
-          .update({ position: newPositionKey })
-          .eq('id', assignment.id);
-
-        if (error) throw error;
+        const res = await fetch('/api/worker-switch-position', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id, newPosition: newPositionKey })
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || 'Switch failed');
 
         onReloadAssignments();
         notify(`✓ Position switched to ${newPositionLabel}!`);
@@ -686,7 +675,13 @@ export default function WorkerPortalView({  loggedInWorker,
                         onClick={async () => {
                           if (!(await confirm('Remove yourself from the standby list for this event?'))) return;
                           try {
-                            await supabase.from('assignments').delete().eq('id', assignment.id);
+                            const res = await fetch('/api/worker-leave-standby', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id })
+                            });
+                            const result = await res.json();
+                            if (!result.ok) throw new Error(result.error || 'Failed to leave standby');
                             onReloadAssignments();
                           } catch (e) {
                             notify('Error removing from standby: ' + e.message);

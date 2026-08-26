@@ -300,22 +300,18 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               // Apply with status 'standby' instead of blocking
               setApplying(true);
               try {
-                const positionKey = getPositionKey(position);
-                
-                const { error } = await supabase
-                  .from('assignments')
-                  .insert([{
-                    event_id: event.id,
-                    worker_id: currentWorker.id,
-                    position: positionKey,
-                    status: 'standby',
-                    applied_at: new Date().toISOString()
-                  }]);
-                
-                if (error) throw error;
-                
+                const res = await fetch('/api/worker-apply', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ eventId: event.id, workerId: currentWorker.id, position })
+                });
+                const result = await res.json();
+                if (!result.ok) throw new Error(result.error || 'Failed to join standby');
+
                 onReloadAssignments();
-                notify(`✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
+                notify(result.result === 'standby'
+                  ? `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`
+                  : `✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval.`);
               } catch (error) {
                 console.error('Error joining standby:', error);
                 notify('Error joining standby: ' + error.message);
@@ -407,23 +403,18 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       
       setApplying(true);
       try {
-        // Convert position label back to key for storage
-        const positionKey = getPositionKey(position);
-        
-        const { error } = await supabase
-          .from('assignments')
-          .insert([{
-            event_id: event.id,
-            worker_id: currentWorker.id,
-            position: positionKey,
-            status: 'pending',
-            applied_at: new Date().toISOString()
-          }]);
-        
-        if (error) throw error;
-        
+        const res = await fetch('/api/worker-apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: event.id, workerId: currentWorker.id, position })
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || 'Failed to apply');
+
         onReloadAssignments();
-        notify(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+        notify(result.result === 'standby'
+          ? `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`
+          : `✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
       } catch (error) {
         console.error('Error applying:', error);
         notify('Error submitting application: ' + error.message);
