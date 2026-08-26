@@ -213,51 +213,23 @@ export default function LoginScreen({ onLogin, authMessage }) {
         }
       }
 
-      // Step 5: migrated === false — existing legacy worker login flow,
-      // unchanged.
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      // Step 5: migrated === false — legacy worker login. The PIN check
+      // happens server-side (api/worker-pin-login.js) so workers.pin_hash
+      // never has to be readable from the browser.
+      const loginRes = await fetch('/api/worker-pin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber, pin }),
+      });
+      const loginResult = await loginRes.json();
 
-      let { data: workers, error: fetchError } = await supabase
-        .from('workers')
-        .select('*')
-        .eq('phone', phoneNumber)
-        .eq('is_active', true);
-
-      if (!workers || workers.length === 0) {
-        const result = await supabase
-          .from('workers')
-          .select('*')
-          .eq('phone', cleanPhone)
-          .eq('is_active', true);
-        workers = result.data;
-        fetchError = result.error;
-      }
-
-      if (fetchError) throw fetchError;
-
-      if (!workers || workers.length === 0) {
-        setError('Phone number not found. Contact your manager.');
+      if (!loginResult.ok) {
+        setError(loginResult.error || 'Login failed. Please try again.');
         setLoading(false);
         return;
       }
 
-      const worker = workers[0];
-
-      if (!worker.pin_hash) {
-        setError('No PIN set for this account. Contact your manager to set up your PIN.');
-        setLoading(false);
-        return;
-      }
-
-      const hashedPin = await hashPin(pin);
-
-      if (hashedPin !== worker.pin_hash) {
-        setError('Incorrect PIN. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      onLogin('worker', worker);
+      onLogin('worker', loginResult.worker);
     } catch (error) {
       setError('Login failed. Please try again.');
     } finally {
