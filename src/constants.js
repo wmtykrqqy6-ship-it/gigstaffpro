@@ -188,3 +188,16 @@ export const SUCCESS_MESSAGES = {
   PAYMENT_UPDATED: 'Payment status updated!',
   INVITE_SENT: 'Invites sent successfully!'
 };
+
+// ============================================
+// WORKER TABLE COLUMN ALLOWLIST
+// ============================================
+// Every client-side read of `workers` must use this explicit column list
+// instead of select('*'). anon/authenticated only hold a column-level
+// SELECT grant on `workers` that excludes pin_hash (see
+// supabase/migrations/20260826120000_revoke_worker_pin_hash_select.sql),
+// and Postgres requires SELECT * to have access to every column — a
+// wildcard select fails outright rather than silently narrowing itself.
+// This applies to inserts/updates chained with .select() too, since that
+// also triggers a RETURNING * under the hood.
+export const WORKER_COLUMNS = 'id, name, phone, email, skills, rank, reliability, total_gigs, no_shows, last_worked, notes, certifications, preferred_contact, earnings, created_at, updated_at, is_active, address, shirt_size, photo_url, is_host, role, home_warehouse_id, home_location_id';

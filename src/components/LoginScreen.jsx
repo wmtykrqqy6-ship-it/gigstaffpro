@@ -3,7 +3,7 @@ import { User, Settings, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { hashPin } from '../utils/authHelpers';
 import { normalizeUsPhoneToE164, deriveSyntheticWorkerEmail } from '../utils/workerAuth';
-import { UI } from '../constants';
+import { UI, WORKER_COLUMNS } from '../constants';
 
 export default function LoginScreen({ onLogin, authMessage }) {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin', 'signup'
@@ -333,7 +333,7 @@ export default function LoginScreen({ onLogin, authMessage }) {
           is_active: true,
           rank: 5, // Default to lowest rank, admin can promote
         }])
-        .select()
+        .select(WORKER_COLUMNS)
         .single();
 
       if (insertError) throw insertError;
