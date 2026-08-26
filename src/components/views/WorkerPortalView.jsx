@@ -184,10 +184,10 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const res = await fetch('/api/worker-cancel-assignment', {
+        const res = await fetch('/api/worker-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id })
+          body: JSON.stringify({ action: 'cancelAssignment', assignmentId: assignment.id, workerId: currentWorker.id })
         });
         const result = await res.json();
         if (!result.ok) throw new Error(result.error || 'Cancel failed');
@@ -228,10 +228,10 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const res = await fetch('/api/worker-switch-position', {
+        const res = await fetch('/api/worker-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id, newPosition: newPositionKey })
+          body: JSON.stringify({ action: 'switchPosition', assignmentId: assignment.id, workerId: currentWorker.id, newPosition: newPositionKey })
         });
         const result = await res.json();
         if (!result.ok) throw new Error(result.error || 'Switch failed');
@@ -675,10 +675,10 @@ export default function WorkerPortalView({  loggedInWorker,
                         onClick={async () => {
                           if (!(await confirm('Remove yourself from the standby list for this event?'))) return;
                           try {
-                            const res = await fetch('/api/worker-leave-standby', {
+                            const res = await fetch('/api/worker-actions', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ assignmentId: assignment.id, workerId: currentWorker.id })
+                              body: JSON.stringify({ action: 'leaveStandby', assignmentId: assignment.id, workerId: currentWorker.id })
                             });
                             const result = await res.json();
                             if (!result.ok) throw new Error(result.error || 'Failed to leave standby');

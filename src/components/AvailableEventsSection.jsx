@@ -300,10 +300,10 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               // Apply with status 'standby' instead of blocking
               setApplying(true);
               try {
-                const res = await fetch('/api/worker-apply', {
+                const res = await fetch('/api/worker-actions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ eventId: event.id, workerId: currentWorker.id, position })
+                  body: JSON.stringify({ action: 'apply', eventId: event.id, workerId: currentWorker.id, position })
                 });
                 const result = await res.json();
                 if (!result.ok) throw new Error(result.error || 'Failed to join standby');
@@ -403,10 +403,10 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       
       setApplying(true);
       try {
-        const res = await fetch('/api/worker-apply', {
+        const res = await fetch('/api/worker-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventId: event.id, workerId: currentWorker.id, position })
+          body: JSON.stringify({ action: 'apply', eventId: event.id, workerId: currentWorker.id, position })
         });
         const result = await res.json();
         if (!result.ok) throw new Error(result.error || 'Failed to apply');

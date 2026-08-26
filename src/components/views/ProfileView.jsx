@@ -367,10 +367,10 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         .getPublicUrl(filePath);
 
       // Update worker record with photo URL
-      const profileRes = await fetch('/api/worker-update-profile', {
+      const profileRes = await fetch('/api/worker-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId: worker.id, updates: { photo_url: publicUrl } })
+        body: JSON.stringify({ action: 'updateProfile', workerId: worker.id, updates: { photo_url: publicUrl } })
       });
       const profileResult = await profileRes.json();
       if (!profileResult.ok) throw new Error(profileResult.error || 'Failed to save photo');
@@ -406,10 +406,11 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           throw new Error('Please try again.');
         }
       } else {
-        const res = await fetch('/api/worker-update-profile', {
+        const res = await fetch('/api/worker-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'updateProfile',
             workerId: worker.id,
             updates: {
               email: editData.email,
