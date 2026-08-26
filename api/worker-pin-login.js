@@ -14,11 +14,18 @@
 import { createHash } from 'crypto';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
+
+// This endpoint must read pin_hash to verify a login, and the anon key can
+// no longer read that column at all (see
+// supabase/migrations/20260826120000_revoke_worker_pin_hash_select.sql) —
+// deliberately, since anon is reachable from any browser. service_role
+// bypasses that column-level restriction and is only ever used here,
+// server-side, never sent to the client.
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
+  apikey: SERVICE_ROLE_KEY,
+  Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
   'Content-Type': 'application/json',
 };
 
@@ -32,6 +39,11 @@ function hashPin(pin) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  if (!SERVICE_ROLE_KEY) {
+    console.error('worker-pin-login: SUPABASE_SERVICE_ROLE_KEY not configured');
+    return res.status(500).json({ ok: false, error: 'Login failed. Please try again.' });
   }
 
   const { phone, pin } = req.body || {};

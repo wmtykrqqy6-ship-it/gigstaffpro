@@ -45,6 +45,14 @@ import InviteWorkersModal from './components/modals/InviteWorkersModal';
 import { useConfirm } from './components/ui/ConfirmDialog';
 import { useToast } from './components/ui/Toast';
 
+// Explicit column list for reading `workers` — must NOT include pin_hash.
+// `select('*')` no longer works for this table: the anon/authenticated
+// roles only hold column-level SELECT grants (see
+// supabase/migrations/20260826120000_revoke_worker_pin_hash_select.sql),
+// and Postgres requires SELECT * to have access to every column, so a
+// wildcard select fails outright rather than silently narrowing itself.
+const WORKER_COLUMNS = 'id, name, phone, email, skills, rank, reliability, total_gigs, no_shows, last_worked, notes, certifications, preferred_contact, earnings, created_at, updated_at, is_active, address, shirt_size, photo_url, is_host, role, home_warehouse_id, home_location_id';
+
 const GigStaffPro = () => {
   const confirm = useConfirm();
   const notify = useToast();
@@ -784,7 +792,7 @@ setAppPositions(storedPositions);
       setLoading(true);
       const { data, error } = await supabase
         .from('workers')
-        .select('*')
+        .select(WORKER_COLUMNS)
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -873,7 +881,7 @@ setAppPositions(storedPositions);
       try {
         const { data, error } = await supabase
           .from('workers')
-          .select('*')
+          .select(WORKER_COLUMNS)
           .eq('id', loggedInWorker.id)
           .single();
 
@@ -1510,7 +1518,7 @@ setAppPositions(storedPositions);
         if (storedRole === 'worker') {
           const { data } = await supabase
             .from('workers')
-            .select('*')
+            .select(WORKER_COLUMNS)
             .eq('id', storedUserId)
             .single();
           if (data) {
