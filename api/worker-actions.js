@@ -267,6 +267,46 @@ async function handleUpdateProfile(supabase, { workerId, updates }) {
   return { status: 200, body: { ok: true } };
 }
 
+async function handleSignup(supabase, { name, phone, email, pinHash }) {
+  if (!name || !phone || !pinHash) {
+    return { status: 400, body: { ok: false, error: 'name, phone and pinHash are required' } };
+  }
+  const cleanPhone = String(phone).replace(/\D/g, '');
+  if (!cleanPhone) {
+    return { status: 400, body: { ok: false, error: 'Invalid phone number' } };
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from('workers').select('id').eq('phone', cleanPhone);
+  if (existingError) throw existingError;
+  if (existing && existing.length > 0) {
+    return { status: 400, body: { ok: false, error: 'An account with this phone number already exists. Try logging in instead.' } };
+  }
+
+  const { data: newWorker, error: insertError } = await supabase
+    .from('workers')
+    .insert([{
+      name: String(name).trim(),
+      phone: cleanPhone,
+      email: email ? String(email).trim() : null,
+      pin_hash: pinHash,
+      is_active: true,
+      rank: 5,
+    }])
+    .select('*')
+    .single();
+  if (insertError) throw insertError;
+
+  // Mark any matching invite as joined — best-effort, never blocks signup.
+  try {
+    await supabase.from('worker_invites').update({ status: 'joined' })
+      .or(`contact.eq.${cleanPhone},contact.eq.${email ? String(email).trim() : ''}`);
+  } catch (_) {}
+
+  const { pin_hash, ...safeWorker } = newWorker;
+  return { status: 200, body: { ok: true, worker: safeWorker } };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -298,6 +338,9 @@ export default async function handler(req, res) {
         break;
       case 'updateProfile':
         result = await handleUpdateProfile(supabase, params);
+        break;
+      case 'signup':
+        result = await handleSignup(supabase, params);
         break;
       default:
         return res.status(400).json({ ok: false, error: 'Unknown action' });

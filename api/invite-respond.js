@@ -3,7 +3,11 @@
 // URL: /api/invite-respond?token=<uuid>&action=accepted  OR  &action=declined
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
+// Service-role, not anon: this handler creates/updates assignments and
+// invitations with no user session at all (it's a one-click email link),
+// so it needs to keep working once anon write access to those tables is
+// locked down to admin-only.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -13,6 +17,11 @@ const headers = {
 };
 
 export default async function handler(req, res) {
+  if (!SUPABASE_KEY) {
+    console.error('invite-respond: SUPABASE_SERVICE_ROLE_KEY not configured');
+    return res.status(500).send(errorPage('Something went wrong. Please contact your admin.'));
+  }
+
   const { token, action } = req.query;
 
   if (!token || !['accepted', 'declined'].includes(action)) {

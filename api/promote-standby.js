@@ -2,13 +2,15 @@
 // Best-effort auto-promotion: called right after a filled assignment is
 // removed (worker self-cancel outside 7 days, or admin unassign) to move the
 // longest-waiting standby worker for that event+position into the opened
-// slot and email them. Mirrors invite-respond.js's use of the anon key for
-// REST calls (assignments/events/workers already allow anon read/write) and
-// its atomic-conditional-PATCH pattern to avoid double-promoting the same
-// standby worker if this were ever triggered twice for one opening.
+// slot and email them. Uses the service-role key (not anon): this can be
+// triggered with no user session at all, and needs to keep working once
+// anon write access to assignments is locked down to admin-only. Keeps
+// invite-respond.js's atomic-conditional-PATCH pattern to avoid
+// double-promoting the same standby worker if this were ever triggered
+// twice for one opening.
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -26,6 +28,11 @@ const isAssignmentFilled = (status) => !UNFILLED_ASSIGNMENT_STATUSES.includes(st
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!SUPABASE_KEY) {
+    console.error('promote-standby: SUPABASE_SERVICE_ROLE_KEY not configured');
+    return res.status(500).json({ promoted: false, reason: 'server not configured' });
   }
 
   const { eventId, position } = req.body || {};

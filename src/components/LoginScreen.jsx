@@ -3,7 +3,7 @@ import { User, Settings, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { hashPin } from '../utils/authHelpers';
 import { normalizeUsPhoneToE164, deriveSyntheticWorkerEmail } from '../utils/workerAuth';
-import { UI, WORKER_COLUMNS } from '../constants';
+import { UI } from '../constants';
 
 export default function LoginScreen({ onLogin, authMessage }) {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin', 'signup'
@@ -308,45 +308,27 @@ export default function LoginScreen({ onLogin, authMessage }) {
     setLoading(true);
     try {
       const cleanPhone = signupPhone.replace(/\D/g, '');
+      const pinHash = await hashPin(signupPin);
 
-      // Check if phone already exists
-      const { data: existing } = await supabase
-        .from('workers')
-        .select('id')
-        .eq('phone', cleanPhone);
-
-      if (existing && existing.length > 0) {
-        setError('An account with this phone number already exists. Try logging in instead.');
+      const res = await fetch('/api/worker-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'signup',
+          name: signupName.trim(),
+          phone: cleanPhone,
+          email: signupEmail.trim() || null,
+          pinHash,
+        })
+      });
+      const result = await res.json();
+      if (!result.ok) {
+        setError(result.error || 'Sign up failed. Please try again.');
         setLoading(false);
         return;
       }
 
-      const pin_hash = await hashPin(signupPin);
-
-      const { data: newWorker, error: insertError } = await supabase
-        .from('workers')
-        .insert([{
-          name: signupName.trim(),
-          phone: cleanPhone,
-          email: signupEmail.trim() || null,
-          pin_hash,
-          is_active: true,
-          rank: 5, // Default to lowest rank, admin can promote
-        }])
-        .select(WORKER_COLUMNS)
-        .single();
-
-      if (insertError) throw insertError;
-
-      // Mark any matching invite as joined
-      if (signupPhone || signupEmail) {
-        await supabase
-          .from('worker_invites')
-          .update({ status: 'joined' })
-          .or(`contact.eq.${cleanPhone},contact.eq.${signupEmail.trim()}`);
-      }
-
-      onLogin('worker', newWorker);
+      onLogin('worker', result.worker);
     } catch (err) {
       setError('Sign up failed: ' + err.message);
     } finally {

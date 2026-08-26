@@ -821,17 +821,19 @@ setAppPositions(storedPositions);
         return worker;
       });
       
-      // Update database for workers that needed migration
-      if (workersNeedingMigration.length > 0) {
-        
-        // Update each worker in database
+      // Persist the migration back to the database — admin-only. A worker
+      // session (this function also runs for legacy-login workers) has no
+      // business writing other workers' rows as a side effect of loading
+      // its own roster view, and won't have permission to under the
+      // admin-only write policy on `workers` — skip the attempt entirely
+      // rather than let it throw and blank out the whole roster.
+      if (workersNeedingMigration.length > 0 && userRole === 'admin') {
         for (const workerUpdate of workersNeedingMigration) {
           await supabase
             .from('workers')
             .update({ skills: workerUpdate.skills })
             .eq('id', workerUpdate.id);
         }
-        
       }
       
       setWorkers(migratedWorkers);
