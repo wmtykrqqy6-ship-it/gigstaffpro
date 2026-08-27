@@ -504,25 +504,34 @@ export default function EventsView({
                         const posKey = pos.key || getPositionKey(pos.name || pos);
                         const posLabel = getPositionLabel(posKey);
                         const count = pos.count || 1;
-                        
+
+                        const filledCount = assignments.filter(a =>
+                          a.event_id === event.id &&
+                          isAssignmentFilled(a.status) &&
+                          (a.position === posKey || a.position === pos.name || a.position === pos.key)
+                        ).length;
+                        const open = Math.max(0, count - filledCount);
+
                         // Count pending and standby for this position
-                        const pendingCount = assignments.filter(a => 
-                          a.event_id === event.id && 
+                        const pendingCount = assignments.filter(a =>
+                          a.event_id === event.id &&
                           a.status === 'pending' &&
                           (a.position === posKey || a.position === pos.name || a.position === pos.key)
                         ).length;
-                        
-                        const standbyCount = assignments.filter(a => 
-                          a.event_id === event.id && 
+
+                        const standbyCount = assignments.filter(a =>
+                          a.event_id === event.id &&
                           a.status === 'standby' &&
                           (a.position === posKey || a.position === pos.name || a.position === pos.key)
                         ).length;
-                        
+
                         return (
-                        <div key={idx} className="bg-red-50 text-red-900 text-sm px-3 py-2 rounded">
+                        <div key={idx} className={`text-sm px-3 py-2 rounded ${open === 0 ? 'bg-green-50 text-green-900' : 'bg-red-50 text-red-900'}`}>
                           <div className="flex justify-between items-center mb-1">
                             <span className="font-medium">{posLabel}</span>
-                            <span className="bg-red-200 px-2 py-0.5 rounded-full text-xs font-bold">{count}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${open === 0 ? 'bg-green-200' : 'bg-red-200'}`}>
+                              {open === 0 ? '✓ Full' : `${open} needed`}
+                            </span>
                           </div>
                           {(pendingCount > 0 || standbyCount > 0) && (
                             <div className="text-xs text-gray-600 mt-1">
