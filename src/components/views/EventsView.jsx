@@ -7,6 +7,7 @@ import { supabase } from '../../supabaseClient';
 export default function EventsView({
   events,
   assignments,
+  invitations = [],
   timeFormat,
   onShowAddEvent,
   onOpenAssignModal,
@@ -67,6 +68,18 @@ export default function EventsView({
     const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
     
     return { filled, total, percentage };
+  };
+
+  // One-glance staffing status per the MVP dashboard spec: Confirmed /
+  // Pending (self-applications awaiting admin review) / Invited (sent
+  // invitations awaiting a worker response) / Standby, all for this event.
+  const getEventStatusCounts = (event) => {
+    const eventAssignments = assignments.filter(a => a.event_id === event.id);
+    const confirmed = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
+    const pending = eventAssignments.filter(a => a.status === 'pending').length;
+    const standby = eventAssignments.filter(a => a.status === 'standby').length;
+    const invited = invitations.filter(i => i.event_id === event.id && i.status === 'pending').length;
+    return { confirmed, pending, invited, standby };
   };
 
   const openAssignModal = (event) => {
@@ -313,6 +326,7 @@ export default function EventsView({
             const staffingStatus = getEventStaffingStatus(event);
             const isFullyStaffed = staffingStatus.filled >= staffingStatus.total && staffingStatus.total > 0;
             const standbyCount = assignments.filter(a => a.event_id === event.id && a.status === 'standby').length;
+            const statusCounts = getEventStatusCounts(event);
             
             return (
             <div key={event.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
@@ -369,6 +383,21 @@ export default function EventsView({
                         {standbyCount} on standby
                       </span>
                     )}
+                  </div>
+                  {/* Status summary — the one-glance "am I staffed" line */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                    <span className={statusCounts.confirmed > 0 ? 'text-green-700 font-semibold' : 'text-gray-400'}>
+                      Confirmed: {statusCounts.confirmed}
+                    </span>
+                    <span className={statusCounts.pending > 0 ? 'text-yellow-700 font-semibold' : 'text-gray-400'}>
+                      Pending: {statusCounts.pending}
+                    </span>
+                    <span className={statusCounts.invited > 0 ? 'text-purple-700 font-semibold' : 'text-gray-400'}>
+                      Invited: {statusCounts.invited}
+                    </span>
+                    <span className={statusCounts.standby > 0 ? 'text-orange-700 font-semibold' : 'text-gray-400'}>
+                      Standby: {statusCounts.standby}
+                    </span>
                   </div>
                   {/* Row 3: Assign Staff - full width on mobile */}
                   <button 

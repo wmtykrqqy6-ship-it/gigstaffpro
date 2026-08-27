@@ -56,6 +56,7 @@ const GigStaffPro = () => {
   const [positions, setPositions] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [standbyPromotions, setStandbyPromotions] = useState([]);
+  const [invitations, setInvitations] = useState([]);
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
@@ -112,6 +113,9 @@ const GigStaffPro = () => {
 
     if (mayLoadWorkers) {
       loadWorkers();
+    }
+    if (userRole === 'admin') {
+      loadInvitations();
     }
     loadEvents();
     loadSettings();
@@ -728,10 +732,24 @@ for (const tier of (travelTiers || [])) {
       const { data, error } = await supabase
         .from('assignments')
         .select('*');
-      
+
       if (error) throw error;
-      
+
       setAssignments(data || []);
+    } catch (error) {
+    }
+  };
+
+  // Admin-only — powers the "Invited" count on the events dashboard.
+  // Workers don't need the global invitation list (they load their own
+  // pending invites separately in WorkerPortalView).
+  const loadInvitations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invitations')
+        .select('id, event_id, worker_id, position_key, status');
+      if (error) throw error;
+      setInvitations(data || []);
     } catch (error) {
     }
   };
@@ -1267,6 +1285,7 @@ setAppPositions(storedPositions);
         <EventsView
           events={events}
           assignments={assignments}
+          invitations={invitations}
           timeFormat={timeFormat}
           onShowAddEvent={() => setShowAddEvent(true)}
           activeLocation={activeLocation}
@@ -1586,7 +1605,7 @@ setAppPositions(storedPositions);
         locations={locations}
         getEffectiveRate={getEffectiveRate}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
-        onReloadAssignments={loadAssignments}
+        onReloadAssignments={() => { loadAssignments(); loadInvitations(); }}
         onSessionExpired={handleAdminSessionExpired}
       />
      <AddWorkerModal
