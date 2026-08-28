@@ -426,20 +426,19 @@ export default function EventsView({
 
                 <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
                   {event.positions && event.positions.length > 0 && (() => {
+                    // Everything except the non-table-game support roles counts
+                    // as a "dealer" here — real position keys are short game
+                    // names (blackjack, craps, poker, roulette, ...), not
+                    // "..._dealer", so this has to exclude support roles rather
+                    // than match on a "dealer" substring.
+                    const SUPPORT_ROLES = ['host', 'bartender', 'server', 'cashier'];
                     const dealerCount = event.positions
-                      .filter(p => (p.key || getPositionKey(p.name || p)).includes('dealer'))
+                      .filter(p => !SUPPORT_ROLES.includes(p.key || getPositionKey(p.name || p)))
                       .reduce((sum, p) => sum + p.count, 0);
-                    const otherCounts = event.positions
-                      .filter(p => !(p.key || getPositionKey(p.name || p)).includes('dealer'))
-                      .map(p => `${p.count} ${getPositionLabel(p.key || getPositionKey(p.name || p))}`);
-                    const parts = [
-                      dealerCount > 0 ? `${dealerCount} Dealer${dealerCount !== 1 ? 's' : ''}` : null,
-                      ...otherCounts
-                    ].filter(Boolean);
                     return (
                       <div className="flex items-center space-x-1">
                         <Users size={16} />
-                        <span>{parts.join(', ')} needed</span>
+                        <span>{dealerCount} Dealer{dealerCount !== 1 ? 's' : ''} needed</span>
                       </div>
                     );
                   })()}
