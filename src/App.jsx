@@ -687,11 +687,12 @@ const getPayRateKey = (position) => {
   };
 
   // Payment calculation — locationId drives hourly rate, miles drives travel pay
-  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday, locationId = null) => {
+  const calculatePay = (position, hours, miles, isLakeGeneva, isHoliday, locationId = null, flatPayAmount = null) => {
 
-    // Step 1: Calculate base pay using location rate if available
+    // Step 1: Calculate base pay — a flat per-event amount overrides the
+    // usual hours × position rate calculation when the event has one set.
     const hourlyRate = getEffectiveRate(position, locationId);
-    const basePay = hours * hourlyRate;
+    const basePay = (flatPayAmount != null && flatPayAmount > 0) ? flatPayAmount : hours * hourlyRate;
 
     // Step 2: Calculate travel pay
 let travelPay = 0;

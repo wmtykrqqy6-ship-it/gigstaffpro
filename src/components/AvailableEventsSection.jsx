@@ -567,15 +567,16 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       numMiles = Number(settings.miles) || 0;
                     }
 
+                    const isFlatPay = event.flat_pay_amount > 0;
                     const payLines = matchingPositions.map(position => {
                       const rateKey = getPayRateKey(position);
                       const locationId = event.location_id || settings.locationId || null;
                       const hourlyRate = getEffectiveRate
                         ? getEffectiveRate(position, locationId)
                         : (payRates[rateKey] || payRates[position] || 0);
-                      if (!hourlyRate) return null;
+                      if (!isFlatPay && !hourlyRate) return null;
 
-                      const basePay = numHours * hourlyRate;
+                      const basePay = isFlatPay ? event.flat_pay_amount : numHours * hourlyRate;
 
                       let travelPay = 0;
                       for (const tier of travelTiers) {
@@ -599,7 +600,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                         {payLines.map(({ position, hourlyRate, travelPay, total }) => (
                           <div key={position} className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">
-                              {position} · {numHours}h × ${hourlyRate}/hr
+                              {isFlatPay
+                                ? `${position} · $${event.flat_pay_amount.toFixed(0)} flat`
+                                : `${position} · ${numHours}h × $${hourlyRate}/hr`}
                               {travelPay > 0 && ` + $${travelPay} travel`}
                             </span>
                             <span className="text-sm font-bold text-green-700">~${total}</span>

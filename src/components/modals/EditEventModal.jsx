@@ -34,6 +34,7 @@ export default function EditEventModal({
     location_id: null,
     invite_only: false,
     staffing_mode: 'approval',
+    flat_pay_amount: '',
     meeting_point_description: '',
     meeting_point_url: '',
     meeting_point_lat: null,
@@ -121,6 +122,7 @@ export default function EditEventModal({
         client_id: event.client_id || null,
         invite_only: event.invite_only || false,
         staffing_mode: event.staffing_mode === 'first-come' ? 'first-come' : 'approval',
+        flat_pay_amount: event.flat_pay_amount != null ? String(event.flat_pay_amount) : '',
         meeting_point_description: event.meeting_point_description || '',
         meeting_point_url: event.meeting_point_url || '',
         meeting_point_lat: event.meeting_point_lat || null,
@@ -218,7 +220,11 @@ export default function EditEventModal({
     setSaving(true);
     try {
       const warehouseId = await assignNearestWarehouse(formData.address);
-      const saveData = { ...formData, warehouse_id: warehouseId };
+      const saveData = {
+        ...formData,
+        warehouse_id: warehouseId,
+        flat_pay_amount: formData.flat_pay_amount === '' ? null : parseFloat(formData.flat_pay_amount),
+      };
       const { error } = await supabase
         .from('events')
         .update(saveData)
@@ -711,6 +717,25 @@ export default function EditEventModal({
                   </p>
                 </div>
               )}
+              {/* Flat Event Pay (optional) */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-800 mb-1">Flat Event Pay (optional)</p>
+                <p className="text-xs text-gray-500 mb-2">
+                  Pay every worker this flat amount instead of their position's hourly rate. Travel pay and other adjustments still apply on top. Leave blank to use normal position-specific pay.
+                </p>
+                <div className="relative w-40">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.flat_pay_amount}
+                    onChange={(e) => setFormData({...formData, flat_pay_amount: e.target.value})}
+                    placeholder="0.00"
+                    className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
               {/* Invite Only Toggle */}
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div>

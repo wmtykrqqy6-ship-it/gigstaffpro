@@ -158,7 +158,8 @@ export default function PaymentCalculatorModal({
         miles,
         isLakeGeneva,
         isHoliday,
-        eventLocationId
+        eventLocationId,
+        selectedEvent?.flat_pay_amount
       );
       setCalculation(calc);
     }
@@ -302,6 +303,15 @@ export default function PaymentCalculatorModal({
               </div>
             )}
 
+            {/* Notice if this event pays a flat amount instead of hourly */}
+            {selectedEvent?.flat_pay_amount > 0 && (
+              <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  💰 This event pays a flat ${selectedEvent.flat_pay_amount.toFixed(2)} per worker instead of an hourly position rate. Travel pay and other adjustments below still apply on top of it.
+                </p>
+              </div>
+            )}
+
             {/* Notice if using event settings */}
             {eventPaymentSettings[selectedEvent.id] && (
               <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
@@ -388,7 +398,11 @@ export default function PaymentCalculatorModal({
                 <h4 className="font-semibold text-gray-900 mb-3">Payment Breakdown</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-700">Base Pay ({hours} hrs × ${payRates[getPayRateKey(assignmentData.position)] || 0}/hr):</span>
+                    <span className="text-gray-700">
+                      {selectedEvent?.flat_pay_amount > 0
+                        ? 'Flat Event Pay:'
+                        : `Base Pay (${hours} hrs × $${payRates[getPayRateKey(assignmentData.position)] || 0}/hr):`}
+                    </span>
                     <span className="font-semibold text-gray-900">${calculation.basePay.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
