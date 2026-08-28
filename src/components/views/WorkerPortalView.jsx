@@ -955,11 +955,21 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     </div>
 
+                    <div className="mt-3">
+                      <a
+                        href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
+                      >
+                        <Calendar size={14} />
+                        <span>Add to Calendar</span>
+                      </a>
+                    </div>
+
                     {assignment.event.address && (
                       <div className="mt-3 p-3 bg-white rounded border border-gray-200">
                         <p className="text-sm font-semibold text-gray-700 mb-1">Address:</p>
                         <p className="text-sm text-gray-900">{assignment.event.address}</p>
-                        <a 
+                        <a
                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.event.address)}`}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1329,11 +1339,21 @@ export default function WorkerPortalView({  loggedInWorker,
                           </div>
                         </div>
 
+                        <div className="mt-3">
+                          <a
+                            href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
+                          >
+                            <Calendar size={14} />
+                            <span>Add to Calendar</span>
+                          </a>
+                        </div>
+
                         {assignment.event.address && (
                           <div className="mt-3 p-3 bg-white rounded border border-gray-200">
                             <p className="text-sm font-semibold text-gray-700 mb-1">Address:</p>
                             <p className="text-sm text-gray-900">{assignment.event.address}</p>
-                            <a 
+                            <a
                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.event.address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
