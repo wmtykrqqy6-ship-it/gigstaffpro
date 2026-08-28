@@ -309,9 +309,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                 if (!result.ok) throw new Error(result.error || 'Failed to join standby');
 
                 onReloadAssignments();
-                notify(result.result === 'standby'
-                  ? `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`
-                  : `✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval.`);
+                if (result.result === 'approved') {
+                  notify(`✓ A spot opened up — you're confirmed for ${event.name}!`);
+                } else if (result.result === 'pending') {
+                  notify(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval.`);
+                } else {
+                  notify(result.message || `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
+                }
               } catch (error) {
                 console.error('Error joining standby:', error);
                 notify('Error joining standby: ' + error.message);
@@ -399,8 +403,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         }
       }
 
-      if (!(await confirm(`Apply for ${position} position at ${event.name}?`))) return;
-      
+      const isFirstCome = event.staffing_mode === 'first-come';
+      if (!(await confirm(
+        isFirstCome
+          ? `Apply for ${position} position at ${event.name}?\n\nThis event is first come, first served — you'll be instantly confirmed.`
+          : `Apply for ${position} position at ${event.name}?`
+      ))) return;
+
       setApplying(true);
       try {
         const res = await fetch('/api/worker-actions', {
@@ -412,9 +421,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         if (!result.ok) throw new Error(result.error || 'Failed to apply');
 
         onReloadAssignments();
-        notify(result.result === 'standby'
-          ? `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`
-          : `✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+        if (result.result === 'approved') {
+          notify(`✓ You're confirmed for ${event.name}!`);
+        } else if (result.result === 'standby') {
+          notify(result.message || `✓ Added to standby list for ${event.name}!\n\nYou'll be notified if a spot opens up.`);
+        } else {
+          notify(`✓ Application submitted for ${event.name}!\n\nYour application is pending admin approval. You'll be notified once it's reviewed.`);
+        }
       } catch (error) {
         console.error('Error applying:', error);
         notify('Error submitting application: ' + error.message);

@@ -39,7 +39,7 @@ async function handleApply(supabase, { eventId, workerId, position }) {
   }
 
   const [{ data: event, error: eventError }, { data: worker, error: workerError }, { data: allAssignments, error: assignmentsError }] = await Promise.all([
-    supabase.from('events').select('id, name, date, time, end_time, positions').eq('id', eventId).maybeSingle(),
+    supabase.from('events').select('id, name, date, time, end_time, positions, staffing_mode').eq('id', eventId).maybeSingle(),
     supabase.from('workers').select('id, skills, is_active').eq('id', workerId).maybeSingle(),
     supabase.from('assignments').select('id, event_id, worker_id, position, status, created_at').or(`event_id.eq.${eventId},worker_id.eq.${workerId}`),
   ]);
@@ -129,11 +129,45 @@ async function handleApply(supabase, { eventId, workerId, position }) {
     }
   }
 
-  const { error: insertError } = await supabase.from('assignments').insert([{
-    event_id: eventId, worker_id: workerId, position: pKey, status: 'pending', applied_at: new Date().toISOString(),
-  }]);
+  // First-come-first-served events skip the pending/approval step entirely
+  // — the first worker to claim an open slot is instantly confirmed.
+  const isFirstCome = event.staffing_mode === 'first-come';
+  const { data: inserted, error: insertError } = await supabase.from('assignments').insert([{
+    event_id: eventId, worker_id: workerId, position: pKey,
+    status: isFirstCome ? 'approved' : 'pending',
+    applied_at: new Date().toISOString(),
+  }]).select('id, created_at').single();
   if (insertError) throw insertError;
-  return { status: 200, body: { ok: true, result: 'pending' } };
+
+  if (isFirstCome) {
+    // Race guard: "first come" has to actually mean first. Two workers can
+    // hit apply for the same last-open slot within milliseconds of each
+    // other and both pass the capacity check above before either insert
+    // lands. Re-count by creation order after the fact and demote anyone
+    // who overshot capacity to standby instead of leaving the slot
+    // overbooked.
+    const { data: raceCheck } = await supabase
+      .from('assignments')
+      .select('id, status, position, created_at')
+      .eq('event_id', eventId);
+    const winners = (raceCheck || [])
+      .filter(a => {
+        const s = a.status;
+        if (s === 'pending' || s === 'rejected' || s === 'cancelled') return false;
+        const aKey = toKey(a.position);
+        return positionMatches(aKey, pKey) || a.position === positionDef.name || a.position === positionDef.key || a.position === position;
+      })
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .slice(0, maxCount)
+      .map(a => a.id);
+
+    if (!winners.includes(inserted.id)) {
+      await supabase.from('assignments').update({ status: 'standby' }).eq('id', inserted.id);
+      return { status: 200, body: { ok: true, result: 'standby', message: 'Someone else claimed that spot just before you — you have been added to standby instead.' } };
+    }
+  }
+
+  return { status: 200, body: { ok: true, result: isFirstCome ? 'approved' : 'pending' } };
 }
 
 async function handleCancelAssignment(supabase, { assignmentId, workerId }, host) {

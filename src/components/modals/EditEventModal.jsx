@@ -33,6 +33,7 @@ export default function EditEventModal({
     host_worker_id: null,
     location_id: null,
     invite_only: false,
+    staffing_mode: 'approval',
     meeting_point_description: '',
     meeting_point_url: '',
     meeting_point_lat: null,
@@ -119,6 +120,7 @@ export default function EditEventModal({
         location_id: event.location_id || null,
         client_id: event.client_id || null,
         invite_only: event.invite_only || false,
+        staffing_mode: event.staffing_mode === 'first-come' ? 'first-come' : 'approval',
         meeting_point_description: event.meeting_point_description || '',
         meeting_point_url: event.meeting_point_url || '',
         meeting_point_lat: event.meeting_point_lat || null,
@@ -674,6 +676,41 @@ export default function EditEventModal({
                   )}
                 </div>
               </div>
+              {/* Signup Mode — only matters when workers can self-apply at all */}
+              {!formData.invite_only && (
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-sm font-medium text-gray-800 mb-2">Signup Mode</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, staffing_mode: 'approval'})}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        formData.staffing_mode !== 'first-come'
+                          ? 'bg-red-900 text-white border-red-900'
+                          : 'bg-white text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      Approval Required
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, staffing_mode: 'first-come'})}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        formData.staffing_mode === 'first-come'
+                          ? 'bg-red-900 text-white border-red-900'
+                          : 'bg-white text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      First Come, First Served
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {formData.staffing_mode === 'first-come'
+                      ? 'Workers who apply for an open spot are instantly confirmed — no admin approval needed.'
+                      : 'Workers who apply go on a pending list until an admin approves them.'}
+                  </p>
+                </div>
+              )}
               {/* Invite Only Toggle */}
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div>
