@@ -425,12 +425,24 @@ export default function EventsView({
                 </div>
 
                 <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
-                  {event.positions && event.positions.length > 0 && (
-                    <div className="flex items-center space-x-1">
-                      <Users size={16} />
-                      <span>{event.positions.reduce((sum, p) => sum + p.count, 0)} workers needed</span>
-                    </div>
-                  )}
+                  {event.positions && event.positions.length > 0 && (() => {
+                    const dealerCount = event.positions
+                      .filter(p => (p.key || getPositionKey(p.name || p)).includes('dealer'))
+                      .reduce((sum, p) => sum + p.count, 0);
+                    const otherCounts = event.positions
+                      .filter(p => !(p.key || getPositionKey(p.name || p)).includes('dealer'))
+                      .map(p => `${p.count} ${getPositionLabel(p.key || getPositionKey(p.name || p))}`);
+                    const parts = [
+                      dealerCount > 0 ? `${dealerCount} Dealer${dealerCount !== 1 ? 's' : ''}` : null,
+                      ...otherCounts
+                    ].filter(Boolean);
+                    return (
+                      <div className="flex items-center space-x-1">
+                        <Users size={16} />
+                        <span>{parts.join(', ')} needed</span>
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center space-x-1">
                     <User size={16} />
                     <span>{event.client}</span>
