@@ -28,13 +28,17 @@ export default function PaymentCalculatorModal({
   const [calculation, setCalculation] = useState(null);
   const [fetchingMiles, setFetchingMiles] = useState(false);
 
-  // Event location drives hourly rate
+  // Event location — still drives travel origin (below) and is shown for
+  // context, but NOT the hourly rate: a worker traveling to a different
+  // market should still be paid their own home rate, with the extra
+  // compensation for the trip coming from travel pay, not a rate swap.
   const eventLocationId = selectedEvent?.location_id || eventPaymentSettings[selectedEvent?.id]?.locationId || null;
   const eventLocation = locations.find(l => l.id === eventLocationId) || null;
 
-  // Worker home location drives travel origin
+  // Worker home location drives both travel origin AND hourly rate.
   const assignedWorker = workers?.find(w => w.id === assignmentData?.workerId);
   const workerHomeLocation = locations.find(l => l.id === assignedWorker?.home_location_id) || null;
+  const rateLocationId = assignedWorker?.home_location_id || null;
 
   // Detect Lake Geneva zip code (53147) from event address
   const isLakeGenevaZip = (address) => {
@@ -158,12 +162,12 @@ export default function PaymentCalculatorModal({
         miles,
         isLakeGeneva,
         isHoliday,
-        eventLocationId,
+        rateLocationId,
         selectedEvent?.flat_pay_amount
       );
       setCalculation(calc);
     }
-  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay, eventLocationId]);
+  }, [hours, miles, isLakeGeneva, isHoliday, assignmentData, calculatePay, rateLocationId]);
 
   const handleConfirm = async () => {
     if (!assignmentData || !calculation) return;
@@ -192,7 +196,7 @@ export default function PaymentCalculatorModal({
           holiday_multiplier: calculation.holidayMultiplier,
           total_pay: calculation.totalPay,
           payment_status: 'pending',
-          hourly_rate_snapshot: getEffectiveRate ? getEffectiveRate(assignmentData.position, eventLocationId) : null,
+          hourly_rate_snapshot: getEffectiveRate ? getEffectiveRate(assignmentData.position, rateLocationId) : null,
           travel_pay_snapshot: calculation.travelPay,
           distance_snapshot: miles,
           market_id_snapshot: eventLocationId || null
@@ -290,14 +294,22 @@ export default function PaymentCalculatorModal({
           </div>
 
           <div className="space-y-6">
-            {/* Location badge */}
-            {eventLocation && (
+            {/* Location badge — the worker's OWN home market sets their rate,
+                not the event's, so a traveling worker isn't paid more or
+                less just because the event happens to be in a different
+                market. Travel pay is the mechanism for compensating the trip. */}
+            {(workerHomeLocation || eventLocation) && (
               <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-center justify-between">
                 <p className="text-sm text-blue-800">
-                  📍 <strong>{eventLocation.name}</strong> rates apply · 
-                  {workerHomeLocation && workerHomeLocation.id !== eventLocationId
-                    ? <span className="ml-1">Travel from <strong>{workerHomeLocation.name}</strong></span>
-                    : <span className="ml-1">Local event</span>
+                  📍 {workerHomeLocation
+                    ? <><strong>{workerHomeLocation.name}</strong> rates apply (worker's home market)</>
+                    : <>Standard rates apply (no home market set for this worker)</>
+                  }
+                  {eventLocation && workerHomeLocation?.id !== eventLocationId
+                    ? <span className="ml-1">· Traveling to <strong>{eventLocation.name}</strong></span>
+                    : eventLocation
+                    ? <span className="ml-1">· Local event</span>
+                    : null
                   }
                 </p>
               </div>
@@ -401,7 +413,7 @@ export default function PaymentCalculatorModal({
                     <span className="text-gray-700">
                       {selectedEvent?.flat_pay_amount > 0
                         ? 'Flat Event Pay:'
-                        : `Base Pay (${hours} hrs × $${payRates[getPayRateKey(assignmentData.position)] || 0}/hr):`}
+                        : `Base Pay (${hours} hrs × $${getEffectiveRate ? getEffectiveRate(assignmentData.position, rateLocationId) : (payRates[getPayRateKey(assignmentData.position)] || 0)}/hr):`}
                     </span>
                     <span className="font-semibold text-gray-900">${calculation.basePay.toFixed(2)}</span>
                   </div>

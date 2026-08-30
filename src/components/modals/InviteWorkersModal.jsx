@@ -96,11 +96,12 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     const numHours = Number(hours) || 0;
     if (!numHours) return null;
 
-    // Hourly rate: use location override if available
+    // Hourly rate: worker's own home market, not the event's — traveling
+    // to a different market doesn't change their base rate, only travel pay.
     const rateKey = getPayRateKey(positionLabel);
     const eventLocationId = event?.location_id || settings.locationId || null;
     const hourlyRate = getEffectiveRate
-      ? getEffectiveRate(positionLabel, eventLocationId)
+      ? getEffectiveRate(positionLabel, worker?.home_location_id || null)
       : (payRates[rateKey] || payRates[positionLabel] || 0);
     if (!hourlyRate) return null;
 
