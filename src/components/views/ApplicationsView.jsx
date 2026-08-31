@@ -206,12 +206,15 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
     const app = applications.find(a => a.id === applicationId);
     if (!app) return;
 
-    const isStandbyPromotion = app.status === 'standby';
-
-    // ✅ Check if position is already full - SKIP this check for standby promotions
-    // (admin is intentionally promoting someone from the standby list)
+    // Capacity check — applies to standby promotions too. countFilledForPosition
+    // already excludes this applicant's own row and only counts truly-filled
+    // (approved) slots, so a standby promotion is checked against every OTHER
+    // already-approved worker exactly like a pending approval is. Without this,
+    // "Approve to Event" on a standby applicant could overstaff a position that
+    // filled up through another path (AssignWorkersModal, auto-promotion,
+    // another admin approving first) in the time since they joined standby.
     const event = events.find(e => e.id === app.event_id);
-    if (!isStandbyPromotion && event && event.positions && Array.isArray(event.positions)) {
+    if (event && event.positions && Array.isArray(event.positions)) {
       const positionDef = findPositionDef(event, app.position);
 
       if (positionDef) {
@@ -219,7 +222,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
         const currentApproved = countFilledForPosition(assignments, app.event_id, positionDef, app.position, applicationId);
 
         if (currentApproved >= maxCount) {
-          // Position is full — caller should have used handleApproveToStandby instead
+          notify('This position filled up since this applicant joined the list — refresh and check standby.');
           return;
         }
       }
