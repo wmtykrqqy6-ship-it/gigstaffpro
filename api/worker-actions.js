@@ -1,7 +1,7 @@
 // api/worker-actions.js
 // Consolidated dispatcher for every worker-initiated write against
 // assignments/workers: apply, cancel, switchPosition, leaveStandby,
-// updateProfile. Combined into one file (rather than five) to keep the
+// checkIn, updateProfile. Combined into one file (rather than five) to keep the
 // project's serverless function count down — Vercel's Hobby plan counts
 // each function as a build against the hourly build-rate limit, and this
 // project was already close to that with the existing endpoints.
@@ -278,6 +278,45 @@ async function handleSwitchPosition(supabase, { assignmentId, workerId, newPosit
   return { status: 200, body: { ok: true } };
 }
 
+async function handleCheckIn(supabase, { assignmentId, workerId }) {
+  if (!assignmentId || !workerId) {
+    return { status: 400, body: { ok: false, error: 'assignmentId and workerId are required' } };
+  }
+
+  const { data: assignment, error: fetchError } = await supabase
+    .from('assignments')
+    .select('id, worker_id, status, checked_in_at, events(date)')
+    .eq('id', assignmentId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!assignment || assignment.worker_id !== workerId) {
+    return { status: 404, body: { ok: false, error: 'Assignment not found' } };
+  }
+  if (!isFilled(assignment.status)) {
+    return { status: 400, body: { ok: false, error: 'This assignment is not currently confirmed' } };
+  }
+  if (assignment.checked_in_at) {
+    return { status: 200, body: { ok: true, checkedInAt: assignment.checked_in_at, alreadyCheckedIn: true } };
+  }
+
+  const eventDate = assignment.events?.date;
+  if (eventDate) {
+    const [y, m, d] = eventDate.split('-').map(Number);
+    const eventDateOnly = new Date(y, m - 1, d);
+    const todayOnly = new Date();
+    todayOnly.setHours(0, 0, 0, 0);
+    if (eventDateOnly.getTime() !== todayOnly.getTime()) {
+      return { status: 400, body: { ok: false, error: 'Check-in is only available on the day of the event.' } };
+    }
+  }
+
+  const checkedInAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from('assignments').update({ checked_in_at: checkedInAt }).eq('id', assignmentId);
+  if (updateError) throw updateError;
+  return { status: 200, body: { ok: true, checkedInAt } };
+}
+
 const PROFILE_ALLOWED_FIELDS = ['email', 'phone', 'address', 'shirt_size', 'photo_url'];
 
 async function handleUpdateProfile(supabase, { workerId, updates }) {
@@ -369,6 +408,9 @@ export default async function handler(req, res) {
         break;
       case 'switchPosition':
         result = await handleSwitchPosition(supabase, params);
+        break;
+      case 'checkIn':
+        result = await handleCheckIn(supabase, params);
         break;
       case 'updateProfile':
         result = await handleUpdateProfile(supabase, params);

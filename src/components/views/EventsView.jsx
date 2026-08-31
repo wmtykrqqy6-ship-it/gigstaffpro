@@ -79,7 +79,8 @@ export default function EventsView({
     const pending = eventAssignments.filter(a => a.status === 'pending').length;
     const standby = eventAssignments.filter(a => a.status === 'standby').length;
     const invited = invitations.filter(i => i.event_id === event.id && i.status === 'pending').length;
-    return { confirmed, pending, invited, standby };
+    const checkedIn = eventAssignments.filter(a => isAssignmentFilled(a.status) && a.checked_in_at).length;
+    return { confirmed, pending, invited, standby, checkedIn };
   };
 
   const openAssignModal = (event) => {
@@ -398,6 +399,11 @@ export default function EventsView({
                     <span className={statusCounts.standby > 0 ? 'text-orange-700 font-semibold' : 'text-gray-400'}>
                       Standby: {statusCounts.standby}
                     </span>
+                    {statusCounts.confirmed > 0 && (
+                      <span className={statusCounts.checkedIn > 0 ? 'text-blue-700 font-semibold' : 'text-gray-400'}>
+                        Checked In: {statusCounts.checkedIn}/{statusCounts.confirmed}
+                      </span>
+                    )}
                   </div>
                   {/* Row 3: Assign Staff - full width on mobile */}
                   <button 

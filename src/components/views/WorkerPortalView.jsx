@@ -199,6 +199,23 @@ export default function WorkerPortalView({  loggedInWorker,
       }
     };
 
+    const checkIn = async (assignment) => {
+      try {
+        const res = await fetch('/api/worker-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'checkIn', assignmentId: assignment.id, workerId: currentWorker.id })
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || 'Check-in failed');
+
+        onReloadAssignments();
+        if (!result.alreadyCheckedIn) notify('✓ Checked in — have a great shift!');
+      } catch (error) {
+        notify('Error checking in: ' + error.message);
+      }
+    };
+
     const switchPosition = async (assignment, newPositionKey) => {
       const eventDate = new Date(assignment.event.date);
       const today = new Date();
@@ -955,7 +972,7 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     </div>
 
-                    <div className="mt-3">
+                    <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-2">
                       <a
                         href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
                         className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
@@ -963,6 +980,20 @@ export default function WorkerPortalView({  loggedInWorker,
                         <Calendar size={14} />
                         <span>Add to Calendar</span>
                       </a>
+                      {assignment.checked_in_at ? (
+                        <span className="text-green-700 text-sm font-medium inline-flex items-center space-x-1">
+                          <CheckCircle size={14} />
+                          <span>Checked in</span>
+                        </span>
+                      ) : isToday ? (
+                        <button
+                          onClick={() => checkIn(assignment)}
+                          className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-1 rounded inline-flex items-center space-x-1"
+                        >
+                          <CheckCircle size={14} />
+                          <span>Check In</span>
+                        </button>
+                      ) : null}
                     </div>
 
                     {assignment.event.address && (
@@ -1339,7 +1370,7 @@ export default function WorkerPortalView({  loggedInWorker,
                           </div>
                         </div>
 
-                        <div className="mt-3">
+                        <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-2">
                           <a
                             href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
@@ -1347,6 +1378,20 @@ export default function WorkerPortalView({  loggedInWorker,
                             <Calendar size={14} />
                             <span>Add to Calendar</span>
                           </a>
+                          {assignment.checked_in_at ? (
+                            <span className="text-green-700 text-sm font-medium inline-flex items-center space-x-1">
+                              <CheckCircle size={14} />
+                              <span>Checked in</span>
+                            </span>
+                          ) : isToday ? (
+                            <button
+                              onClick={() => checkIn(assignment)}
+                              className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-1 rounded inline-flex items-center space-x-1"
+                            >
+                              <CheckCircle size={14} />
+                              <span>Check In</span>
+                            </button>
+                          ) : null}
                         </div>
 
                         {assignment.event.address && (
