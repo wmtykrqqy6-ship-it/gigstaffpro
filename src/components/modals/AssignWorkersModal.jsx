@@ -725,7 +725,7 @@ export default function AssignWorkersModal({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
                               {qualifiedWorkers.map(worker => {
                                 // Check if worker is assigned to a different position in this event
-                                const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== pos.name);
+                                const otherAssignment = eventAssignments.find(a => a.worker_id === worker.id && a.position !== positionKey);
                                 const isAvailable = !otherAssignment;
                               
                               // Check for time conflicts with other events on the same day
