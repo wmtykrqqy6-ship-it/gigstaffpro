@@ -301,11 +301,12 @@ async function handleCheckIn(supabase, { assignmentId, workerId }) {
 
   const eventDate = assignment.events?.date;
   if (eventDate) {
-    const [y, m, d] = eventDate.split('-').map(Number);
-    const eventDateOnly = new Date(y, m - 1, d);
-    const todayOnly = new Date();
-    todayOnly.setHours(0, 0, 0, 0);
-    if (eventDateOnly.getTime() !== todayOnly.getTime()) {
+    // Vercel functions run in UTC, so comparing against `new Date()` directly
+    // misjudges "today" for evening check-ins in the business's Central timezone
+    // (e.g. 10pm CDT is already the next day in UTC). Compare date strings in
+    // the business's local timezone instead.
+    const todayInBusinessTz = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+    if (eventDate !== todayInBusinessTz) {
       return { status: 400, body: { ok: false, error: 'Check-in is only available on the day of the event.' } };
     }
   }
