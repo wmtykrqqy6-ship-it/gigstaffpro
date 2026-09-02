@@ -134,7 +134,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                     {date.getDate()}
                   </div>
                   {dayEvts.slice(0, 2).map(ev => {
-                    const filled = assignments.filter(a => a.event_id === ev.id).length;
+                    const filled = assignments.filter(a => a.event_id === ev.id && isAssignmentFilled(a.status)).length;
                     const total = ev.positions?.reduce((s, p) => s + (p.count || 1), 0) || 0;
                     return (
                       <div key={ev.id} className={`text-xs p-0.5 rounded mb-0.5 truncate ${

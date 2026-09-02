@@ -14,7 +14,6 @@ import {
 
 export default function Navigation({
   userRole,
-  assignments,
   paymentTrackingEnabled,
   currentView,
   onNavigate,
@@ -26,20 +25,17 @@ export default function Navigation({
 }) {
   if (userRole !== 'admin') return null;
 
-  // Count pending applications
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const activeLocationName = activeLocation === 'all'
     ? 'All Markets'
     : (locations.find(l => l.id === activeLocation)?.name || 'All Markets');
-
-  const pendingCount = pendingApplicationsCount;
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'staff', label: 'Staff', icon: Users },
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'schedule', label: 'Schedule', icon: Clock },
-    { id: 'applications', label: 'Applications', icon: FileText, badge: pendingCount },
+    { id: 'applications', label: 'Applications', icon: FileText, badge: pendingApplicationsCount },
     { id: 'reports', label: 'Reports', icon: ClipboardList, badge: pendingReportsCount },
     ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
     { id: 'settings', label: 'Settings', icon: Settings }

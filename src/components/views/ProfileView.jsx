@@ -854,6 +854,8 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
             })}
           </div>
         )}
+      </div>
+
       {/* Reminder Preferences */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
@@ -905,8 +907,6 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         <p style={{fontSize:'11px',color:'#9ca3af',marginTop:'12px'}}>
           SMS reminders coming soon. All reminders are ON by default.
         </p>
-      </div>
-
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ export default function PaymentCalculatorModal({
   const [isHoliday, setIsHoliday] = useState(false);
   const [calculation, setCalculation] = useState(null);
   const [fetchingMiles, setFetchingMiles] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Event location — still drives travel origin (below) and is shown for
   // context, but NOT the hourly rate: a worker traveling to a different
@@ -171,12 +172,14 @@ export default function PaymentCalculatorModal({
 
   const handleConfirm = async () => {
     if (!assignmentData || !calculation) return;
-    
+    if (submitting) return;
+
     if (hours <= 0) {
       notify('Hours must be greater than 0');
       return;
     }
 
+    setSubmitting(true);
     try {
       const { error } = await supabase
         .from('assignments')
@@ -258,6 +261,8 @@ export default function PaymentCalculatorModal({
       notify(`✓ ${worker.name} assigned to ${assignmentData.position}\n\nTotal Pay: $${calculation.totalPay.toFixed(2)}`);
     } catch (error) {
       notify('Error creating assignment: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -457,10 +462,10 @@ export default function PaymentCalculatorModal({
             <div className="flex space-x-3 pt-4">
               <button
                 onClick={handleConfirm}
-                disabled={hours <= 0}
+                disabled={hours <= 0 || submitting}
                 className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                Confirm Assignment
+                {submitting ? 'Confirming...' : 'Confirm Assignment'}
               </button>
               <button
                 onClick={handleClose}

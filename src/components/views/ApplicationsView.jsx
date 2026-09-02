@@ -306,23 +306,27 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
       const event = events.find(e => e.id === app.event_id);
       if (!event) { approvableApps.push(app); continue; }
 
-      const positionDef = event.positions?.find(p => 
-        p.key === app.position || p.name === app.position
-      );
+      // Same normalized position matching as handleApprove's capacity check
+      // (findPositionDef/countFilledForPosition) — this loop used to do its
+      // own raw string-equality matching, which could disagree with
+      // handleApprove about when a position is full and let bulk-approve
+      // overstaff a position single-approve would have correctly blocked.
+      const positionDef = findPositionDef(event, app.position);
       if (!positionDef) { approvableApps.push(app); continue; }
 
       const maxCount = positionDef.count || 1;
-      // Count currently approved + any we've already added to approvableApps
-      const currentApproved = assignments.filter(a => 
-        a.event_id === app.event_id && 
-        a.position === app.position && 
-        a.status === 'approved'
-      ).length;
-      const pendingApprovalCount = approvableApps.filter(a =>
-        a.event_id === app.event_id && a.position === app.position
-      ).length;
+      const currentFilled = countFilledForPosition(assignments, app.event_id, positionDef, app.position);
+      // + any we've already staged for approval earlier in this same batch
+      const pendingApprovalCount = approvableApps.filter(a => {
+        if (a.event_id !== app.event_id) return false;
+        return a.position === app.position ||
+               a.position === positionDef.key ||
+               a.position === positionDef.name ||
+               getPositionKey(a.position) === getPositionKey(app.position) ||
+               getPositionLabel(a.position) === getPositionLabel(app.position);
+      }).length;
 
-      if (currentApproved + pendingApprovalCount >= maxCount) {
+      if (currentFilled + pendingApprovalCount >= maxCount) {
         overfilledApps.push(app);
       } else {
         approvableApps.push(app);

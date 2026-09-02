@@ -297,7 +297,7 @@ export default function EventsView({
             <button
               onClick={() => {
                 setStatusFilter('active');
-                setDateRangeFilter('next-30');
+                setDateRangeFilter('all');
                 setLocationFilter('all');
                 setSearchTerm('');
               }}

@@ -1540,10 +1540,16 @@ setAppPositions(storedPositions);
 
       if (storedRole && storedUserId) {
         if (storedRole === 'worker') {
+          // is_active=true is required here (mirrors api/worker-pin-login.js's
+          // own filter) — without it, a worker an admin just deactivated
+          // keeps full portal access on refresh for as long as this
+          // sessionStorage marker survives, since deactivation has no other
+          // way to invalidate an already-restored legacy session.
           const { data } = await supabase
             .from('workers')
             .select(WORKER_COLUMNS)
             .eq('id', storedUserId)
+            .eq('is_active', true)
             .single();
           if (data) {
             setLoggedInWorker(data);
@@ -1569,6 +1575,22 @@ setAppPositions(storedPositions);
     return <LoginScreen onLogin={handleLogin} authMessage={adminAuthMessage} />;
   }
 
+  // Mirrors ApplicationsView.jsx's own pendingCount exactly (status
+  // 'pending', matching worker+event still exist, event date not in the
+  // past) so the nav badge and the page's own "Pending Review" tile always
+  // agree.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const pendingApplicationsCount = assignments.filter(a => {
+    if (a.status !== 'pending') return false;
+    const worker = workers.find(w => w.id === a.worker_id);
+    const event = events.find(e => e.id === a.event_id);
+    if (!worker || !event) return false;
+    const [ey, em, ed] = (event.date || '').split('-').map(Number);
+    if (!ey) return true;
+    return new Date(ey, em - 1, ed) >= today;
+  }).length;
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Header
@@ -1586,11 +1608,11 @@ setAppPositions(storedPositions);
 />
   <Navigation
   userRole={userRole}
-  assignments={assignments}
   paymentTrackingEnabled={paymentTrackingEnabled}
   currentView={currentView}
   onNavigate={(id) => navigate(id)}
   pendingReportsCount={pendingReportsCount}
+  pendingApplicationsCount={pendingApplicationsCount}
 />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}

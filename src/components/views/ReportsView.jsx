@@ -89,6 +89,12 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
 
       // Apply rating changes to each worker
       for (const record of records) {
+        // If a prior attempt got partway through (network error, etc.) and
+        // the admin retries, skip records already marked applied — without
+        // this, re-running the loop re-adds their rating change on top of
+        // the already-updated value, double-counting the adjustment.
+        if (record.rating_applied) continue;
+
         const worker = freshWorkers.find(w => w.id === record.worker_id);
         if (!worker) {
           console.warn('Worker not found for record:', record.worker_id);

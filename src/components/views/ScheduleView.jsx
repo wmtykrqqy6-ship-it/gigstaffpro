@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, positionMatches } from '../../utils/positionHelpers';
+import { getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import AssignWorkersModal from '../modals/AssignWorkersModal';
 
 export default function ScheduleView({
@@ -164,7 +164,7 @@ export default function ScheduleView({
                   {sortedDayEvents.slice(0, 2).map(event => {
                     const eventAssignments = assignments.filter(a => a.event_id === event.id);
                     const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
-                    const filled = eventAssignments.length;
+                    const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
                     const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
                     
                     return (
@@ -245,7 +245,7 @@ export default function ScheduleView({
                 {dayEvents.map(event => {
                   const eventAssignments = assignments.filter(a => a.event_id === event.id);
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
-                  const filled = eventAssignments.length;
+                  const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
                   
                   return (
                     <div key={event.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
