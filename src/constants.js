@@ -11,13 +11,9 @@
 export const PAYMENT = {
   // Lake Geneva bonus amount
   LAKE_GENEVA_BONUS: 15.00,
-  
+
   // Holiday pay multiplier (1.5x = time and a half)
   HOLIDAY_MULTIPLIER: 1.5,
-  
-  // Default values for new assignments
-  DEFAULT_HOURS: 4,
-  DEFAULT_MILES: 0,
 };
 
 // ============================================
@@ -33,55 +29,15 @@ export const RANK_ACCESS_DAYS = {
 };
 
 // ============================================
-// WORKER DEFAULTS
-// ============================================
-
-export const WORKER_DEFAULTS = {
-  RANK: 1,
-  RELIABILITY: 5.0,
-  TOTAL_GIGS: 0,
-  NO_SHOWS: 0,
-  IS_ACTIVE: true
-};
-
-// ============================================
-// TIME & DATE CONSTANTS
-// ============================================
-
-export const TIME = {
-  // Milliseconds conversions
-  MS_PER_SECOND: 1000,
-  MS_PER_MINUTE: 60000,
-  MS_PER_HOUR: 3600000,
-  MS_PER_DAY: 86400000,
-  
-  // Default time format
-  DEFAULT_FORMAT: '12', // '12' or '24' hour
-  
-  // Days before event worker can cancel/switch
-  CANCEL_DAYS_NOTICE: 7,
-  SWITCH_DAYS_NOTICE: 7
-};
-
-// ============================================
 // UI CONSTANTS
 // ============================================
 
 export const UI = {
   // PIN requirements
   PIN_LENGTH: 4,
-  
+
   // Phone number formatting
   PHONE_MAX_LENGTH: 14, // (555) 123-4567
-  
-  // Search/filter debounce (ms)
-  SEARCH_DEBOUNCE_MS: 300,
-  
-  // Items per page for pagination
-  DEFAULT_PAGE_SIZE: 20,
-  
-  // Modal animation duration (ms)
-  MODAL_ANIMATION_MS: 200
 };
 
 // ============================================
@@ -89,22 +45,6 @@ export const UI = {
 // ============================================
 
 export const STATUS = {
-  // Assignment statuses
-  ASSIGNMENT: {
-    PENDING: 'pending',
-    APPROVED: 'approved',
-    STANDBY: 'standby',
-    REJECTED: 'rejected',
-    CANCELLED: 'cancelled'
-  },
-  
-  // Payment statuses
-  PAYMENT: {
-    PENDING: 'pending',
-    PAID: 'paid',
-    PROCESSING: 'processing'
-  },
-  
   // Event statuses
   EVENT: {
     CONFIRMED: 'confirmed',
@@ -113,24 +53,6 @@ export const STATUS = {
     CANCELLED: 'cancelled',
     COMPLETED: 'completed'
   }
-};
-
-// ============================================
-// VALIDATION RULES
-// ============================================
-
-export const VALIDATION = {
-  // Email regex (basic)
-  EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  
-  // Phone regex (US format)
-  PHONE_REGEX: /^\(\d{3}\) \d{3}-\d{4}$/,
-  
-  // PIN regex (4 digits)
-  PIN_REGEX: /^\d{4}$/,
-  
-  // Minimum password length
-  MIN_PASSWORD_LENGTH: 8
 };
 
 // ============================================

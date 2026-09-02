@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Archive, Send, SlidersHorizontal, ChevronDown, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Send, SlidersHorizontal, AlertCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -14,7 +14,6 @@ export default function EventsView({
   onOpenInviteModal,
   onOpenEditEvent,
   onDeleteEvent,
-  onAutoArchive,
   activeLocation = 'all'
 }) {
   const [statusFilter, setStatusFilter] = useState('active');

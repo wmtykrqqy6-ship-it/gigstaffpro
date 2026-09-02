@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import AssignWorkersModal from '../modals/AssignWorkersModal';
 
 export default function ScheduleView({
@@ -13,8 +13,7 @@ export default function ScheduleView({
   eventPaymentSettings,
   onAssign,
   onUnassign,
-  onSavePaymentSettings,
-  onReloadAssignments
+  onSavePaymentSettings
 }) {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());

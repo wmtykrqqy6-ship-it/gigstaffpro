@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { hashPin } from '../../utils/authHelpers';
 import { normalizeUsPhoneToE164 } from '../../utils/workerAuth';
-import { UI, SUCCESS_MESSAGES } from '../../constants';
+import { UI } from '../../constants';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 

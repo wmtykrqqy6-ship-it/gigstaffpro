@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Upload, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
+import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';

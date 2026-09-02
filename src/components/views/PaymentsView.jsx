@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, CheckCircle, Clock, Filter, Download, AlertCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, Clock, Download, AlertCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel } from '../../utils/positionHelpers';

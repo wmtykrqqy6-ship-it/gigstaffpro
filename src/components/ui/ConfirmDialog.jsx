@@ -10,20 +10,36 @@ const ConfirmContext = createContext(null);
 export function ConfirmProvider({ children }) {
   const [dialog, setDialog] = useState(null); // { message }
   const resolveRef = useRef(null);
+  // Only one dialog renders at a time. Without a queue, a second confirm()
+  // call while one is already showing would overwrite resolveRef and
+  // silently strand the first caller's promise forever (it never resolves,
+  // so whatever code was awaiting it never runs) — queuing instead means a
+  // second concurrent call just waits its turn.
+  const queueRef = useRef([]);
+
+  const showNext = useCallback(() => {
+    const next = queueRef.current.shift();
+    if (next) {
+      resolveRef.current = next.resolve;
+      setDialog({ message: next.message });
+    }
+  }, []);
 
   const confirmAction = useCallback((message) => {
     return new Promise((resolve) => {
-      resolveRef.current = resolve;
-      setDialog({ message });
+      queueRef.current.push({ message, resolve });
+      if (!resolveRef.current) showNext();
     });
-  }, []);
+  }, [showNext]);
 
   const handleChoice = (result) => {
     setDialog(null);
     if (resolveRef.current) {
-      resolveRef.current(result);
+      const resolve = resolveRef.current;
       resolveRef.current = null;
+      resolve(result);
     }
+    showNext();
   };
 
   return (

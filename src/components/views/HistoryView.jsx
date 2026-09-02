@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, DollarSign, Briefcase, TrendingUp, Award } from 'lucide-react';
+import { Calendar, Clock, MapPin, DollarSign, Briefcase, Award } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 
@@ -39,8 +39,6 @@ export default function HistoryView({ worker, assignments, events, timeFormat, p
 
   // Calculate summary stats
   const totalEarnings = pastAssignments.reduce((sum, a) => sum + (a.total_pay || 0), 0);
-  const totalHours = pastAssignments.reduce((sum, a) => sum + (a.hours || 0), 0);
-  const uniqueVenues = [...new Set(pastAssignments.map(a => a.event?.venue).filter(Boolean))].length;
 
   return (
     <div className="space-y-6">

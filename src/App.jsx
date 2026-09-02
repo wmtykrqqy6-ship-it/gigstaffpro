@@ -14,9 +14,7 @@ import {
 import {
   RANK_ACCESS_DAYS,
   PAYMENT,
-  TIME,
   UI,
-  WORKER_DEFAULTS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   WORKER_COLUMNS
@@ -688,11 +686,15 @@ const getPayRateKey = (position) => {
   // Get effective hourly rate for a position, using location override if available
   const getEffectiveRate = (position, locationId) => {
     const rateKey = getPayRateKey(position);
+    // Nullish coalescing, not ||: a location override or base rate can be a
+    // legitimately-configured 0 (e.g. an unpaid position), which must not
+    // be treated the same as "no rate configured" and fall through to a
+    // higher default rate.
     if (locationId && locationPayRates[locationId]) {
-      const locRate = locationPayRates[locationId][rateKey] || locationPayRates[locationId][position];
-      if (locRate) return locRate;
+      const locRate = locationPayRates[locationId][rateKey] ?? locationPayRates[locationId][position];
+      if (locRate != null) return locRate;
     }
-    return payRates[rateKey] || payRates[position] || 0;
+    return payRates[rateKey] ?? payRates[position] ?? 0;
   };
 
   // Payment calculation — locationId drives hourly rate, miles drives travel pay
@@ -747,6 +749,7 @@ for (const tier of (travelTiers || [])) {
 
       setAssignments(data || []);
     } catch (error) {
+      notify('Error loading assignments: ' + error.message);
     }
   };
 
@@ -761,6 +764,7 @@ for (const tier of (travelTiers || [])) {
       if (error) throw error;
       setInvitations(data || []);
     } catch (error) {
+      notify('Error loading invitations: ' + error.message);
     }
   };
 
@@ -1065,6 +1069,7 @@ setAppPositions(storedPositions);
       // Recompute stored mileage for any event whose location changed
       recalculateMilesForLocationChanges(previousEvents, migratedEvents);
     } catch (error) {
+      notify('Error loading events: ' + error.message);
     }
   };
 
@@ -1327,7 +1332,6 @@ setAppPositions(storedPositions);
           onAssign={handleAssignWorker}
           onUnassign={handleUnassignWorker}
           onSavePaymentSettings={handleSaveEventPaymentSettings}
-          onReloadAssignments={loadAssignments}
         />
       );
     }

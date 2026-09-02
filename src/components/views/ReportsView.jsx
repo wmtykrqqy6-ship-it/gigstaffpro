@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, CheckCircle, Clock, XCircle, AlertTriangle, Star, ChevronDown, Eye } from 'lucide-react';
+import { ClipboardList, CheckCircle, Clock, XCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
