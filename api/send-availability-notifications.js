@@ -124,6 +124,16 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  // Meant to be triggered only by the hourly GitHub Actions cron
+  // (.github/workflows/send-availability-notifications.yml), which sends
+  // this header. Without it, anyone who finds the URL could invoke it
+  // directly — low-impact since sends are deduped via
+  // event_availability_notifications, but this closes the gap rather than
+  // relying on dedup alone.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers['x-cron-secret'] !== cronSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (!RESEND_KEY) return res.status(500).json({ error: 'Email service not configured' });
 
   const results = { checked: 0, sent: 0, skipped: 0, errors: [] };

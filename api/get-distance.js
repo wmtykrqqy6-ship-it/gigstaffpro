@@ -1,9 +1,36 @@
+// Every caller in this codebase hits this via a same-origin relative fetch
+// (App.jsx, AvailableEventsSection.jsx, and several modals) — same-origin
+// requests never need CORS headers at all. The previous `Access-Control-
+// Allow-Origin: *` had no legitimate purpose here and let any third-party
+// site's visitors' browsers silently ride on this app's billed Google Maps
+// key. Rate limiting (below) caps abuse from direct/scripted callers, which
+// CORS can't do anyway since it's a browser-only mechanism.
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const rateLimitBuckets = new Map();
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateLimitBuckets.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return String(forwarded).split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  const ip = getClientIp(req);
+  if (isRateLimited(ip)) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
 
   const { origin, destination } = req.query;
 
