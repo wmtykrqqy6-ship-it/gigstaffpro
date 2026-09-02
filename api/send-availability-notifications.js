@@ -4,6 +4,8 @@
 // emails all eligible workers of that rank in the event's market.
 // Deduplication: tracks sent notifications in event_availability_notifications table.
 
+import { escapeHtml } from './_lib/escapeHtml.js';
+
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
 const RESEND_KEY   = process.env.RESEND_API_KEY;
@@ -55,7 +57,7 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
   const positionList = (positions || [])
     .map(p => {
       const label = (p.key || p.name || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      return `<li style="margin:2px 0;font-size:13px;color:#374151">${label} (${p.count || 1} needed)</li>`;
+      return `<li style="margin:2px 0;font-size:13px;color:#374151">${escapeHtml(label)} (${p.count || 1} needed)</li>`;
     }).join('');
 
   const rows = [
@@ -67,7 +69,7 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
   ].filter(Boolean).map(([label, val]) =>
     `<tr>
       <td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">${label}</td>
-      <td style="padding:5px 0;color:#111;font-size:13px">${val}</td>
+      <td style="padding:5px 0;color:#111;font-size:13px">${escapeHtml(val)}</td>
     </tr>`
   ).join('');
 
@@ -84,9 +86,9 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
   </div>
 
   <div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-    <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${worker.name},</p>
+    <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${escapeHtml(worker.name)},</p>
     <p style="margin:0 0 20px;color:#374151;font-size:14px">
-      A new shift is available for <strong>${event.name}</strong>.
+      A new shift is available for <strong>${escapeHtml(event.name)}</strong>.
       Sign up in the staff portal before spots fill up.
     </p>
 

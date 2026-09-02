@@ -1693,36 +1693,8 @@ setAppPositions(storedPositions);
           setShowAssignModal(false);
           setSelectedEvent(null);
         }}
-        onAssign={(workerId, position, existingAssignment, defaultHours, event) => {
-          setAssignmentPaymentData({
-            workerId,
-            position,
-            existingAssignment,
-            defaultHours
-          });
-          // Set selectedEvent so PaymentCalculatorModal can access it
-          if (event) {
-            setSelectedEvent(event);
-          }
-          setShowPaymentModal(true);
-        }}
-        onUnassign={async (assignmentId) => {
-          try {
-            const removed = assignments.find(a => a.id === assignmentId);
-
-            const { error } = await supabase
-              .from('assignments')
-              .delete()
-              .eq('id', assignmentId);
-
-            if (error) throw error;
-
-            loadAssignments();
-            triggerStandbyPromotion(removed);
-          } catch (error) {
-            notify('Error removing assignment: ' + error.message);
-          }
-        }}
+        onAssign={handleAssignWorker}
+        onUnassign={handleUnassignWorker}
         onReloadAssignments={loadAssignments}
         onSavePaymentSettings={handleSaveEventPaymentSettings}
       />

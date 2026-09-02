@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   let event;
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/events?id=eq.${event_id}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`,
+      `${SUPABASE_URL}/rest/v1/events?id=eq.${encodeURIComponent(event_id)}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const data = await response.json();

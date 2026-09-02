@@ -20,6 +20,7 @@
 // event, any time.
 
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
+import { escapeHtml } from './_lib/escapeHtml.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -154,7 +155,7 @@ export default async function handler(req, res) {
           event.dress_code ? ['👔', 'Dress Code', event.dress_code] : null,
           event.parking ? ['🅿', 'Parking', event.parking] : null,
         ].filter(Boolean).map(([icon, label, val]) =>
-          `<tr><td class="lbl">${icon} ${label}</td><td class="val">${val}</td></tr>`
+          `<tr><td class="lbl">${icon} ${label}</td><td class="val">${escapeHtml(val)}</td></tr>`
         ).join('');
 
         const promoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -173,7 +174,7 @@ body{font-family:Arial,sans-serif;margin:0;padding:0}
 <div class="b">
 <div style="text-align:center;margin:0 0 16px"><div style="font-size:44px">🎉</div>
 <h2 style="margin:6px 0 2px;color:#111">You're off the waitlist!</h2>
-<p style="color:#6b7280;margin:0">A spot opened up and you're confirmed for <strong>${event.name}</strong></p></div>
+<p style="color:#6b7280;margin:0">A spot opened up and you're confirmed for <strong>${escapeHtml(event.name)}</strong></p></div>
 <table style="border-collapse:collapse;width:100%;margin:0 0 14px">${rows}</table>
 <div style="text-align:center;margin:14px 0"><a href="${calUrl}" class="cal">📅 Add to Calendar</a></div>
 <hr style="border:none;border-top:1px solid #f3f4f6;margin:14px 0 10px">

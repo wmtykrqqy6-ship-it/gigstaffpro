@@ -6,6 +6,8 @@
 // Built to support SMS in the future — add a sendSms() helper and
 // call it alongside sendEmail() using the same prefs structure.
 
+import { escapeHtml } from './_lib/escapeHtml.js';
+
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
 const RESEND_KEY   = process.env.RESEND_API_KEY;
@@ -105,7 +107,7 @@ function buildReminderEmail({ worker, event, assignment, hoursUntil }) {
    .map(([icon, label, val]) =>
      `<tr>
        <td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">${icon} ${label}</td>
-       <td style="padding:5px 0;color:#111;font-size:13px">${val}</td>
+       <td style="padding:5px 0;color:#111;font-size:13px">${escapeHtml(val)}</td>
      </tr>`
    ).join('');
 
@@ -126,10 +128,10 @@ function buildReminderEmail({ worker, event, assignment, hoursUntil }) {
 
   <!-- Body -->
   <div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-    <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${worker.name},</p>
+    <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${escapeHtml(worker.name)},</p>
     <p style="margin:0 0 20px;color:#374151;font-size:14px">
       This is your <strong>${hoursUntil}-hour reminder</strong> for your upcoming shift at
-      <strong>${event.name}</strong>.
+      <strong>${escapeHtml(event.name)}</strong>.
     </p>
 
     <!-- Details table -->
