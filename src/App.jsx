@@ -460,11 +460,20 @@ const handleSaveWorker = async (formData) => {
   // promote the longest-waiting standby worker for that same event+position
   // into the opened slot and email them. Never blocks or errors the caller —
   // the unassign/cancel already succeeded by the time this runs.
-  const triggerStandbyPromotion = (removedAssignment) => {
+  const triggerStandbyPromotion = async (removedAssignment) => {
     if (!removedAssignment || !isAssignmentFilled(removedAssignment.status)) return;
+    // promote-standby.js is admin-gated when called from the browser — get
+    // the current session token the same way SetPinModal/EditWorkerModal do.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return;
+
     fetch('/api/promote-standby', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ eventId: removedAssignment.event_id, position: removedAssignment.position })
     })
       .then(res => res.json())

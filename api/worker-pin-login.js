@@ -15,6 +15,35 @@ import { createHash } from 'crypto';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 
+// Legacy PINs can be as short as 4 digits (10,000 combinations) with no
+// account lockout, so this endpoint needs its own throttle — mirrors
+// api/worker-auth-status.js's rate-limit convention (in-memory,
+// per-instance, best-effort; not a hard security control, but raises
+// brute-forcing a known phone number's PIN from "trivial" to
+// "impractical at pilot scale"). Limited by phone (the actual attack
+// target) as well as IP, since an attacker can rotate IPs but not the
+// phone number they're targeting.
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const rateLimitBuckets = new Map();
+
+function isRateLimited(key) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(key);
+  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateLimitBuckets.set(key, { count: 1, windowStart: now });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return String(forwarded).split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 // This endpoint must read pin_hash to verify a login, and the anon key can
 // no longer read that column at all (see
 // supabase/migrations/20260826120000_revoke_worker_pin_hash_select.sql) —
@@ -54,6 +83,11 @@ export default async function handler(req, res) {
   const cleanPhone = phone.replace(/\D/g, '');
   if (!cleanPhone) {
     return res.status(400).json({ ok: false, error: 'Invalid phone number.' });
+  }
+
+  const ip = getClientIp(req);
+  if (isRateLimited(`ip:${ip}`) || isRateLimited(`phone:${cleanPhone}`)) {
+    return res.status(429).json({ ok: false, error: 'Too many attempts. Please try again later.' });
   }
 
   try {

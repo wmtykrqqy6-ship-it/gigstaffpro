@@ -8,6 +8,18 @@
 // invite-respond.js's atomic-conditional-PATCH pattern to avoid
 // double-promoting the same standby worker if this were ever triggered
 // twice for one opening.
+//
+// Reachable from two different trust levels, so it needs two different
+// gates: (1) App.jsx calls it directly from the admin dashboard right after
+// an admin unassigns someone — gated on a real admin session below; (2)
+// worker-actions.js's handleCancelAssignment calls it server-to-server after
+// a worker cancels their own shift, where there's no admin session to check
+// — gated on a shared internal secret instead. Previously this endpoint had
+// neither: anyone on the internet could POST any eventId/position and force
+// a real standby-to-approved promotion (plus the promotion email) for any
+// event, any time.
+
+import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -33,6 +45,17 @@ export default async function handler(req, res) {
   if (!SUPABASE_KEY) {
     console.error('promote-standby: SUPABASE_SERVICE_ROLE_KEY not configured');
     return res.status(500).json({ promoted: false, reason: 'server not configured' });
+  }
+
+  const internalSecret = process.env.INTERNAL_API_SECRET;
+  const suppliedSecret = req.headers['x-internal-secret'];
+  const isTrustedInternalCall = !!internalSecret && suppliedSecret === internalSecret;
+
+  if (!isTrustedInternalCall) {
+    const adminCheck = await verifyAdminRequest(req);
+    if (!adminCheck.ok) {
+      return res.status(adminCheck.status).json({ promoted: false, reason: adminCheck.error });
+    }
   }
 
   const { eventId, position } = req.body || {};
