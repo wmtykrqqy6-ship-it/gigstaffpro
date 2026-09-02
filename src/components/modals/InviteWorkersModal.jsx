@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'; 
 import { X, Send, Clock, CheckCircle, XCircle, Users, Star, Shield, AlertCircle, UserCheck, RefreshCw, Bell } from 'lucide-react';  
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
+import { getPositionLabel, getPayRateKey, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 import { useToast } from '../ui/Toast';
@@ -21,22 +21,6 @@ const fmtTime = (t) => {
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-};
-
-const getPayRateKey = (position) => {
-  const p = String(position || '').toLowerCase().trim();
-  if (p.includes('blackjack')) return 'blackjack_dealer';
-  if (p.includes('roulette')) return 'roulette_dealer';
-  if (p.includes('poker')) return 'poker_dealer';
-  if (p.includes('craps')) return 'craps_dealer';
-  if (p.includes('baccarat')) return 'baccarat_dealer';
-  if (p.includes('event lead')) return 'event_lead';
-  if (p === 'dealer') return 'dealer';
-  if (p.includes('host')) return 'host';
-  if (p.includes('bartender')) return 'bartender';
-  if (p.includes('server')) return 'server';
-  if (p.includes('cashier')) return 'cashier';
-  return p.replace(/\s+/g, '_');
 };
 
 export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments, defaultPosition = null, onSessionExpired }) {

@@ -8,6 +8,7 @@ import {
   setPositions as setAppPositions,
   getPositionLabel,
   getPositionKey,
+  getPayRateKey,
   positionMatches,
   isAssignmentFilled
 } from './utils/positionHelpers';
@@ -665,24 +666,6 @@ setPayRates(ratesMap);
       console.error('loadPaymentConfig error:', error);
     }
   };
-const getPayRateKey = (position) => {
-  const p = String(position || '').toLowerCase().trim();
-
-  if (p.includes('blackjack')) return 'blackjack_dealer';
-  if (p.includes('roulette')) return 'roulette_dealer';
-  if (p.includes('poker')) return 'poker_dealer';
-  if (p.includes('craps')) return 'craps_dealer';
-  if (p.includes('baccarat')) return 'baccarat_dealer';
-  if (p.includes('event lead')) return 'event_lead';
-  if (p === 'dealer') return 'dealer';
-  if (p.includes('host')) return 'host';
-  if (p.includes('bartender')) return 'bartender';
-  if (p.includes('server')) return 'server';
-  if (p.includes('cashier')) return 'cashier';
-
-  return p.replace(/\s+/g, '_');
-};
-
   // Get effective hourly rate for a position, using location override if available
   const getEffectiveRate = (position, locationId) => {
     const rateKey = getPayRateKey(position);

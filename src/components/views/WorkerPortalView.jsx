@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, Users, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
-import { getPositionLabel, getPositionKey, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
@@ -10,22 +10,6 @@ import HistoryView from './HistoryView';
 import PostEventReportModal from '../modals/PostEventReportModal';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
-
-const getPayRateKey = (position) => {
-  const p = String(position || '').toLowerCase().trim();
-  if (p.includes('blackjack')) return 'blackjack_dealer';
-  if (p.includes('roulette')) return 'roulette_dealer';
-  if (p.includes('poker')) return 'poker_dealer';
-  if (p.includes('craps')) return 'craps_dealer';
-  if (p.includes('baccarat')) return 'baccarat_dealer';
-  if (p.includes('event lead')) return 'event_lead';
-  if (p === 'dealer') return 'dealer';
-  if (p.includes('host')) return 'host';
-  if (p.includes('bartender')) return 'bartender';
-  if (p.includes('server')) return 'server';
-  if (p.includes('cashier')) return 'cashier';
-  return p.replace(/\s+/g, '_');
-};
 
 export default function WorkerPortalView({  loggedInWorker,
   workers = [],

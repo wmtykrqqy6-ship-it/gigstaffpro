@@ -1,26 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { parseDateSafe, formatTime } from '../utils/dateHelpers';
-import { getPositionLabel, getPositionKey, positionMatches } from '../utils/positionHelpers';
+import { parseDateSafe, formatTime, parseTimeToMinutes, timeRangesOverlap } from '../utils/dateHelpers';
+import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
-
-const getPayRateKey = (position) => {
-  const p = String(position || '').toLowerCase().trim();
-  if (p.includes('blackjack')) return 'blackjack_dealer';
-  if (p.includes('roulette')) return 'roulette_dealer';
-  if (p.includes('poker')) return 'poker_dealer';
-  if (p.includes('craps')) return 'craps_dealer';
-  if (p.includes('baccarat')) return 'baccarat_dealer';
-  if (p.includes('event lead')) return 'event_lead';
-  if (p === 'dealer') return 'dealer';
-  if (p.includes('host')) return 'host';
-  if (p.includes('bartender')) return 'bartender';
-  if (p.includes('server')) return 'server';
-  if (p.includes('cashier')) return 'cashier';
-  return p.replace(/\s+/g, '_');
-};
 
 const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, onReloadAssignments }) => {
     const confirm = useConfirm();
@@ -181,22 +165,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               if (!otherEvent || otherEvent.date !== event.date) continue;
               
               // Check time overlap
-              const parseTime = (timeStr) => {
-                if (!timeStr) return null;
-                const [hours, minutes] = timeStr.split(':').map(Number);
-                return hours * 60 + minutes;
-              };
-              
-              const thisStart = parseTime(event.time);
-              const thisEnd = parseTime(event.end_time);
-              const otherStart = parseTime(otherEvent.time);
-              const otherEnd = parseTime(otherEvent.end_time);
-              
-              if (thisEnd && otherEnd) {
-                const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
-                if (hasOverlap) {
-                          return false; // Hide this event
-                }
+              const thisStart = parseTimeToMinutes(event.time);
+              const thisEnd = parseTimeToMinutes(event.end_time);
+              const otherStart = parseTimeToMinutes(otherEvent.time);
+              const otherEnd = parseTimeToMinutes(otherEvent.end_time);
+
+              if (timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd)) {
+                return false; // Hide this event
               }
             }
           }
@@ -265,24 +240,15 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                   if (!otherEvent || otherEvent.date !== event.date) continue;
                   
                   // Check time overlap
-                  const parseTime = (timeStr) => {
-                    if (!timeStr) return null;
-                    const [hours, minutes] = timeStr.split(':').map(Number);
-                    return hours * 60 + minutes;
-                  };
-                  
-                  const thisStart = parseTime(event.time);
-                  const thisEnd = parseTime(event.end_time);
-                  const otherStart = parseTime(otherEvent.time);
-                  const otherEnd = parseTime(otherEvent.end_time);
-                  
-                  if (thisEnd && otherEnd) {
-                    const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
-                    if (hasOverlap) {
-                      hasConflict = true;
-                      conflictEventName = otherEvent.name;
-                      break;
-                    }
+                  const thisStart = parseTimeToMinutes(event.time);
+                  const thisEnd = parseTimeToMinutes(event.end_time);
+                  const otherStart = parseTimeToMinutes(otherEvent.time);
+                  const otherEnd = parseTimeToMinutes(otherEvent.end_time);
+
+                  if (timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd)) {
+                    hasConflict = true;
+                    conflictEventName = otherEvent.name;
+                    break;
                   }
                 }
               }
@@ -344,20 +310,12 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           const otherEvent = events.find(e => e.id === assignment.event_id);
           if (!otherEvent || otherEvent.date !== event.date) return false;
           
-          const parseTime = (timeStr) => {
-            if (!timeStr) return null;
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            return hours * 60 + minutes;
-          };
-          
-          const thisStart = parseTime(event.time);
-          const thisEnd = parseTime(event.end_time);
-          const otherStart = parseTime(otherEvent.time);
-          const otherEnd = parseTime(otherEvent.end_time);
-          
-          if (!thisEnd || !otherEnd) return false;
-          
-          return (thisStart < otherEnd) && (thisEnd > otherStart);
+          const thisStart = parseTimeToMinutes(event.time);
+          const thisEnd = parseTimeToMinutes(event.end_time);
+          const otherStart = parseTimeToMinutes(otherEvent.time);
+          const otherEnd = parseTimeToMinutes(otherEvent.end_time);
+
+          return timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd);
         });
         
         if (conflicts.length > 0) {

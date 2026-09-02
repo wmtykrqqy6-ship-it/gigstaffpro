@@ -3,6 +3,7 @@ import { X, Search, CheckCircle, Trash2, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey, getPositionLabel, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
+import { parseTimeToMinutes, timeRangesOverlap } from '../../utils/dateHelpers';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
@@ -198,21 +199,12 @@ export default function AssignWorkersModal({
           if (!otherEvent) return false;
           if (otherEvent.date !== event.date) return false;
           
-          const parseTime = (timeStr) => {
-            if (!timeStr) return null;
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            return hours * 60 + minutes;
-          };
-          
-          const thisStart = parseTime(event.time);
-          const thisEnd = parseTime(event.end_time);
-          const otherStart = parseTime(otherEvent.time);
-          const otherEnd = parseTime(otherEvent.end_time);
-          
-          if (!thisEnd || !otherEnd) return false;
-          
-          const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
-          return hasOverlap;
+          const thisStart = parseTimeToMinutes(event.time);
+          const thisEnd = parseTimeToMinutes(event.end_time);
+          const otherStart = parseTimeToMinutes(otherEvent.time);
+          const otherEnd = parseTimeToMinutes(otherEvent.end_time);
+
+          return timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd);
         });
         
         if (conflicts.length > 0) {
@@ -622,24 +614,15 @@ export default function AssignWorkersModal({
                                                 const otherEv = events.find(e => e.id === otherAssignment.event_id);
                                                 if (!otherEv || otherEv.date !== event.date) continue;
                                                 
-                                                const parseTime = (timeStr) => {
-                                                  if (!timeStr) return null;
-                                                  const [hours, minutes] = timeStr.split(':').map(Number);
-                                                  return hours * 60 + minutes;
-                                                };
-                                                
-                                                const thisStart = parseTime(event.time);
-                                                const thisEnd = parseTime(event.end_time);
-                                                const otherStart = parseTime(otherEv.time);
-                                                const otherEnd = parseTime(otherEv.end_time);
-                                                
-                                                if (thisEnd && otherEnd) {
-                                                  const hasOverlap = (thisStart < otherEnd) && (thisEnd > otherStart);
-                                                  if (hasOverlap) {
-                                                    hasConflict = true;
-                                                    conflictEvent = otherEv;
-                                                    break;
-                                                  }
+                                                const thisStart = parseTimeToMinutes(event.time);
+                                                const thisEnd = parseTimeToMinutes(event.end_time);
+                                                const otherStart = parseTimeToMinutes(otherEv.time);
+                                                const otherEnd = parseTimeToMinutes(otherEv.end_time);
+
+                                                if (timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd)) {
+                                                  hasConflict = true;
+                                                  conflictEvent = otherEv;
+                                                  break;
                                                 }
                                               }
                                             }
@@ -742,20 +725,12 @@ export default function AssignWorkersModal({
                                   const otherEvent = events.find(e => e.id === assignment.event_id);
                                   if (!otherEvent || otherEvent.date !== event.date) return false;
                                   
-                                  const parseTime = (timeStr) => {
-                                    if (!timeStr) return null;
-                                    const [hours, minutes] = timeStr.split(':').map(Number);
-                                    return hours * 60 + minutes;
-                                  };
-                                  
-                                  const thisStart = parseTime(event.time);
-                                  const thisEnd = parseTime(event.end_time);
-                                  const otherStart = parseTime(otherEvent.time);
-                                  const otherEnd = parseTime(otherEvent.end_time);
-                                  
-                                  if (!thisEnd || !otherEnd) return false;
-                                  
-                                  return (thisStart < otherEnd) && (thisEnd > otherStart);
+                                  const thisStart = parseTimeToMinutes(event.time);
+                                  const thisEnd = parseTimeToMinutes(event.end_time);
+                                  const otherStart = parseTimeToMinutes(otherEvent.time);
+                                  const otherEnd = parseTimeToMinutes(otherEvent.end_time);
+
+                                  return timeRangesOverlap(thisStart, thisEnd, otherStart, otherEnd);
                                 });
                                 
                                 if (conflicts.length > 0) {

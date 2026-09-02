@@ -56,6 +56,31 @@ export const getPositionKey = (keyOrLabel) => {
   return String(keyOrLabel).toLowerCase().replace(/\s+/g, '_');
 };
 
+// Maps a position's display value down to the key its pay rate is looked
+// up under — several specific position labels (e.g. "Blackjack Dealer",
+// "Roulette Wheel") share one rate bucket ("X_dealer"). Was previously
+// copy-pasted identically across App.jsx, AvailableEventsSection.jsx,
+// WorkerPortalView.jsx, InviteWorkersModal.jsx, and twice in
+// SettingsView.jsx — consolidated here since a rule change had to be made
+// in all six places to stay in sync.
+export const getPayRateKey = (position) => {
+  const p = String(position || '').toLowerCase().trim();
+
+  if (p.includes('blackjack')) return 'blackjack_dealer';
+  if (p.includes('roulette')) return 'roulette_dealer';
+  if (p.includes('poker')) return 'poker_dealer';
+  if (p.includes('craps')) return 'craps_dealer';
+  if (p.includes('baccarat')) return 'baccarat_dealer';
+  if (p.includes('event lead')) return 'event_lead';
+  if (p === 'dealer') return 'dealer';
+  if (p.includes('host')) return 'host';
+  if (p.includes('bartender')) return 'bartender';
+  if (p.includes('server')) return 'server';
+  if (p.includes('cashier')) return 'cashier';
+
+  return p.replace(/\s+/g, '_');
+};
+
 // Assignment statuses that do NOT count as filling a position slot.
 // Everything else (approved, confirmed, legacy null/undefined admin-assigned, etc.)
 // counts as filled — this is the single source of truth for "is this slot taken".

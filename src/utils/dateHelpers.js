@@ -27,3 +27,24 @@ export const parseDateSafe = (dateStr) => {
   // Create date in local timezone
   return new Date(year, month - 1, day);
 };
+
+// Parses "HH:MM" into minutes-since-midnight, or null if empty/missing.
+// Note: a literal midnight ("00:00") parses to 0, which every existing
+// caller of this and timeRangesOverlap below treats as falsy on purpose
+// (an event with no recorded end time and one starting exactly at
+// midnight are indistinguishable here) — preserved as-is since this was
+// copy-pasted identically three times in AvailableEventsSection.jsx
+// before being consolidated.
+export const parseTimeToMinutes = (timeStr) => {
+  if (!timeStr) return null;
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+// True if two [start, end) time ranges (in minutes-since-midnight) overlap.
+// Either range missing an end time is treated as "can't determine, no
+// conflict".
+export const timeRangesOverlap = (startA, endA, startB, endB) => {
+  if (!endA || !endB) return false;
+  return startA < endB && endA > startB;
+};

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle, Tag, Calendar, DollarSign, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
+import { getPayRateKey } from '../../utils/positionHelpers';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -118,22 +119,6 @@ function TravelTierRow({ tier, onSave }) {
 function LocationPayRates({ location, positions, onPayRatesChanged }) {
   const [rates, setRates] = React.useState({});
   const [loading, setLoading] = React.useState(true);
-
-  const getPayRateKey = (position) => {
-    const p = String(position || '').toLowerCase().trim();
-    if (p.includes('blackjack')) return 'blackjack_dealer';
-    if (p.includes('roulette')) return 'roulette_dealer';
-    if (p.includes('poker')) return 'poker_dealer';
-    if (p.includes('craps')) return 'craps_dealer';
-    if (p.includes('baccarat')) return 'baccarat_dealer';
-    if (p.includes('event lead')) return 'event_lead';
-    if (p === 'dealer') return 'dealer';
-    if (p.includes('host')) return 'host';
-    if (p.includes('bartender')) return 'bartender';
-    if (p.includes('server')) return 'server';
-    if (p.includes('cashier')) return 'cashier';
-    return p.replace(/\s+/g, '_');
-  };
 
   const loadRates = async () => {
     setLoading(true);
@@ -268,23 +253,6 @@ export default function SettingsView({
       setLocationBonuses((bonusData || []).filter(b => b.zip_code));
     } catch (err) { console.error('loadPayRatesData:', err); }
     finally { setLoadingPayRates(false); }
-  };
-
-  // Helper: normalize position label to a pay_rates key (mirrors App.jsx getPayRateKey)
-  const getPayRateKey = (position) => {
-    const p = String(position || '').toLowerCase().trim();
-    if (p.includes('blackjack')) return 'blackjack_dealer';
-    if (p.includes('roulette')) return 'roulette_dealer';
-    if (p.includes('poker')) return 'poker_dealer';
-    if (p.includes('craps')) return 'craps_dealer';
-    if (p.includes('baccarat')) return 'baccarat_dealer';
-    if (p.includes('event lead')) return 'event_lead';
-    if (p === 'dealer') return 'dealer';
-    if (p.includes('host')) return 'host';
-    if (p.includes('bartender')) return 'bartender';
-    if (p.includes('server')) return 'server';
-    if (p.includes('cashier')) return 'cashier';
-    return p.replace(/\s+/g, '_');
   };
 
   // Build a map: normalizedKey → pay_rates row, for quick lookup
