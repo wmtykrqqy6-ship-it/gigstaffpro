@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck } from 'lucide-react';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { supabase } from '../../supabaseClient';
@@ -164,9 +164,13 @@ export default function StaffView({
     return true;
   });
 
-  // Compute live gig counts from assignments (approved/confirmed only)
+  // Compute live gig counts from assignments (filled slots only). Uses the
+  // shared isAssignmentFilled helper, not a local status allowlist — the
+  // allowlist version used here previously excluded legacy assignment rows
+  // with a null/undefined status (pre-dating status tracking, from direct
+  // admin assignment), undercounting some workers' total gigs.
   const getGigCount = (workerId) =>
-    assignments.filter(a => a.worker_id === workerId && ['approved', 'confirmed', 'assigned'].includes(a.status)).length;
+    assignments.filter(a => a.worker_id === workerId && isAssignmentFilled(a.status)).length;
 
   // Sort workers
   const sortedWorkers = [...filteredWorkers].sort((a, b) => {
