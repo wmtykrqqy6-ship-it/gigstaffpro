@@ -11,6 +11,98 @@ import PostEventReportModal from '../modals/PostEventReportModal';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
+// Check-in status/action for one assignment. Was duplicated verbatim
+// between the List View's assignment card and the Calendar view's per-day
+// "Event Details" modal -- extracted here since a fix to one copy is easy
+// to miss in the other. The surrounding card chrome in those two places is
+// NOT merged with this one: it has genuinely diverged (different grid
+// layout since the modal's title already shows the date, different Notes/
+// Dress Code/Parking formatting, different Pay section placement, and the
+// modal closes itself after Cancel/Switch while the list view doesn't need
+// to) -- unifying those would mean picking a canonical presentation with
+// no clearly-correct answer, unlike this check-in block which really was
+// byte-for-byte identical.
+function CheckInSection({
+  assignment,
+  checkIns,
+  checkingIn,
+  showManualCheckIn,
+  manualNotes,
+  setManualNotes,
+  setShowManualCheckIn,
+  handleCheckIn,
+  handleManualCheckIn,
+}) {
+  const now = new Date();
+  const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
+  const [sh, sm] = (assignment.event.time || '00:00').split(':').map(Number);
+  const shiftStart = new Date(ey, em - 1, ed, sh, sm, 0);
+  const hoursUntil = (shiftStart - now) / (1000 * 60 * 60);
+  const canCheckIn = hoursUntil <= 1 && hoursUntil > -8; // within 1hr before, up to 8hrs after
+  const existingCheckIn = checkIns[assignment.id];
+  const isLoading = checkingIn[assignment.id];
+  const showManual = showManualCheckIn[assignment.id];
+
+  if (!canCheckIn && !existingCheckIn) return null;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-200">
+      {existingCheckIn ? (
+        <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <span className="text-green-600 text-lg">✓</span>
+          <div>
+            <p className="text-sm font-semibold text-green-800">Checked In</p>
+            <p className="text-xs text-green-600">
+              {new Date(existingCheckIn.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+              {' · '}{existingCheckIn.method === 'geo' ? '📍 GPS verified' : '✋ Manual'}
+              {existingCheckIn.flagged && existingCheckIn.method !== 'geo' && ' · ⚠ Flagged for review'}
+            </p>
+          </div>
+        </div>
+      ) : showManual ? (
+        <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
+          <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
+          <textarea
+            value={manualNotes[assignment.id] || ''}
+            onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
+            placeholder="Optional: explain your location (e.g. 'At the back entrance as instructed')"
+            rows={2}
+            className="w-full px-3 py-2 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 bg-white"
+          />
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleManualCheckIn(assignment)}
+              disabled={isLoading}
+              className="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+            >
+              {isLoading ? 'Checking in...' : 'Submit Manual Check-in'}
+            </button>
+            <button
+              onClick={() => setShowManualCheckIn(prev => ({ ...prev, [assignment.id]: false }))}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => handleCheckIn(assignment)}
+          disabled={isLoading}
+          className="w-full bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          {isLoading ? (
+            <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>Locating...</span></>
+          ) : (
+            <><span>✓</span><span>Check In Now</span></>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function WorkerPortalView({  loggedInWorker,
   workers = [],
   assignments,
@@ -1077,76 +1169,17 @@ export default function WorkerPortalView({  loggedInWorker,
                     )}
 
                     {/* Check-in Button */}
-                    {(() => {
-                      const now = new Date();
-                      const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
-                      const [sh, sm] = (assignment.event.time || '00:00').split(':').map(Number);
-                      const shiftStart = new Date(ey, em - 1, ed, sh, sm, 0);
-                      const hoursUntil = (shiftStart - now) / (1000 * 60 * 60);
-                      const canCheckIn = hoursUntil <= 1 && hoursUntil > -8; // within 1hr before, up to 8hrs after
-                      const existingCheckIn = checkIns[assignment.id];
-                      const isLoading = checkingIn[assignment.id];
-                      const showManual = showManualCheckIn[assignment.id];
-
-                      if (!canCheckIn && !existingCheckIn) return null;
-
-                      return (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          {existingCheckIn ? (
-                            <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <span className="text-green-600 text-lg">✓</span>
-                              <div>
-                                <p className="text-sm font-semibold text-green-800">Checked In</p>
-                                <p className="text-xs text-green-600">
-                                  {new Date(existingCheckIn.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                  {' · '}{existingCheckIn.method === 'geo' ? '📍 GPS verified' : '✋ Manual'}
-                                  {existingCheckIn.flagged && existingCheckIn.method !== 'geo' && ' · ⚠ Flagged for review'}
-                                </p>
-                              </div>
-                            </div>
-                          ) : showManual ? (
-                            <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                              <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
-                              <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
-                              <textarea
-                                value={manualNotes[assignment.id] || ''}
-                                onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
-                                placeholder="Optional: explain your location (e.g. 'At the back entrance as instructed')"
-                                rows={2}
-                                className="w-full px-3 py-2 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 bg-white"
-                              />
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => handleManualCheckIn(assignment)}
-                                  disabled={isLoading}
-                                  className="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
-                                >
-                                  {isLoading ? 'Checking in...' : 'Submit Manual Check-in'}
-                                </button>
-                                <button
-                                  onClick={() => setShowManualCheckIn(prev => ({ ...prev, [assignment.id]: false }))}
-                                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleCheckIn(assignment)}
-                              disabled={isLoading}
-                              className="w-full bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
-                            >
-                              {isLoading ? (
-                                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>Locating...</span></>
-                              ) : (
-                                <><span>✓</span><span>Check In Now</span></>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    <CheckInSection
+                      assignment={assignment}
+                      checkIns={checkIns}
+                      checkingIn={checkingIn}
+                      showManualCheckIn={showManualCheckIn}
+                      manualNotes={manualNotes}
+                      setManualNotes={setManualNotes}
+                      setShowManualCheckIn={setShowManualCheckIn}
+                      handleCheckIn={handleCheckIn}
+                      handleManualCheckIn={handleManualCheckIn}
+                    />
 
                     {/* Switch Position Section */}
                     {(() => {
@@ -1465,76 +1498,17 @@ export default function WorkerPortalView({  loggedInWorker,
                     })()}
 
                     {/* Check-in Button */}
-                    {(() => {
-                      const now = new Date();
-                      const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
-                      const [sh, sm] = (assignment.event.time || '00:00').split(':').map(Number);
-                      const shiftStart = new Date(ey, em - 1, ed, sh, sm, 0);
-                      const hoursUntil = (shiftStart - now) / (1000 * 60 * 60);
-                      const canCheckIn = hoursUntil <= 1 && hoursUntil > -8; // within 1hr before, up to 8hrs after
-                      const existingCheckIn = checkIns[assignment.id];
-                      const isLoading = checkingIn[assignment.id];
-                      const showManual = showManualCheckIn[assignment.id];
-
-                      if (!canCheckIn && !existingCheckIn) return null;
-
-                      return (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          {existingCheckIn ? (
-                            <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <span className="text-green-600 text-lg">✓</span>
-                              <div>
-                                <p className="text-sm font-semibold text-green-800">Checked In</p>
-                                <p className="text-xs text-green-600">
-                                  {new Date(existingCheckIn.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                  {' · '}{existingCheckIn.method === 'geo' ? '📍 GPS verified' : '✋ Manual'}
-                                  {existingCheckIn.flagged && existingCheckIn.method !== 'geo' && ' · ⚠ Flagged for review'}
-                                </p>
-                              </div>
-                            </div>
-                          ) : showManual ? (
-                            <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                              <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
-                              <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
-                              <textarea
-                                value={manualNotes[assignment.id] || ''}
-                                onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
-                                placeholder="Optional: explain your location (e.g. 'At the back entrance as instructed')"
-                                rows={2}
-                                className="w-full px-3 py-2 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 bg-white"
-                              />
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => handleManualCheckIn(assignment)}
-                                  disabled={isLoading}
-                                  className="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
-                                >
-                                  {isLoading ? 'Checking in...' : 'Submit Manual Check-in'}
-                                </button>
-                                <button
-                                  onClick={() => setShowManualCheckIn(prev => ({ ...prev, [assignment.id]: false }))}
-                                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleCheckIn(assignment)}
-                              disabled={isLoading}
-                              className="w-full bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
-                            >
-                              {isLoading ? (
-                                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>Locating...</span></>
-                              ) : (
-                                <><span>✓</span><span>Check In Now</span></>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    <CheckInSection
+                      assignment={assignment}
+                      checkIns={checkIns}
+                      checkingIn={checkingIn}
+                      showManualCheckIn={showManualCheckIn}
+                      manualNotes={manualNotes}
+                      setManualNotes={setManualNotes}
+                      setShowManualCheckIn={setShowManualCheckIn}
+                      handleCheckIn={handleCheckIn}
+                      handleManualCheckIn={handleManualCheckIn}
+                    />
 
                     {/* Switch Position Section */}
                         {(() => {
