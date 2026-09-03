@@ -169,7 +169,16 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Send confirmation email with calendar link
+    // 4. Send confirmation email with calendar link, and gather the same
+    // event name / position / calendar link for the landing page below --
+    // so the worker sees what they just accepted immediately, not only in
+    // an email they may not check right away.
+    let confirmedEventName = null;
+    const confirmedPositionLabel = invite.position_key
+      ? invite.position_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      : null;
+    const confirmedCalUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${invite.event_id}&position=${encodeURIComponent(confirmedPositionLabel || '')}`;
+
     try {
       const [eventRes, workerRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`, { headers }),
@@ -178,6 +187,7 @@ export default async function handler(req, res) {
       const [events, workers] = await Promise.all([eventRes.json(), workerRes.json()]);
       const event = events?.[0];
       const worker = workers?.[0];
+      confirmedEventName = event?.name || null;
 
       if (event && worker?.email) {
         const fmtDate = (d) => {
@@ -243,7 +253,8 @@ export default async function handler(req, res) {
     return res.status(200).send(successPage(
       '✅ Invitation Accepted!',
       "You're confirmed for this event. Log in to the staff portal to view your upcoming schedule.",
-      'accepted'
+      'accepted',
+      { eventName: confirmedEventName, positionLabel: confirmedPositionLabel, calUrl: confirmedCalUrl }
     ));
   } else {
     // Declined
@@ -284,14 +295,28 @@ function basePage(content) {
 </html>`;
 }
 
-function successPage(title, message, type) {
+function successPage(title, message, type, extra) {
   const icon = type === 'accepted' ? '🎉' : '👋';
+
+  const detailsHtml = (type === 'accepted' && extra?.eventName)
+    ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 20px;text-align:left">
+         <p style="margin:0 0 4px;color:#111;font-weight:bold;font-size:15px">${escapeHtml(extra.eventName)}</p>
+         ${extra.positionLabel ? `<p style="margin:0;color:#6b7280;font-size:13px">🎴 ${escapeHtml(extra.positionLabel)}</p>` : ''}
+       </div>`
+    : '';
+
+  const calendarBtnHtml = (type === 'accepted' && extra?.calUrl)
+    ? `<div style="margin:0 0 16px"><a href="${extra.calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">📅 Add to Calendar</a></div>`
+    : '';
+
   return basePage(`
     <div class="header"><h1>🎰 Vegas on Wheels</h1><p>Staff Portal</p></div>
     <div class="body">
       <div class="icon">${icon}</div>
       <h2>${title}</h2>
       <p>${message}</p>
+      ${detailsHtml}
+      ${calendarBtnHtml}
       <a class="btn" href="https://gigstaffpro.vercel.app">Go to Staff Portal →</a>
     </div>`);
 }
