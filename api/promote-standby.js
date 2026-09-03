@@ -21,6 +21,7 @@
 
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 import { escapeHtml } from './_lib/escapeHtml.js';
+import { renderEmailShell } from './_lib/emailShell.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -155,31 +156,19 @@ export default async function handler(req, res) {
           event.dress_code ? ['👔', 'Dress Code', event.dress_code] : null,
           event.parking ? ['🅿', 'Parking', event.parking] : null,
         ].filter(Boolean).map(([icon, label, val]) =>
-          `<tr><td class="lbl">${icon} ${label}</td><td class="val">${escapeHtml(val)}</td></tr>`
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon} ${label}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
         ).join('');
 
-        const promoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0}
-.w{max-width:500px;margin:0 auto}
-.h{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
-.h h1{color:#fff;margin:0;font-size:20px}
-.h p{color:#fca5a5;margin:4px 0 0;font-size:13px}
-.b{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
-.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
-.val{padding:4px 0;color:#111;font-size:13px}
-.cal{display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500}
-.ft{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
-</style></head><body><div class="w">
-<div class="h"><h1>🎰 Vegas on Wheels</h1><p>Spot Opened Up</p></div>
-<div class="b">
+        const promoBody = `
 <div style="text-align:center;margin:0 0 16px"><div style="font-size:44px">🎉</div>
 <h2 style="margin:6px 0 2px;color:#111">You're off the waitlist!</h2>
 <p style="color:#6b7280;margin:0">A spot opened up and you're confirmed for <strong>${escapeHtml(event.name)}</strong></p></div>
 <table style="border-collapse:collapse;width:100%;margin:0 0 14px">${rows}</table>
-<div style="text-align:center;margin:14px 0"><a href="${calUrl}" class="cal">📅 Add to Calendar</a></div>
+<div style="text-align:center;margin:14px 0"><a href="${calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">📅 Add to Calendar</a></div>
 <hr style="border:none;border-top:1px solid #f3f4f6;margin:14px 0 10px">
-<p class="ft">View your schedule in the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
-</div></div></body></html>`;
+<p style="color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0">View your schedule in the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>`;
+
+        const promoHtml = renderEmailShell({ subtitle: 'Spot Opened Up', bodyHtml: promoBody });
 
         const resendKey = process.env.RESEND_API_KEY;
         if (resendKey) {

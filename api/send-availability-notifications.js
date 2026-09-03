@@ -5,6 +5,7 @@
 // Deduplication: tracks sent notifications in event_availability_notifications table.
 
 import { escapeHtml } from './_lib/escapeHtml.js';
+import { renderEmailShell } from './_lib/emailShell.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
@@ -73,19 +74,7 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
     </tr>`
   ).join('');
 
-  return {
-    subject: `New shift available: ${event.name} on ${fmtDate(event.date)}`,
-    html: `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-</head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif">
-<div style="max-width:520px;margin:24px auto">
-
-  <div style="background:#7c0a02;padding:24px 20px;border-radius:8px 8px 0 0;text-align:center">
-    <div style="font-size:22px;font-weight:bold;color:#fff">Vegas on Wheels</div>
-    <div style="font-size:13px;color:#fca5a5;margin-top:4px">New Shift Available — Sign up before it fills up</div>
-  </div>
-
-  <div style="background:#fff;padding:24px 20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+  const body = `
     <p style="margin:0 0 6px;font-size:15px;color:#111">Hi ${escapeHtml(worker.name)},</p>
     <p style="margin:0 0 20px;color:#374151;font-size:14px">
       A new shift is available for <strong>${escapeHtml(event.name)}</strong>.
@@ -115,10 +104,11 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
       You're receiving this because you're an approved worker in this market.<br>
       Visit your <a href="${PORTAL_URL}" style="color:#7c0a02">staff portal profile</a> to manage notification preferences.
-    </p>
-  </div>
-</div>
-</body></html>`,
+    </p>`;
+
+  return {
+    subject: `New shift available: ${event.name} on ${fmtDate(event.date)}`,
+    html: renderEmailShell({ subtitle: 'New Shift Available — Sign up before it fills up', bodyHtml: body }),
   };
 }
 

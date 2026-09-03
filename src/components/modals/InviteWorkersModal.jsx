@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { getPositionLabel, getPayRateKey, positionMatches, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
+import { renderEmailShell } from '../../utils/emailShell.js';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 
@@ -275,7 +276,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         const invitePay = calcEstimatedPay(positionLabel, event.id, worker, workerMiles);
         const invitePayHtml = invitePay
-          ? `<div class="pay"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p></div>`
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p></div>`
           : '';
 
         const timeStr = event.time
@@ -291,40 +292,26 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td class="lbl">${icon}</td><td class="val">${val}</td></tr>`
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${val}</td></tr>`
         ).join('');
 
         const detailsHtml = rows
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${rows}</table>`
           : '';
 
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0}
-.wrap{max-width:500px;margin:0 auto}
-.hdr{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
-.hdr h1{color:#fff;margin:0;font-size:20px}
-.hdr p{color:#fca5a5;margin:4px 0 0;font-size:13px}
-.body{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
-.btn-wrap{text-align:center;margin:16px 0}
-.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
-.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
-.val{padding:4px 0;color:#111;font-size:13px}
-.pay{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0}
-.footer{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
-</style></head><body><div class="wrap">
-<div class="hdr"><h1>🎰 Vegas on Wheels</h1><p>You've been invited — please respond</p></div>
-<div class="body">
+        const body = `
 <p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
 <p style="color:#374151;margin:0 0 16px">Invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
-<div class="btn-wrap">
-  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
-  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+<div style="text-align:center;margin:16px 0">
+  <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>
 </div>
 <p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 16px">⏰ Respond by <strong>${expiresStr}</strong></p>
 ${detailsHtml}
 ${invitePayHtml}
-<p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
-</div></div></body></html>`;
+<p style="color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>`;
+
+        const html = renderEmailShell({ subtitle: "You've been invited — please respond", bodyHtml: body });
 
         const emailRes = await fetch('/api/send-email', {
           method: 'POST',
@@ -453,7 +440,7 @@ ${invitePayHtml}
         }
         const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker, reInviteWorkerMiles);
         const reInvitePayHtml = reInvitePay
-          ? `<div class="pay"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p></div>`
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p></div>`
           : '';
 
         const riTimeStr = event.time
@@ -470,39 +457,25 @@ ${invitePayHtml}
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td class="lbl">${icon}</td><td class="val">${val}</td></tr>`
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${val}</td></tr>`
         ).join('');
         const riDetailsHtml = riRows
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${riRows}</table>`
           : '';
 
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0}
-.wrap{max-width:500px;margin:0 auto}
-.hdr{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
-.hdr h1{color:#fff;margin:0;font-size:20px}
-.hdr p{color:#fca5a5;margin:4px 0 0;font-size:13px}
-.body{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
-.btn-wrap{text-align:center;margin:16px 0}
-.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
-.lbl{padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap}
-.val{padding:4px 0;color:#111;font-size:13px}
-.pay{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0}
-.footer{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
-</style></head><body><div class="wrap">
-<div class="hdr"><h1>🎰 Vegas on Wheels</h1><p>You've been invited — please respond</p></div>
-<div class="body">
+        const riBody = `
 <p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
 <p style="color:#374151;margin:0 0 16px">Re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
-<div class="btn-wrap">
-  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
-  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+<div style="text-align:center;margin:16px 0">
+  <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>
 </div>
 <p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 16px">⏰ Respond by <strong>${expiresStr}</strong></p>
 ${riDetailsHtml}
 ${reInvitePayHtml}
-<p class="footer">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
-</div></div></body></html>`;
+<p style="color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a> to respond.<br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>`;
+
+        const html = renderEmailShell({ subtitle: "You've been invited — please respond", bodyHtml: riBody });
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         const accessToken = sessionData?.session?.access_token;
 
@@ -555,28 +528,18 @@ ${reInvitePayHtml}
       const acceptUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${inv.token}&action=accepted`;
       const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${inv.token}&action=declined`;
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:Arial,sans-serif;margin:0;padding:0}
-.w{max-width:500px;margin:0 auto}
-.h{background:#7c0a02;padding:20px;text-align:center;border-radius:8px 8px 0 0}
-.h h1{color:#fff;margin:0;font-size:20px}
-.h p{color:#fca5a5;margin:4px 0 0;font-size:13px}
-.b{background:#fff;padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px}
-.btn{display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px}
-.ft{color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0}
-</style></head><body><div class="w">
-<div class="h"><h1>🎰 Vegas on Wheels</h1><p>⏰ Reminder — please respond</p></div>
-<div class="b">
+      const nudgeBody = `
 <p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
 <p style="color:#374151;margin:0 0 16px">You haven't responded to your invite for <strong>${event.name}</strong> as <strong>${positionLabel}</strong>. Please respond before your window closes.</p>
 <div style="text-align:center;margin:0 0 16px">
-  <a href="${acceptUrl}" class="btn" style="background:#16a34a;color:#fff">✅ Accept</a>
-  <a href="${declineUrl}" class="btn" style="background:#dc2626;color:#fff">✕ Decline</a>
+  <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
+  <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>
 </div>
 <p style="color:#6b7280;font-size:12px;text-align:center;margin:0 0 8px">⏰ Respond by <strong>${expiresStr}</strong></p>
 <hr style="border:none;border-top:1px solid #f3f4f6;margin:12px 0 10px">
-<p class="ft">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>
-</div></div></body></html>`;
+<p style="color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0">Or <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">log in to the staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>`;
+
+      const html = renderEmailShell({ subtitle: '⏰ Reminder — please respond', bodyHtml: nudgeBody });
 
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
