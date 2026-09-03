@@ -5,6 +5,7 @@ import { getPositionLabel, getPayRateKey, positionMatches, isAssignmentFilled } 
 import { getHostLabel } from '../../utils/hostLabelHelper';
 import { RELIABILITY_THRESHOLDS } from '../../utils/reliabilityHelpers';
 import { renderEmailShell } from '../../utils/emailShell.js';
+import { escapeHtml } from '../../utils/escapeHtml.js';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 
@@ -292,7 +293,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${val}</td></tr>`
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
         ).join('');
 
         const detailsHtml = rows
@@ -300,8 +301,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           : '';
 
         const body = `
-<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
-<p style="color:#374151;margin:0 0 16px">Invited to work <strong>${event.name}</strong> as <strong>${positionLabel}</strong>.</p>
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${escapeHtml(worker.name)},</p>
+<p style="color:#374151;margin:0 0 16px">Invited to work <strong>${escapeHtml(event.name)}</strong> as <strong>${escapeHtml(positionLabel)}</strong>.</p>
 <div style="text-align:center;margin:16px 0">
   <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
   <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>
@@ -457,15 +458,15 @@ ${invitePayHtml}
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${val}</td></tr>`
+          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
         ).join('');
         const riDetailsHtml = riRows
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${riRows}</table>`
           : '';
 
         const riBody = `
-<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
-<p style="color:#374151;margin:0 0 16px">Re-invited to work <strong>${event.name}</strong> as <strong>${riPositionLabel}</strong>.</p>
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${escapeHtml(worker.name)},</p>
+<p style="color:#374151;margin:0 0 16px">Re-invited to work <strong>${escapeHtml(event.name)}</strong> as <strong>${escapeHtml(riPositionLabel)}</strong>.</p>
 <div style="text-align:center;margin:16px 0">
   <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
   <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>
@@ -529,8 +530,8 @@ ${reInvitePayHtml}
       const declineUrl = `https://gigstaffpro.vercel.app/api/invite-respond?token=${inv.token}&action=declined`;
 
       const nudgeBody = `
-<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${worker.name},</p>
-<p style="color:#374151;margin:0 0 16px">You haven't responded to your invite for <strong>${event.name}</strong> as <strong>${positionLabel}</strong>. Please respond before your window closes.</p>
+<p style="font-size:15px;color:#111;margin:0 0 4px">Hi ${escapeHtml(worker.name)},</p>
+<p style="color:#374151;margin:0 0 16px">You haven't responded to your invite for <strong>${escapeHtml(event.name)}</strong> as <strong>${escapeHtml(positionLabel)}</strong>. Please respond before your window closes.</p>
 <div style="text-align:center;margin:0 0 16px">
   <a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#16a34a;color:#fff">✅ Accept</a>
   <a href="${declineUrl}" style="display:inline-block;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;margin:0 4px;background:#dc2626;color:#fff">✕ Decline</a>

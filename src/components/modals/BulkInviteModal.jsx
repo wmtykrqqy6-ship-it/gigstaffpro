@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { renderEmailShell } from '../../utils/emailShell.js';
+import { escapeHtml } from '../../utils/escapeHtml.js';
 
 export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
   const confirm = useConfirm();
@@ -37,7 +38,7 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
 
   const sendInviteEmail = async (toEmail, toName) => {
     const body = `
-      <p style="color:#111827;font-size:16px;margin:0 0 12px">Hi ${toName},</p>
+      <p style="color:#111827;font-size:16px;margin:0 0 12px">Hi ${escapeHtml(toName)},</p>
       <p style="color:#374151;margin:0 0 12px">You've been invited to join the Vegas on Wheels staff portal. Click the button below to get started:</p>
       <div style="text-align:center;margin:24px 0">
         <a href="https://gigstaffpro.vercel.app" style="background:#7c0a02;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block">
