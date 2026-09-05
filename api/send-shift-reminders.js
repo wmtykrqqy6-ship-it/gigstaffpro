@@ -107,8 +107,8 @@ function buildReminderEmail({ worker, event, assignment, hoursUntil }) {
   ].filter(Boolean)
    .map(([icon, label, val]) =>
      `<tr>
-       <td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">${icon} ${label}</td>
-       <td style="padding:5px 0;color:#111;font-size:13px">${escapeHtml(val)}</td>
+       <td style="padding:7px 12px 7px 0;color:#6b7280;font-size:16px;white-space:nowrap;vertical-align:top">${icon} ${label}</td>
+       <td style="padding:7px 0;color:#111;font-size:16px">${escapeHtml(val)}</td>
      </tr>`
    ).join('');
 

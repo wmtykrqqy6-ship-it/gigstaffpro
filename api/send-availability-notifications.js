@@ -58,7 +58,7 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
   const positionList = (positions || [])
     .map(p => {
       const label = (p.key || p.name || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      return `<li style="margin:2px 0;font-size:13px;color:#374151">${escapeHtml(label)} (${p.count || 1} needed)</li>`;
+      return `<li style="margin:4px 0;font-size:16px;color:#374151">${escapeHtml(label)} (${p.count || 1} needed)</li>`;
     }).join('');
 
   const rows = [
@@ -69,8 +69,8 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
     event.dress_code ? ['Dress Code', event.dress_code] : null,
   ].filter(Boolean).map(([label, val]) =>
     `<tr>
-      <td style="padding:5px 12px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap;vertical-align:top">${label}</td>
-      <td style="padding:5px 0;color:#111;font-size:13px">${escapeHtml(val)}</td>
+      <td style="padding:7px 12px 7px 0;color:#6b7280;font-size:16px;white-space:nowrap;vertical-align:top">${label}</td>
+      <td style="padding:7px 0;color:#111;font-size:16px">${escapeHtml(val)}</td>
     </tr>`
   ).join('');
 
@@ -89,7 +89,7 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
     <!-- Positions needed -->
     ${positionList ? `
     <div style="margin-bottom:20px">
-      <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151">Positions needed:</p>
+      <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#374151">Positions needed:</p>
       <ul style="margin:0;padding-left:18px">${positionList}</ul>
     </div>` : ''}
 

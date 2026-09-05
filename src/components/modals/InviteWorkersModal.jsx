@@ -277,7 +277,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
 
         const invitePay = calcEstimatedPay(positionLabel, event.id, worker, workerMiles);
         const invitePayHtml = invitePay
-          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${invitePay.breakdown}</p></div>`
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:10px 0"><p style="margin:0 0 4px;font-size:16px;color:#166534;font-weight:bold">💰 Estimated Pay: $${invitePay.total}</p><p style="margin:0;font-size:14px;color:#4b5563">${invitePay.breakdown}</p></div>`
           : '';
 
         const timeStr = event.time
@@ -293,7 +293,7 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
+          `<tr><td style="padding:6px 10px 6px 0;color:#6b7280;font-size:16px;white-space:nowrap">${icon}</td><td style="padding:6px 0;color:#111;font-size:16px">${escapeHtml(val)}</td></tr>`
         ).join('');
 
         const detailsHtml = rows
@@ -441,7 +441,7 @@ ${invitePayHtml}
         }
         const reInvitePay = calcEstimatedPay(inv.position_key, event.id, worker, reInviteWorkerMiles);
         const reInvitePayHtml = reInvitePay
-          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin:10px 0"><p style="margin:0 0 2px;font-size:13px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p><p style="margin:0;font-size:12px;color:#4b5563">${reInvitePay.breakdown}</p></div>`
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin:10px 0"><p style="margin:0 0 4px;font-size:16px;color:#166534;font-weight:bold">💰 Estimated Pay: $${reInvitePay.total}</p><p style="margin:0;font-size:14px;color:#4b5563">${reInvitePay.breakdown}</p></div>`
           : '';
 
         const riTimeStr = event.time
@@ -458,7 +458,7 @@ ${invitePayHtml}
           event.dress_code ? ['👔', event.dress_code] : null,
           event.parking ? ['🅿', event.parking] : null,
         ].filter(Boolean).map(([icon, val]) =>
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
+          `<tr><td style="padding:6px 10px 6px 0;color:#6b7280;font-size:16px;white-space:nowrap">${icon}</td><td style="padding:6px 0;color:#111;font-size:16px">${escapeHtml(val)}</td></tr>`
         ).join('');
         const riDetailsHtml = riRows
           ? `<table style="border-collapse:collapse;width:100%;margin:12px 0">${riRows}</table>`

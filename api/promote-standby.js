@@ -156,7 +156,7 @@ export default async function handler(req, res) {
           event.dress_code ? ['👔', 'Dress Code', event.dress_code] : null,
           event.parking ? ['🅿', 'Parking', event.parking] : null,
         ].filter(Boolean).map(([icon, label, val]) =>
-          `<tr><td style="padding:4px 8px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap">${icon} ${label}</td><td style="padding:4px 0;color:#111;font-size:13px">${escapeHtml(val)}</td></tr>`
+          `<tr><td style="padding:6px 10px 6px 0;color:#6b7280;font-size:16px;white-space:nowrap">${icon} ${label}</td><td style="padding:6px 0;color:#111;font-size:16px">${escapeHtml(val)}</td></tr>`
         ).join('');
 
         const promoBody = `
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
 <h2 style="margin:6px 0 2px;color:#111">You're off the waitlist!</h2>
 <p style="color:#6b7280;margin:0">A spot opened up and you're confirmed for <strong>${escapeHtml(event.name)}</strong></p></div>
 <table style="border-collapse:collapse;width:100%;margin:0 0 14px">${rows}</table>
-<div style="text-align:center;margin:14px 0"><a href="${calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">📅 Add to Calendar</a></div>
+<div style="text-align:center;margin:14px 0"><a href="${calUrl}" style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;color:#374151;padding:12px 22px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:500">📅 Add to Calendar</a></div>
 <hr style="border:none;border-top:1px solid #f3f4f6;margin:14px 0 10px">
 <p style="color:#9ca3af;font-size:11px;text-align:center;margin:12px 0 0">View your schedule in the <a href="https://gigstaffpro.vercel.app" style="color:#7c0a02">staff portal</a><br><strong style="color:#7c0a02">Vegas on Wheels</strong></p>`;
 
