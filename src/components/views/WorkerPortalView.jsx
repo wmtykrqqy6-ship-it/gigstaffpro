@@ -516,7 +516,7 @@ export default function WorkerPortalView({  loggedInWorker,
                 // How many spots remain for this position on this event
                 const totalForPos = (invEvent.positions || []).find(p => p.position === inv.position_key || p.key === inv.position_key)?.count || 0;
                 const confirmedForPos = (assignments || []).filter(a =>
-                  a.event_id === inv.event_id && a.position === inv.position_key && a.status !== 'standby'
+                  a.event_id === inv.event_id && a.position === inv.position_key && isAssignmentFilled(a.status)
                 ).length;
                 const spotsLeft = Math.max(0, totalForPos - confirmedForPos);
 
@@ -904,7 +904,7 @@ export default function WorkerPortalView({  loggedInWorker,
                               <React.Fragment key={idx}>
                                 <div
                                   className="text-white bg-blue-500 rounded truncate block sm:hidden"
-                                  style={{ fontSize: '9px', padding: '2px 3px', lineHeight: 1.2 }}
+                                  style={{ fontSize: '11px', padding: '2px 3px', lineHeight: 1.3 }}
                                 >
                                   {formatTime(assignment.event.time, timeFormat)}
                                 </div>
@@ -916,7 +916,7 @@ export default function WorkerPortalView({  loggedInWorker,
                               </React.Fragment>
                             ))}
                             {dayAssignments.length > 2 && (
-                              <div style={{ fontSize: '9px' }} className="text-gray-500 leading-none">
+                              <div style={{ fontSize: '11px' }} className="text-gray-500 leading-none">
                                 +{dayAssignments.length - 2}
                               </div>
                             )}
