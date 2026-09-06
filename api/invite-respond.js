@@ -55,31 +55,53 @@ export default async function handler(req, res) {
     return res.status(200).send(alreadyRespondedPage(msg));
   }
 
-  // Check expiry
-  if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ status: 'expired' })
-    });
-    return res.status(200).send(errorPage('Sorry, this invitation has expired. Contact your manager.'));
-  }
-
   if (action === 'accepted') {
-    // 0. Conflict check: does this worker already hold a filled assignment
+    // 0. Fetch the event (with positions, to check fill status below) and
+    // this worker's other assignments (for the conflict check below), plus
+    // every assignment against this event (to see whether the invited
+    // position has since filled).
+    const [inviteEventRes, workerAssignmentsRes, eventAssignmentsRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=id,name,date,time,end_time,positions`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?worker_id=eq.${invite.worker_id}&select=event_id,status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${invite.event_id}&select=id,position,status`, { headers }),
+    ]);
+    const [inviteEvents, workerAssignments, eventAssignments] = await Promise.all([
+      inviteEventRes.json(), workerAssignmentsRes.json(), eventAssignmentsRes.json(),
+    ]);
+    const inviteEvent = inviteEvents?.[0];
+
+    const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
+
+    // The response window exists to keep staffing moving -- it's what
+    // triggers the admin's "notify next rank" prompt in the dashboard --
+    // not to lock a worker out of a slot nobody else has taken. So a late
+    // accept only actually fails if the position has genuinely filled up
+    // since the invite went out; otherwise the elapsed window is irrelevant
+    // and the accept proceeds normally below.
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      const posDef = (inviteEvent?.positions || []).find(p => p.key === invite.position_key || p.name === invite.position_key);
+      const neededCount = (posDef && posDef.count) || 1;
+      const filledForPosition = (eventAssignments || []).filter(a =>
+        !UNFILLED.includes(a.status) &&
+        (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
+      ).length;
+
+      if (filledForPosition >= neededCount) {
+        await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ status: 'expired' })
+        });
+        return res.status(200).send(errorPage('Sorry, this position has already been filled and the invitation window has closed. Contact your manager.'));
+      }
+    }
+
+    // 1. Conflict check: does this worker already hold a filled assignment
     // that overlaps this invite's event, on the same date? Self-apply and
     // standby-join in the app both block on this; this one-click email link
     // previously didn't, so a worker could double-book straight from their
     // inbox with no warning. Best-effort (check-then-act, not atomic) — the
     // atomic claim below still guarantees this invite itself can't be
     // double-accepted.
-    const [inviteEventRes, workerAssignmentsRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=id,name,date,time,end_time`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/assignments?worker_id=eq.${invite.worker_id}&select=event_id,status`, { headers }),
-    ]);
-    const [inviteEvents, workerAssignments] = await Promise.all([inviteEventRes.json(), workerAssignmentsRes.json()]);
-    const inviteEvent = inviteEvents?.[0];
-
-    const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
     const filledOtherEventIds = [...new Set(
       (workerAssignments || [])
         .filter(a => a.event_id !== invite.event_id && !UNFILLED.includes(a.status))
@@ -117,7 +139,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 1. Atomically claim the invite: only proceed if THIS request is the one that
+    // 2. Atomically claim the invite: only proceed if THIS request is the one that
     // actually flips status pending -> confirmed. This link is a plain GET, and email
     // security scanners (Outlook Safe Links, Microsoft Defender, Proofpoint, etc.)
     // routinely pre-fetch links in incoming mail to scan them before the recipient
@@ -143,7 +165,7 @@ export default async function handler(req, res) {
       return res.status(200).send(alreadyRespondedPage('You already accepted this invitation!'));
     }
 
-    // 2. Create the assignment — safe now, this request is the sole winner of the claim
+    // 3. Create the assignment — safe now, this request is the sole winner of the claim
     await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=minimal' },
@@ -155,7 +177,7 @@ export default async function handler(req, res) {
       })
     });
 
-    // 3. Expire any other pending invites for this same event+position slot if now full
+    // 4. Expire any other pending invites for this same event+position slot if now full
     const posRes = await fetch(
       `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${invite.event_id}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
       { headers }
@@ -169,7 +191,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Send confirmation email with calendar link, and gather the same
+    // 5. Send confirmation email with calendar link, and gather the same
     // event name / position / calendar link for the landing page below --
     // so the worker sees what they just accepted immediately, not only in
     // an email they may not check right away.
