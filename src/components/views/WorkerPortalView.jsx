@@ -32,6 +32,7 @@ function CheckInSection({
   setShowManualCheckIn,
   handleCheckIn,
   handleManualCheckIn,
+  manualCheckInInfo,
 }) {
   const now = new Date();
   const [ey, em, ed] = (assignment.event.date || '').split('-').map(Number);
@@ -62,7 +63,18 @@ function CheckInSection({
       ) : showManual ? (
         <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm font-semibold text-amber-800">Manual Check-in</p>
-          <p className="text-xs text-amber-600">You appear to be outside the check-in zone or GPS is unavailable. Your check-in will be flagged for admin review.</p>
+          <p className="text-xs text-amber-600">
+            {(() => {
+              const info = manualCheckInInfo?.[assignment.id];
+              if (info?.reason === 'too-far' && info.distanceMiles != null) {
+                return `You're about ${info.distanceMiles.toFixed(2)} mi from the venue — check-in requires being within 0.25 mi. Your check-in will be flagged for admin review.`;
+              }
+              if (info?.reason === 'no-meeting-point') {
+                return "This event doesn't have a precise meeting-point location set, so check-in can't be location-verified. Your check-in will be flagged for admin review.";
+              }
+              return "We couldn't get your location (GPS unavailable or permission denied). Your check-in will be flagged for admin review.";
+            })()}
+          </p>
           <textarea
             value={manualNotes[assignment.id] || ''}
             onChange={e => setManualNotes(prev => ({ ...prev, [assignment.id]: e.target.value }))}
@@ -344,6 +356,12 @@ export default function WorkerPortalView({  loggedInWorker,
     const [checkingIn, setCheckingIn] = useState({});
     const [manualNotes, setManualNotes] = useState({});
     const [showManualCheckIn, setShowManualCheckIn] = useState({});
+    // Why a given assignment dropped to the manual/flagged path -- surfaced
+    // in the UI so "flagged for review" isn't a mystery to the worker, and
+    // the underlying distance (when known) also gets saved with the
+    // check-in itself for admin review, instead of being computed and then
+    // thrown away.
+    const [manualCheckInInfo, setManualCheckInInfo] = useState({});
 
     // Load check-ins for this worker
     React.useEffect(() => {
@@ -406,11 +424,22 @@ export default function WorkerPortalView({  loggedInWorker,
         if (method === 'geo') {
           await submitCheckIn({ assignmentId, event, workerLat, workerLng, distanceMiles, method, flagged, notes: null });
         } else {
+          setManualCheckInInfo(prev => ({
+            ...prev,
+            [assignmentId]: {
+              reason: geoLat && geoLng ? 'too-far' : 'no-meeting-point',
+              distanceMiles, workerLat, workerLng,
+            },
+          }));
           setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: true }));
           setCheckingIn(prev => ({ ...prev, [assignmentId]: false }));
         }
       } catch (err) {
         // GPS denied or unavailable
+        setManualCheckInInfo(prev => ({
+          ...prev,
+          [assignmentId]: { reason: 'gps-denied', distanceMiles: null, workerLat: null, workerLng: null },
+        }));
         setShowManualCheckIn(prev => ({ ...prev, [assignmentId]: true }));
         setCheckingIn(prev => ({ ...prev, [assignmentId]: false }));
       }
@@ -418,11 +447,17 @@ export default function WorkerPortalView({  loggedInWorker,
 
     const handleManualCheckIn = async (assignment) => {
       setCheckingIn(prev => ({ ...prev, [assignment.id]: true }));
+      const info = manualCheckInInfo[assignment.id];
       await submitCheckIn({
         assignmentId: assignment.id,
         event: assignment.event,
-        workerLat: null, workerLng: null,
-        distanceMiles: null,
+        // Save whatever location/distance was actually computed above
+        // (when the worker was simply too far, not when GPS failed
+        // outright) instead of discarding it -- an admin reviewing a
+        // flagged check-in previously had no distance to go on at all.
+        workerLat: info?.workerLat ?? null,
+        workerLng: info?.workerLng ?? null,
+        distanceMiles: info?.distanceMiles ?? null,
         method: 'manual',
         flagged: true,
         notes: manualNotes[assignment.id] || '',
@@ -1219,6 +1254,7 @@ export default function WorkerPortalView({  loggedInWorker,
                       setShowManualCheckIn={setShowManualCheckIn}
                       handleCheckIn={handleCheckIn}
                       handleManualCheckIn={handleManualCheckIn}
+                      manualCheckInInfo={manualCheckInInfo}
                     />
 
                     {/* Switch Position Section */}
@@ -1548,6 +1584,7 @@ export default function WorkerPortalView({  loggedInWorker,
                       setShowManualCheckIn={setShowManualCheckIn}
                       handleCheckIn={handleCheckIn}
                       handleManualCheckIn={handleManualCheckIn}
+                      manualCheckInInfo={manualCheckInInfo}
                     />
 
                     {/* Switch Position Section */}
