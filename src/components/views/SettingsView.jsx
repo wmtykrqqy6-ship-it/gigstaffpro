@@ -225,10 +225,14 @@ export default function SettingsView({
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
   const [hostLabelSaved, setHostLabelSaved] = useState(false);
 
-  const handleSaveHostLabel = () => {
-    setHostLabel(hostLabelValue);
-    setHostLabelSaved(true);
-    setTimeout(() => setHostLabelSaved(false), 2000);
+  const handleSaveHostLabel = async () => {
+    try {
+      await setHostLabel(hostLabelValue);
+      setHostLabelSaved(true);
+      setTimeout(() => setHostLabelSaved(false), 2000);
+    } catch (err) {
+      notify('Saved to this browser only — could not save org-wide: ' + err.message);
+    }
   };
 
   // --- Pay Rates state ---
@@ -1950,7 +1954,7 @@ export default function SettingsView({
               onClick={async () => {
                 setSaving(true);
                 try {
-                  setHostLabel(hostLabelValue);
+                  await setHostLabel(hostLabelValue);
                   await saveRankAccessSettings();
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();

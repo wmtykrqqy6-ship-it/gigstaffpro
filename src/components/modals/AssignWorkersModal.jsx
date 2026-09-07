@@ -43,6 +43,7 @@ export default function AssignWorkersModal({
   const [expandedPositions, setExpandedPositions] = useState({});
   const [selectedHostId, setSelectedHostId] = useState(event?.host_worker_id || '');
   const [savingHost, setSavingHost] = useState(false);
+  const [assigningWorkerId, setAssigningWorkerId] = useState(null);
   const confirm = useConfirm();
   const notify = useToast();
 
@@ -184,6 +185,11 @@ export default function AssignWorkersModal({
   };
 
   const assignWorker = async (workerId, position, existingAssignment = null) => {
+    // Guards the async gap (a conflict check, possibly an awaited confirm()
+    // dialog, then the parent's onAssign) against a fast double-click firing
+    // this twice before the first call resolves and assignments re-render.
+    if (assigningWorkerId) return;
+    setAssigningWorkerId(workerId);
     try {
       const worker = workers.find(w => w.id === workerId);
       
@@ -261,6 +267,8 @@ export default function AssignWorkersModal({
 
     } catch (error) {
       notify('Error in assignment process: ' + error.message);
+    } finally {
+      setAssigningWorkerId(null);
     }
   };
 
@@ -793,7 +801,7 @@ export default function AssignWorkersModal({
                                   </div>
                                   <button
                                     onClick={() => assignWorker(worker.id, positionKey, otherAssignment)}
-                                    disabled={hasTimeConflict}
+                                    disabled={hasTimeConflict || !!assigningWorkerId}
                                     className={`ml-3 px-3 py-1 rounded text-sm ${
                                       hasTimeConflict
                                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'

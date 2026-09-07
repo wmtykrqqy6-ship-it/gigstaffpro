@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Calendar, Users, Clock, MapPin, DollarSign, Mail, Phone, CheckCircle, XCircle, Menu, Plus, Search, Filter, Star, Bell, Settings, LogOut, ChevronDown, TrendingUp, Send, Trash2, Edit, Download, BarChart3, AlertCircle, X, MessageSquare, Award, Target, FileText, History, Copy, Home, Briefcase, User } from 'lucide-react';
 import { hashPin } from './utils/authHelpers';
+import { loadHostLabelFromServer } from './utils/hostLabelHelper';
 import { formatTime, parseDateSafe } from './utils/dateHelpers';
 import {
   STANDARD_POSITIONS,
@@ -122,6 +123,7 @@ const GigStaffPro = () => {
     loadPaymentConfig();
     loadPaymentTrackingSetting();
     loadRankAccessDays();
+    loadHostLabelFromServer();
     loadTimeFormat();
     loadPendingReportsCount();
     loadLocations();

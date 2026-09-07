@@ -23,9 +23,12 @@ export default function Navigation({
   activeLocation = 'all',
   onSetActiveLocation
 }) {
-  if (userRole !== 'admin') return null;
-
+  // Hook must run unconditionally, before the early return below --
+  // otherwise React throws "Rendered fewer hooks than expected" the moment
+  // userRole ever changes on an already-mounted instance.
   const [showLocationMenu, setShowLocationMenu] = useState(false);
+
+  if (userRole !== 'admin') return null;
   const activeLocationName = activeLocation === 'all'
     ? 'All Markets'
     : (locations.find(l => l.id === activeLocation)?.name || 'All Markets');

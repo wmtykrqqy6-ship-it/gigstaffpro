@@ -5,13 +5,20 @@
 // pin_hash) to the browser and compared hashes client-side. Combined with
 // workers.pin_hash being readable by anyone holding the public anon key
 // (see the security lockdown work in this repo's migrations), that meant
-// every legacy worker's PIN hash — an unsalted single SHA-256 round over a
-// short numeric PIN, i.e. trivially crackable offline — was exposed to
-// anyone on the internet. This endpoint moves the hash comparison here so
-// pin_hash never reaches the browser at all; a companion migration then
-// revokes anon/authenticated SELECT on that one column.
+// every legacy worker's PIN hash — originally an unsalted single SHA-256
+// round over a short numeric PIN, i.e. trivially crackable offline — was
+// exposed to anyone on the internet. This endpoint moves the hash
+// comparison here so pin_hash never reaches the browser at all; a
+// companion migration then revokes anon/authenticated SELECT on that one
+// column.
+//
+// pin_hash values are also being migrated from that original unsalted
+// SHA-256 format to a salted PBKDF2 format (see hashPinSalted below) —
+// this endpoint accepts either on read (a still-legacy row falls back to
+// hashPinLegacy) and transparently upgrades a row to the new format the
+// next time its worker logs in successfully.
 
-import { createHash } from 'crypto';
+import { createHash, randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 
@@ -58,11 +65,36 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-// Mirrors src/utils/authHelpers.js's hashPin() exactly (SHA-256 hex of the
-// raw PIN, no salt) — kept as an independent copy since api/ functions
-// aren't bundled through Vite, matching the existing api/_lib convention.
-function hashPin(pin) {
+// Legacy format: unsalted SHA-256 hex of the raw PIN. Still checked below
+// for any pin_hash not yet upgraded to the salted format, and mirrors
+// src/utils/authHelpers.js's old behavior — kept as an independent copy
+// since api/ functions aren't bundled through Vite, matching the existing
+// api/_lib convention.
+function hashPinLegacy(pin) {
   return createHash('sha256').update(pin, 'utf8').digest('hex');
+}
+
+// Current format: PBKDF2-SHA256 with a random per-PIN salt, stored as
+// "pbkdf2$<iterations>$<saltHex>$<hashHex>". Mirrors
+// src/utils/authHelpers.js's hashPin()/verifyPin() — see that file's header
+// comment for why a salt alone isn't enough for a 4-digit keyspace and the
+// iteration count is what actually matters.
+const PBKDF2_ITERATIONS = 100000;
+
+function hashPinSalted(pin, saltHex) {
+  const salt = Buffer.from(saltHex, 'hex');
+  const derived = pbkdf2Sync(String(pin), salt, PBKDF2_ITERATIONS, 32, 'sha256');
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${saltHex}$${derived.toString('hex')}`;
+}
+
+function verifyPinSalted(pin, storedHash) {
+  const parts = storedHash.split('$');
+  if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
+  const [, , saltHex] = parts;
+  const recomputed = hashPinSalted(pin, saltHex);
+  const a = Buffer.from(recomputed, 'utf8');
+  const b = Buffer.from(storedHash, 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export default async function handler(req, res) {
@@ -117,8 +149,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, error: 'No PIN set for this account. Contact your manager to set up your PIN.' });
     }
 
-    if (hashPin(pin) !== worker.pin_hash) {
+    const isSalted = worker.pin_hash.startsWith('pbkdf2$');
+    const valid = isSalted ? verifyPinSalted(pin, worker.pin_hash) : hashPinLegacy(pin) === worker.pin_hash;
+
+    if (!valid) {
       return res.status(200).json({ ok: false, error: 'Incorrect PIN. Please try again.' });
+    }
+
+    // Transparent upgrade: a correct legacy-format PIN is the one moment we
+    // have the raw PIN in hand server-side, so re-hash it into the salted
+    // format and migrate this row on the way through. Non-critical if it
+    // fails — the login itself already succeeded either way.
+    if (!isSalted) {
+      const newHash = hashPinSalted(pin, randomBytes(16).toString('hex'));
+      fetch(`${SUPABASE_URL}/rest/v1/workers?id=eq.${worker.id}`, {
+        method: 'PATCH',
+        headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ pin_hash: newHash }),
+      }).catch(() => {});
     }
 
     // Never send pin_hash back to the client.
