@@ -94,6 +94,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ promoted: false, reason: 'no standby workers' });
     }
 
+    // Re-check capacity immediately before claiming. The check above runs
+    // at the top of the request, but the slot can fill through a completely
+    // different path in between (e.g. an admin manually assigning someone
+    // via the normal dashboard) — the conditional claim right below only
+    // guards against re-promoting this *same* candidate twice, not against
+    // the position having filled some other way since. This doesn't fully
+    // close the race (that would need a real DB-level transaction/RPC) but
+    // narrows the window from the whole request down to just this
+    // round-trip.
+    const recheckRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${eventId}&select=id,position,status`,
+      { headers }
+    );
+    const recheckAssignments = await recheckRes.json();
+    const filledNow = (recheckAssignments || []).filter(a => isAssignmentFilled(a.status) && matchesPosition(a)).length;
+    if (filledNow >= needed) {
+      return res.status(200).json({ promoted: false, reason: 'position filled since check' });
+    }
+
     // Atomic conditional claim — only promotes if this candidate is still on
     // standby at the moment of the write, so two near-simultaneous triggers
     // for the same opening can't both promote someone.

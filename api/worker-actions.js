@@ -341,6 +341,30 @@ async function handleUpdateProfile(supabase, { workerId, updates }) {
   if (fetchError) throw fetchError;
   if (!worker) return { status: 404, body: { ok: false, error: 'Worker not found' } };
 
+  // Migrated workers' login identity is keyed off worker_auth_links.phone_e164
+  // (and a synthetic Auth email derived from it — see admin-set-worker-pin.js),
+  // not workers.phone directly. Updating workers.phone here without also
+  // repointing that row desyncs the two and can lock the worker out. The
+  // normal client path (ProfileView.jsx's update_authenticated_worker_profile
+  // RPC, used for migrated workers) never sends phone for exactly this
+  // reason, but this endpoint has no session check tying workerId to the
+  // caller, so that protection has to be enforced here too, not just trusted
+  // from the client.
+  if ('phone' in safeUpdates) {
+    const { data: link, error: linkError } = await supabase
+      .from('worker_auth_links')
+      .select('worker_id')
+      .eq('worker_id', workerId)
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (link) {
+      delete safeUpdates.phone;
+      if (Object.keys(safeUpdates).length === 0) {
+        return { status: 400, body: { ok: false, error: 'Phone number can only be changed by an administrator once your account is migrated.' } };
+      }
+    }
+  }
+
   const { error: updateError } = await supabase.from('workers').update(safeUpdates).eq('id', workerId);
   if (updateError) throw updateError;
   return { status: 200, body: { ok: true } };

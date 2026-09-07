@@ -66,19 +66,30 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
   const saveReminderPrefs = async (newPrefs) => {
     setSavingPrefs(true);
     try {
-      await supabase.from('worker_reminder_prefs').upsert(
+      const { error } = await supabase.from('worker_reminder_prefs').upsert(
         { worker_id: worker.id, ...newPrefs, updated_at: new Date().toISOString() },
         { onConflict: 'worker_id' }
       );
+      if (error) throw error;
     } finally {
       setSavingPrefs(false);
     }
   };
 
   const toggleReminder = async (key) => {
+    // Optimistic update with rollback -- a failed save (RLS denial, network
+    // blip) previously left the toggle showing the new, unsaved state with
+    // no error and no way to tell until the next full reload silently
+    // flipped it back.
+    const previous = reminderPrefs;
     const updated = { ...reminderPrefs, [key]: !reminderPrefs[key] };
     setReminderPrefs(updated);
-    await saveReminderPrefs(updated);
+    try {
+      await saveReminderPrefs(updated);
+    } catch (e) {
+      setReminderPrefs(previous);
+      notify('Could not save reminder preference: ' + e.message);
+    }
   };
 
   const loadReliabilityLog = async () => {
@@ -681,7 +692,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
             <Star size={24} className="mx-auto mb-2 text-yellow-500 fill-yellow-500" />
             <p className="text-sm text-gray-600 mb-1">Reliability</p>
             <div className="flex items-center justify-center space-x-1">
-              <p className="text-2xl font-bold text-gray-900">{worker.reliability || 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{worker.reliability ?? 5.0}</p>
               <Star size={16} className="text-yellow-500 fill-yellow-500" />
             </div>
           </div>
