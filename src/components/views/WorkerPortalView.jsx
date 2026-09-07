@@ -451,6 +451,38 @@ export default function WorkerPortalView({  loggedInWorker,
     }, [currentWorker?.id]);
 
     const handleInviteResponse = async (invitation, response) => {
+      if (response === 'accepted') {
+        // Same-day double-booking guard as the one-click email Accept link
+        // (api/invite-respond.js) and the admin's own Confirm action
+        // (InviteWorkersModal.jsx handleConfirmWorker) -- this in-app button
+        // skipped it entirely, so a worker could accept two overlapping
+        // shifts from the portal with zero warning.
+        const invEvent = events.find(e => e.id === invitation.event_id);
+        if (invEvent?.date && invEvent?.time) {
+          const parseTime = (t) => {
+            if (!t) return null;
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + (m || 0);
+          };
+          const thisStart = parseTime(invEvent.time);
+          const thisEnd = parseTime(invEvent.end_time) ?? (thisStart + 8 * 60);
+
+          const conflict = workerAssignments.find(a => {
+            if (a.event_id === invitation.event_id) return false;
+            if (a.event.date !== invEvent.date) return false;
+            const otherStart = parseTime(a.event.time);
+            if (otherStart == null) return false;
+            const otherEnd = parseTime(a.event.end_time) ?? (otherStart + 8 * 60);
+            return thisStart < otherEnd && thisEnd > otherStart;
+          });
+
+          if (conflict) {
+            notify(`You're already confirmed for "${conflict.event.name}" on this same date, and the times overlap with "${invEvent.name}". This invite hasn't been accepted — contact your manager to sort out the conflict.`);
+            return;
+          }
+        }
+      }
+
       setRespondingInvite(invitation.id);
       try {
         await supabase.from('invitations')
@@ -461,6 +493,14 @@ export default function WorkerPortalView({  loggedInWorker,
           .eq('id', invitation.id);
         setPendingInvites(prev => prev.filter(i => i.id !== invitation.id));
         if (onReloadAssignments) onReloadAssignments();
+        // Unlike the email Accept link, accepting here doesn't create the
+        // assignment directly -- it still goes through the admin's Confirm
+        // step in the dashboard, and previously gave the worker no
+        // indication of that, so a worker could easily believe they were
+        // already booked.
+        if (response === 'accepted') {
+          notify("Accepted! Your spot is pending admin confirmation — you'll see it on your schedule once it's locked in.");
+        }
       } catch (err) {
         notify('Error responding to invite: ' + err.message);
       } finally {
