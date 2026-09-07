@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, CheckCircle, Clock, XCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import PostEventReportModal from '../modals/PostEventReportModal';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -254,7 +254,7 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
               {eventsNeedingReports.map(event => {
                 const eventDate = parseDateSafe(event.date);
                 const eventAssignments = assignments.filter(a =>
-                  a.event_id === event.id && (a.status === 'approved' || a.status === 'assigned')
+                  a.event_id === event.id && isAssignmentFilled(a.status)
                 );
                 return (
                   <div key={event.id} className="p-5 flex items-center justify-between hover:bg-gray-50">

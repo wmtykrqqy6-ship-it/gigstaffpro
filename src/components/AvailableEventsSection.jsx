@@ -532,7 +532,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       // change the base rate, only the travel pay below.
                       const hourlyRate = getEffectiveRate
                         ? getEffectiveRate(position, workerHomeLocationId)
-                        : (payRates[rateKey] || payRates[position] || 0);
+                        : (payRates[rateKey] ?? payRates[position] ?? 0);
                       if (!isFlatPay && !hourlyRate) return null;
 
                       const basePay = isFlatPay ? event.flat_pay_amount : numHours * hourlyRate;
