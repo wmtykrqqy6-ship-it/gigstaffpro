@@ -31,9 +31,13 @@ export default async function handler(req, res) {
     return res.status(400).send(errorPage('Invalid link. Please log in to the staff portal.'));
   }
 
-  // Look up the invitation by token
+  // Look up the invitation by token. This is a fully public, unauthenticated
+  // endpoint -- the token IS the auth -- so an unencoded value containing
+  // "&" or other reserved characters would become additional PostgREST
+  // query parameters appended to a request that goes on to create real
+  // assignment rows, rather than a plain string comparison.
   const getRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/invitations?token=eq.${token}&select=*`,
+    `${SUPABASE_URL}/rest/v1/invitations?token=eq.${encodeURIComponent(token)}&select=*`,
     { headers }
   );
   const invites = await getRes.json();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { getPositionLabel } from '../../utils/positionHelpers';
+import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -84,7 +84,7 @@ export default function PostEventReportModal({
   // Get workers assigned to this event
   const eventAssignments = assignments.filter(a =>
     a.event_id === event?.id &&
-    (a.status === 'approved' || a.status === 'assigned')
+    isAssignmentFilled(a.status)
   );
 
   const assignedWorkers = eventAssignments.map(a => ({

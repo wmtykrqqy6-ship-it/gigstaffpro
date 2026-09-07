@@ -236,6 +236,12 @@ export default function EventFormModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // The event has already been inserted/updated once we're waiting on the
+    // save-venue prompt below -- the rest of this (still-mounted, still-
+    // interactive) form must not be able to trigger a second insert while
+    // that prompt is up, which would create a duplicate event.
+    if (showSaveVenuePrompt) return;
+
     if (formData.positions.length === 0) {
       notify('Please specify at least one staff position needed');
       return;
@@ -793,10 +799,10 @@ export default function EventFormModal({
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || showSaveVenuePrompt}
                   className="flex-1 bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {saving ? (isEdit ? 'Updating Event...' : 'Creating Event...') : (isEdit ? 'Update Event' : 'Create Event')}
+                  {showSaveVenuePrompt ? 'Saved ✓' : saving ? (isEdit ? 'Updating Event...' : 'Creating Event...') : (isEdit ? 'Update Event' : 'Create Event')}
                 </button>
                 <button
                   type="button"
