@@ -1261,7 +1261,7 @@ export default function WorkerPortalView({  loggedInWorker,
                     {(() => {
                       // Get available positions for this event
                       const eventPositions = assignment.event.positions || [];
-                      const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && a.status === 'approved');
+                      const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && isAssignmentFilled(a.status));
                       
                       // Find positions worker is qualified for but not currently assigned to
                       const availablePositions = eventPositions
@@ -1591,7 +1591,7 @@ export default function WorkerPortalView({  loggedInWorker,
                         {(() => {
                           // Get available positions for this event
                           const eventPositions = assignment.event.positions || [];
-                          const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && a.status === 'approved');
+                          const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && isAssignmentFilled(a.status));
                           
                           // Find positions worker is qualified for but not currently assigned to
                           const availablePositions = eventPositions

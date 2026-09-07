@@ -208,9 +208,13 @@ export default function ScheduleView({
     };
 
     const ListView = () => {
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      const dayEvents = events
-        .filter(event => event.date === dateStr)
+      // Reuses getEventsForDate's local-date construction rather than
+      // reimplementing it -- this copy previously used
+      // selectedDate.toISOString(), which converts to UTC first and so
+      // showed tomorrow's events once local time crossed into UTC's next
+      // day (after ~7pm Central), while getEventsForDate right above it
+      // never had that bug.
+      const dayEvents = getEventsForDate(selectedDate)
         .sort((a, b) => {
           // Sort by start time (earliest first)
           const timeA = a.time || '00:00';

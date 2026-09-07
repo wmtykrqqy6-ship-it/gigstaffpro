@@ -15,6 +15,11 @@ const RESEND_KEY   = process.env.RESEND_API_KEY;
 
 const REMINDER_TIERS = [96, 48, 24, 4]; // hours before shift
 
+// Mirrors src/utils/positionHelpers.js's UNFILLED_ASSIGNMENT_STATUSES — kept
+// as an independent copy since api/ functions aren't bundled through Vite,
+// matching the existing api/_lib/workerAuth.js convention.
+const UNFILLED_ASSIGNMENT_STATUSES = ['standby', 'pending', 'rejected', 'cancelled'];
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 const sbHeaders = () => ({
@@ -168,9 +173,13 @@ export default async function handler(req, res) {
   const results = { checked: 0, sent: 0, skipped: 0, errors: [] };
 
   try {
-    // 1. Fetch all confirmed assignments with event + worker data
+    // 1. Fetch all filled assignments with event + worker data. Excludes
+    // rather than allowlists statuses -- the admin's own "Confirm accepted
+    // invite" flow creates assignments with status 'confirmed', which an
+    // allowlist of just (approved,assigned) silently missed, meaning those
+    // workers never got a single shift reminder.
     const asgRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/assignments?select=id,worker_id,event_id,position,status&status=in.(approved,assigned)`,
+      `${SUPABASE_URL}/rest/v1/assignments?select=id,worker_id,event_id,position,status&status=not.in.(${UNFILLED_ASSIGNMENT_STATUSES.join(',')})`,
       { headers: sbHeaders() }
     );
     const assignments = await asgRes.json();

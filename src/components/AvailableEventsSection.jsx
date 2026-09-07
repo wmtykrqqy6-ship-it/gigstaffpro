@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime, parseTimeToMinutes, timeRangesOverlap } from '../utils/dateHelpers';
-import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches } from '../utils/positionHelpers';
+import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches, isAssignmentFilled } from '../utils/positionHelpers';
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
@@ -145,8 +145,14 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           const alreadyAssigned = assignments.some(a => {
             if (a.event_id !== event.id) return false;
             if (a.worker_id !== currentWorker.id) return false;
-            const status = a.status;
-            return status === 'approved' || status === 'pending' || (!status);
+            // isAssignmentFilled misses 'pending' on purpose (an application
+            // awaiting approval isn't "filled" elsewhere in the app), but a
+            // worker with a pending application here should still have this
+            // event hidden from "available to apply to" -- hence the explicit
+            // OR. Previously missed 'confirmed' entirely (not in the old
+            // approved/pending/null allowlist), so a worker whose invite had
+            // been admin-confirmed could still see and re-apply to the event.
+            return isAssignmentFilled(a.status) || a.status === 'pending';
           });
           
           if (alreadyAssigned) {
@@ -156,7 +162,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
           // Check for time conflicts with APPROVED assignments
           const workerApprovedAssignments = assignments.filter(a => 
             a.worker_id === currentWorker.id && 
-            (a.status === 'approved' || !a.status) // Approved or admin-assigned
+            isAssignmentFilled(a.status) // Approved, confirmed, assigned, or admin-assigned (null status)
           );
           
           if (workerApprovedAssignments.length > 0) {
@@ -228,7 +234,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               // Check for time conflicts with APPROVED assignments
               const workerApprovedAssignments = assignments.filter(a => 
                 a.worker_id === currentWorker.id && 
-                (a.status === 'approved' || !a.status) // Approved or admin-assigned
+                isAssignmentFilled(a.status) // Approved, confirmed, assigned, or admin-assigned (null status)
               );
               
               let hasConflict = false;
@@ -295,11 +301,15 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         }
       }
 
-      // Check for time conflicts
-      const workerAssignments = assignments.filter(a => 
-        a.worker_id === currentWorker.id && 
+      // Check for time conflicts. Deliberately includes 'pending' (unlike
+      // isAssignmentFilled) since a pending application should still block
+      // applying to an overlapping event; previously missed 'confirmed'
+      // entirely, so a worker with a confirmed overlapping shift could apply
+      // here with no conflict warning.
+      const workerAssignments = assignments.filter(a =>
+        a.worker_id === currentWorker.id &&
         a.event_id !== event.id &&
-        ['approved', 'pending'].includes(a.status || 'approved')
+        (isAssignmentFilled(a.status) || a.status === 'pending')
       );
       
       let hasTimeConflict = false;
