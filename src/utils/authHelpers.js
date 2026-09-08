@@ -19,19 +19,23 @@ const fromHex = (hex) =>
   new Uint8Array(hex.match(/.{2}/g).map(b => parseInt(b, 16)));
 
 // existingSalt (hex string) lets verifyPin() recompute a hash under the
-// same salt as a stored one, for comparison.
-export const hashPin = async (pin, existingSalt = null) => {
+// same salt as a stored one, for comparison. existingIterations does the
+// same for the iteration count, so verifying an older hash (produced under
+// a since-changed PBKDF2_ITERATIONS) still recomputes under the count it
+// was actually created with instead of today's constant.
+export const hashPin = async (pin, existingSalt = null, existingIterations = null) => {
   if (!pin) return '';
 
+  const iterations = existingIterations || PBKDF2_ITERATIONS;
   const encoder = new TextEncoder();
   const salt = existingSalt ? fromHex(existingSalt) : crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
   const derivedBits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     keyMaterial,
     256
   );
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${toHex(salt)}$${toHex(derivedBits)}`;
+  return `pbkdf2$${iterations}$${toHex(salt)}$${toHex(derivedBits)}`;
 };
 
 // True if `pin` matches a hash previously produced by hashPin() above.
@@ -42,7 +46,7 @@ export const verifyPin = async (pin, storedHash) => {
   if (!pin || !storedHash) return false;
   const parts = storedHash.split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
-  const [, , saltHex] = parts;
-  const recomputed = await hashPin(pin, saltHex);
+  const [, iterationsStr, saltHex] = parts;
+  const recomputed = await hashPin(pin, saltHex, Number(iterationsStr));
   return recomputed === storedHash;
 };

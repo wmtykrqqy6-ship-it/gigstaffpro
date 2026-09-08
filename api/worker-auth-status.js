@@ -6,33 +6,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { normalizeUsPhoneToE164 } from './_lib/workerAuth.js';
-
-const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 
 // In-memory, per-instance, best-effort only — not shared across concurrent
 // serverless instances or cold starts. Acceptable for pilot-scale abuse
 // mitigation, not a hard security control.
-const rateLimitBuckets = new Map();
-
-function isRateLimited(ip) {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(ip);
-
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitBuckets.set(ip, { count: 1, windowStart: now });
-    return false;
-  }
-
-  bucket.count += 1;
-  return bucket.count > RATE_LIMIT_MAX;
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return String(forwarded).split(',')[0].trim();
-  return req.socket?.remoteAddress || 'unknown';
-}
+const isRateLimited = createRateLimiter(10, 60 * 1000);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

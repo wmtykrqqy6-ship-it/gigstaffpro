@@ -164,7 +164,7 @@ export default async function handler(req, res) {
           ? (event.end_time ? `${fmtTime(event.time)} – ${fmtTime(event.end_time)}` : fmtTime(event.time))
           : '';
         const positionLabel = (posDef && posDef.label) || position.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        const calUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${eventId}&position=${encodeURIComponent(positionLabel)}`;
+        const calUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${encodeURIComponent(eventId)}&position=${encodeURIComponent(positionLabel)}`;
 
         const rows = [
           ['📅', 'Date', fmtDate(event.date)],

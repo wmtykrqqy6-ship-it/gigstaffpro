@@ -13,6 +13,7 @@
 // impersonation protection; see the commit message for the full context.
 
 import { createClient } from '@supabase/supabase-js';
+import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -24,26 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 // api/worker-pin-login.js's existing convention (in-memory, per-instance,
 // best-effort -- not a hard security control, but raises "spam this with a
 // script" from trivial to impractical at pilot scale).
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const rateLimitBuckets = new Map();
-
-function isRateLimited(key) {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(key);
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitBuckets.set(key, { count: 1, windowStart: now });
-    return false;
-  }
-  bucket.count += 1;
-  return bucket.count > RATE_LIMIT_MAX;
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return String(forwarded).split(',')[0].trim();
-  return req.socket?.remoteAddress || 'unknown';
-}
+const isRateLimited = createRateLimiter(5, 15 * 60 * 1000);
 
 const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
 const isFilled = (status) => !UNFILLED.includes(status);
@@ -169,6 +151,29 @@ async function handleApply(supabase, { eventId, workerId, position }) {
     applied_at: new Date().toISOString(),
   }]).select('id, created_at').single();
   if (insertError) throw insertError;
+
+  // Duplicate-application guard: a fast double-tap can fire two apply
+  // requests before either insert lands, both passing the checks above off
+  // the same stale pre-insert snapshot. Re-check by creation order after
+  // the fact — if an earlier active assignment already claims this same
+  // spot for this worker, this insert lost the race; delete it and hand
+  // back the earlier one's status instead of leaving a duplicate row.
+  {
+    const { data: dupCheck } = await supabase
+      .from('assignments')
+      .select('id, position, status, created_at')
+      .eq('event_id', eventId)
+      .eq('worker_id', workerId);
+    const activeDup = (dupCheck || [])
+      .filter(a => !['rejected', 'cancelled'].includes(a.status))
+      .filter(a => isCombinable ? toKey(a.position) === pKey : true)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    if (activeDup.length > 1 && activeDup[0].id !== inserted.id) {
+      await supabase.from('assignments').delete().eq('id', inserted.id);
+      const existing = activeDup[0];
+      return { status: 200, body: { ok: true, result: existing.status, message: 'You already applied to this event.' } };
+    }
+  }
 
   if (isFirstCome) {
     // Race guard: "first come" has to actually mean first. Two workers can

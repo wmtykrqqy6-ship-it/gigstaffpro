@@ -172,7 +172,12 @@ export default function PostEventReportModal({
         .from('attendance_records')
         .insert(attendanceRecords);
 
-      if (attendanceError) throw attendanceError;
+      if (attendanceError) {
+        // Roll back the report row so it doesn't orphan and permanently
+        // block resubmission via the "already submitted" check above.
+        await supabase.from('post_event_reports').delete().eq('id', report.id);
+        throw attendanceError;
+      }
 
       if (onSuccess) await onSuccess();
       onClose();

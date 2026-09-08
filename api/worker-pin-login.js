@@ -19,6 +19,7 @@
 // next time its worker logs in successfully.
 
 import { createHash, randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
+import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 
@@ -30,26 +31,7 @@ const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 // "impractical at pilot scale"). Limited by phone (the actual attack
 // target) as well as IP, since an attacker can rotate IPs but not the
 // phone number they're targeting.
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const rateLimitBuckets = new Map();
-
-function isRateLimited(key) {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(key);
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitBuckets.set(key, { count: 1, windowStart: now });
-    return false;
-  }
-  bucket.count += 1;
-  return bucket.count > RATE_LIMIT_MAX;
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return String(forwarded).split(',')[0].trim();
-  return req.socket?.remoteAddress || 'unknown';
-}
+const isRateLimited = createRateLimiter(5, 15 * 60 * 1000);
 
 // This endpoint must read pin_hash to verify a login, and the anon key can
 // no longer read that column at all (see
@@ -81,17 +63,17 @@ function hashPinLegacy(pin) {
 // iteration count is what actually matters.
 const PBKDF2_ITERATIONS = 100000;
 
-function hashPinSalted(pin, saltHex) {
+function hashPinSalted(pin, saltHex, iterations = PBKDF2_ITERATIONS) {
   const salt = Buffer.from(saltHex, 'hex');
-  const derived = pbkdf2Sync(String(pin), salt, PBKDF2_ITERATIONS, 32, 'sha256');
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${saltHex}$${derived.toString('hex')}`;
+  const derived = pbkdf2Sync(String(pin), salt, iterations, 32, 'sha256');
+  return `pbkdf2$${iterations}$${saltHex}$${derived.toString('hex')}`;
 }
 
 function verifyPinSalted(pin, storedHash) {
   const parts = storedHash.split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
-  const [, , saltHex] = parts;
-  const recomputed = hashPinSalted(pin, saltHex);
+  const [, iterationsStr, saltHex] = parts;
+  const recomputed = hashPinSalted(pin, saltHex, Number(iterationsStr));
   const a = Buffer.from(recomputed, 'utf8');
   const b = Buffer.from(storedHash, 'utf8');
   return a.length === b.length && timingSafeEqual(a, b);

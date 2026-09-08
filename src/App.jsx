@@ -405,6 +405,17 @@ const handleClearAllNotifications = async () => {
 const handleSaveWorker = async (formData) => {
   setSavingWorker(true);
   try {
+    if (formData.phone) {
+      const cleanPhone = String(formData.phone).replace(/\D/g, '');
+      const { data: existing, error: existingError } = await supabase
+        .from('workers').select('id').eq('phone', cleanPhone);
+      if (existingError) throw existingError;
+      if (existing && existing.length > 0) {
+        notify('A worker with this phone number already exists.');
+        return false;
+      }
+    }
+
     const { error } = await supabase
       .from('workers')
       .insert([formData]);
