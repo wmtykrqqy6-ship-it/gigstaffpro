@@ -67,8 +67,8 @@ export default async function handler(req, res) {
 
   try {
     const [eventRes, assignmentsRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${eventId}&select=name,date,time,end_time,venue,address,dress_code,parking,positions&limit=1`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${eventId}&select=id,worker_id,position,status,created_at`, { headers })
+      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${encodeURIComponent(eventId)}&select=name,date,time,end_time,venue,address,dress_code,parking,positions&limit=1`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${encodeURIComponent(eventId)}&select=id,worker_id,position,status,created_at`, { headers })
     ]);
     const [events, assignments] = await Promise.all([eventRes.json(), assignmentsRes.json()]);
     const event = events?.[0];
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
     // narrows the window from the whole request down to just this
     // round-trip.
     const recheckRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${eventId}&select=id,position,status`,
+      `${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${encodeURIComponent(eventId)}&select=id,position,status`,
       { headers }
     );
     const recheckAssignments = await recheckRes.json();

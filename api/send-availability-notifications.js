@@ -155,7 +155,7 @@ export default async function handler(req, res) {
     // 3. Load already-sent notifications for deduplication
     const eventIds = events.map(e => e.id);
     const sentRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/event_availability_notifications?event_id=in.(${eventIds.join(',')})&select=event_id,rank,worker_id`,
+      `${SUPABASE_URL}/rest/v1/event_availability_notifications?event_id=in.(${eventIds.map(encodeURIComponent).join(',')})&select=event_id,rank,worker_id`,
       { headers: sbHeaders() }
     );
     const sentData = await sentRes.json();

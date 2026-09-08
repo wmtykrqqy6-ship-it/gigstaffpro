@@ -192,10 +192,10 @@ export default async function handler(req, res) {
     const workerIds = [...new Set(assignments.map(a => a.worker_id))];
 
     const [evRes, wrRes, prefsRes, sentRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/events?id=in.(${eventIds.join(',')})&select=id,name,date,time,end_time,venue,address,dress_code,parking,notes&status=neq.cancelled`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/workers?id=in.(${workerIds.join(',')})&select=id,name,email`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/worker_reminder_prefs?worker_id=in.(${workerIds.join(',')})&select=*`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/shift_reminders_sent?assignment_id=in.(${assignments.map(a=>a.id).join(',')})&select=assignment_id,hours_before,channel`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/events?id=in.(${eventIds.map(encodeURIComponent).join(',')})&select=id,name,date,time,end_time,venue,address,dress_code,parking,notes&status=neq.cancelled`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/workers?id=in.(${workerIds.map(encodeURIComponent).join(',')})&select=id,name,email`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/worker_reminder_prefs?worker_id=in.(${workerIds.map(encodeURIComponent).join(',')})&select=*`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/shift_reminders_sent?assignment_id=in.(${assignments.map(a=>encodeURIComponent(a.id)).join(',')})&select=assignment_id,hours_before,channel`, { headers: sbHeaders() }),
     ]);
 
     const [events, workers, prefs, alreadySent] = await Promise.all([

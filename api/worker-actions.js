@@ -14,6 +14,37 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// Neither 'signup' nor 'updateProfile' requires any session at all (no real
+// worker session token exists yet, per the file header above), so each is
+// individually abusable with no throttle: signup can mass-create worker
+// rows, and updateProfile lets anyone holding a workerId (a UUID, but one
+// that surfaces in plenty of client responses across the app) silently
+// overwrite that worker's contact info. A real fix needs session infra;
+// this rate limit is the cheap stopgap, mirroring
+// api/worker-pin-login.js's existing convention (in-memory, per-instance,
+// best-effort -- not a hard security control, but raises "spam this with a
+// script" from trivial to impractical at pilot scale).
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const rateLimitBuckets = new Map();
+
+function isRateLimited(key) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(key);
+  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateLimitBuckets.set(key, { count: 1, windowStart: now });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return String(forwarded).split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
 const isFilled = (status) => !UNFILLED.includes(status);
 const COMBINABLE_POSITIONS = ['host', 'setup', 'cleanup'];
@@ -423,6 +454,20 @@ export default async function handler(req, res) {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const { action, ...params } = req.body || {};
+
+  if (action === 'signup' || action === 'updateProfile') {
+    const ip = getClientIp(req);
+    // signup: also key by the phone being claimed, since that's the actual
+    // resource under attack (an IP-only limit doesn't stop a distributed
+    // attempt to claim one specific number ahead of its real owner).
+    // updateProfile: also key by the target workerId, for the same reason.
+    const secondaryKey = action === 'signup'
+      ? `phone:${String(params?.phone || '').replace(/\D/g, '')}`
+      : `worker:${params?.workerId || ''}`;
+    if (isRateLimited(`${action}:ip:${ip}`) || isRateLimited(`${action}:${secondaryKey}`)) {
+      return res.status(429).json({ ok: false, error: 'Too many attempts. Please try again later.' });
+    }
+  }
 
   try {
     let result;

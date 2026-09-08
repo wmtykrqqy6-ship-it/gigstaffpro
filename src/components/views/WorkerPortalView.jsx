@@ -247,9 +247,16 @@ export default function WorkerPortalView({  loggedInWorker,
     const totalEarnings = currentWorker.earnings || 0;
 
     const cancelAssignment = async (assignment) => {
-      const eventDate = new Date(assignment.event.date);
-      const today = new Date();
-      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+      // parseDateSafe (already used 3 lines below for display) parses in
+      // local time; the plain `new Date("YYYY-MM-DD")` this used before
+      // parses as UTC midnight instead, which in negative-UTC-offset zones
+      // during evening local hours could compute daysUntil one short of the
+      // true local-calendar difference -- occasionally blocking a
+      // cancellation that should still be allowed under the 7-day cutoff.
+      const eventDate = parseDateSafe(assignment.event.date);
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const daysUntil = Math.ceil((eventDate - todayMidnight) / (1000 * 60 * 60 * 24));
       
       // Check if within 7 days
       if (daysUntil < 7) {

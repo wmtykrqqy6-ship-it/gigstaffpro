@@ -49,12 +49,14 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (data.status !== 'OK') {
-      return res.status(400).json({ error: `Maps API error: ${data.status}` });
+      console.error('get-distance: Maps API error:', data.status);
+      return res.status(400).json({ error: 'Could not calculate distance' });
     }
 
     const element = data.rows?.[0]?.elements?.[0];
     if (!element || element.status !== 'OK') {
-      return res.status(400).json({ error: `Route not found: ${element?.status}` });
+      console.error('get-distance: route not found:', element?.status);
+      return res.status(400).json({ error: 'Route not found' });
     }
 
     // Distance in meters → miles
@@ -63,6 +65,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ miles, text: element.distance.text });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('get-distance error:', err);
+    return res.status(500).json({ error: 'Could not calculate distance' });
   }
 }

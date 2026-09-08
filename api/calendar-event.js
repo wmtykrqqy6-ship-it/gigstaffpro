@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     .replace(/\\/g, '\\\\')
     .replace(/;/g, '\\;')
     .replace(/,/g, '\\,')
-    .replace(/\n/g, '\\n');
+    .replace(/\r\n|\r|\n/g, '\\n');
 
   const description = [
     position ? `Position: ${position}` : null,
