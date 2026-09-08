@@ -447,7 +447,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             // Convert back to labels for display
             const matchingPositions = matchingPositionKeys.map(key => getPositionLabel(key));
             
-            const daysUntil = Math.ceil((parseDateSafe(event.date) - new Date()) / (1000 * 60 * 60 * 24));
+            // Compare against today's local midnight, not the exact current
+            // moment -- mixing a local-midnight event date with "right now"
+            // made the "Soon!" cutoff drift a day early/late depending on
+            // what time of day it is.
+            const nowForBadge = new Date();
+            const todayMidnightForBadge = new Date(nowForBadge.getFullYear(), nowForBadge.getMonth(), nowForBadge.getDate());
+            const daysUntil = Math.ceil((parseDateSafe(event.date) - todayMidnightForBadge) / (1000 * 60 * 60 * 24));
             
             return (
               <div key={event.id} className="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-blue-50">

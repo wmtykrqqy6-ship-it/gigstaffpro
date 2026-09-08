@@ -4,7 +4,7 @@ import {
   MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList, UserPlus
 } from 'lucide-react';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
-import { formatTime } from '../../utils/dateHelpers';
+import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
 
 // --- Inline Schedule Section ---
 function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssignModal, onNavigate }) {
@@ -309,13 +309,17 @@ export default function DashboardView({
 
   const upcomingEvents = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const eventDate = new Date(e.date);
+    // parseDateSafe treats "YYYY-MM-DD" as local, not UTC (see
+    // getUnfilledAlerts above) -- the raw new Date(e.date) this used before
+    // parses as UTC midnight, which in negative-UTC-offset zones shifts an
+    // event scheduled for today back a calendar day, excluding it here.
+    const eventDate = parseDateSafe(e.date);
     eventDate.setHours(0, 0, 0, 0);
     return eventDate >= today;
   }).length;
   const needStaffing = scopedEvents.filter(e => {
     if (e.status === 'completed' || e.status === 'cancelled' || e.status === 'archived') return false;
-    const eventDate = new Date(e.date);
+    const eventDate = parseDateSafe(e.date);
     eventDate.setHours(0, 0, 0, 0);
     if (eventDate < today) return false;
     const eventAssignments = assignments.filter(a => a.event_id === e.id);
@@ -550,7 +554,7 @@ export default function DashboardView({
         const weekEvents = scopedEvents
           .filter(event => {
             if (event.status === 'cancelled' || event.status === 'archived') return false;
-            const eventDate = new Date(event.date);
+            const eventDate = parseDateSafe(event.date);
             return eventDate >= now && eventDate <= sevenDaysOut;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -575,7 +579,7 @@ export default function DashboardView({
                   const totalNeeded = event.positions?.reduce((sum, p) => sum + (p.count || 1), 0) || 0;
                   const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
                   const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
-                  const eventDate = new Date(event.date);
+                  const eventDate = parseDateSafe(event.date);
                   const daysUntil = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
                   const urgencyBorder = daysUntil === 0 ? 'border-l-red-500'
                     : daysUntil === 1 ? 'border-l-orange-400'

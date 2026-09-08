@@ -4,6 +4,7 @@ import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelper
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { supabase } from '../../supabaseClient';
+import { useToast } from '../ui/Toast';
 
 
 const formatPhone = (p) => {
@@ -27,6 +28,7 @@ export default function StaffView({
   onToggleActive,
   onRetryLoad
 }) {
+  const notify = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('all');
   const [rankFilter, setRankFilter] = useState('all');
@@ -543,11 +545,19 @@ export default function StaffView({
                                   key={loc.id}
                                   onClick={async (e) => {
                                     e.stopPropagation();
+                                    // Only update local state once the write actually succeeds --
+                                    // this previously flipped the UI unconditionally, so a failed
+                                    // write (RLS denial, network blip) left the admin believing a
+                                    // worker's market approval had changed when the database was
+                                    // never touched, silently affecting which events that worker
+                                    // can see.
                                     if (approved) {
-                                      await supabase.from('worker_locations').delete().eq('worker_id',worker.id).eq('location_id',loc.id);
+                                      const { error } = await supabase.from('worker_locations').delete().eq('worker_id',worker.id).eq('location_id',loc.id);
+                                      if (error) { notify('Error removing market: ' + error.message); return; }
                                       setWorkerLocationMap(prev=>({...prev,[worker.id]:(prev[worker.id]||[]).filter(id=>id!==loc.id)}));
                                     } else {
-                                      await supabase.from('worker_locations').insert({worker_id:worker.id,location_id:loc.id,approved:true});
+                                      const { error } = await supabase.from('worker_locations').insert({worker_id:worker.id,location_id:loc.id,approved:true});
+                                      if (error) { notify('Error approving market: ' + error.message); return; }
                                       setWorkerLocationMap(prev=>({...prev,[worker.id]:[...(prev[worker.id]||[]),loc.id]}));
                                     }
                                   }}

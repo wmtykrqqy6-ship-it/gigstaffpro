@@ -117,6 +117,7 @@ function TravelTierRow({ tier, onSave }) {
 // ── Location Pay Rates Component (embedded in location card) ──
 // ── Location Pay Rates (reads/writes location_pay_rates directly) ──
 function LocationPayRates({ location, positions, onPayRatesChanged }) {
+  const notify = useToast();
   const [rates, setRates] = React.useState({});
   const [loading, setLoading] = React.useState(true);
 
@@ -138,20 +139,31 @@ function LocationPayRates({ location, positions, onPayRatesChanged }) {
     const key = getPayRateKey(positionLabel);
     const numRate = parseFloat(rate);
     if (isNaN(numRate)) return;
-    if (existingId) {
-      await supabase.from('location_pay_rates').update({ hourly_rate: numRate }).eq('id', existingId);
-    } else {
-      await supabase.from('location_pay_rates').insert({ location_id: location.id, position: key, hourly_rate: numRate });
+    try {
+      if (existingId) {
+        const { error } = await supabase.from('location_pay_rates').update({ hourly_rate: numRate }).eq('id', existingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('location_pay_rates').insert({ location_id: location.id, position: key, hourly_rate: numRate });
+        if (error) throw error;
+      }
+      await loadRates();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error saving pay rate: ' + err.message);
     }
-    await loadRates();
-    if (onPayRatesChanged) onPayRatesChanged();
   };
 
   const clearRate = async (existingId) => {
     if (!existingId) return;
-    await supabase.from('location_pay_rates').delete().eq('id', existingId);
-    await loadRates();
-    if (onPayRatesChanged) onPayRatesChanged();
+    try {
+      const { error } = await supabase.from('location_pay_rates').delete().eq('id', existingId);
+      if (error) throw error;
+      await loadRates();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error clearing pay rate: ' + err.message);
+    }
   };
 
   if (loading) return <p className="text-xs text-gray-400 mt-2">Loading...</p>;
@@ -272,14 +284,20 @@ export default function SettingsView({
     if (isNaN(rate) || rate < 0) { notify('Enter a valid rate'); return; }
     const key = getPayRateKey(positionLabel);
     const existing = payRatesMap[key] || payRatesMap[positionLabel];
-    if (existing) {
-      await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', existing.id);
-    } else {
-      // Create new row using the normalized key as position name
-      await supabase.from('pay_rates').insert({ position: key, hourly_rate: rate });
+    try {
+      if (existing) {
+        const { error } = await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        // Create new row using the normalized key as position name
+        const { error } = await supabase.from('pay_rates').insert({ position: key, hourly_rate: rate });
+        if (error) throw error;
+      }
+      loadPayRatesData();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error saving pay rate: ' + err.message);
     }
-    loadPayRatesData();
-    if (onPayRatesChanged) onPayRatesChanged();
   };
 
   useEffect(() => {
@@ -290,35 +308,56 @@ export default function SettingsView({
     setSavingPayRate(id);
     const rate = parseFloat(newRate);
     if (isNaN(rate) || rate < 0) { notify('Enter a valid rate'); setSavingPayRate(null); return; }
-    await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', id);
-    setSavingPayRate(null);
-    loadPayRatesData();
-    if (onPayRatesChanged) onPayRatesChanged();
+    try {
+      const { error } = await supabase.from('pay_rates').update({ hourly_rate: rate }).eq('id', id);
+      if (error) throw error;
+      loadPayRatesData();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error saving pay rate: ' + err.message);
+    } finally {
+      setSavingPayRate(null);
+    }
   };
 
   const saveTravelTier = async (id, field, value) => {
     const num = parseFloat(value);
     if (isNaN(num)) return;
-    await supabase.from('travel_tiers').update({ [field]: num }).eq('id', id);
-    loadPayRatesData();
-    if (onPayRatesChanged) onPayRatesChanged();
+    try {
+      const { error } = await supabase.from('travel_tiers').update({ [field]: num }).eq('id', id);
+      if (error) throw error;
+      loadPayRatesData();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error saving travel tier: ' + err.message);
+    }
   };
 
   const saveLocationBonus = async () => {
     const { name, zip, bonus_amount } = newLocationBonus;
     if (!name || !zip || !bonus_amount) { notify('Fill in all fields'); return; }
-    await supabase.from('bonuses').insert({ bonus_name: name, bonus_amount: parseFloat(bonus_amount), zip_code: zip });
-    setNewLocationBonus({ name: '', zip: '', bonus_amount: '' });
-    setAddingLocationBonus(false);
-    loadPayRatesData();
-    if (onPayRatesChanged) onPayRatesChanged();
+    try {
+      const { error } = await supabase.from('bonuses').insert({ bonus_name: name, bonus_amount: parseFloat(bonus_amount), zip_code: zip });
+      if (error) throw error;
+      setNewLocationBonus({ name: '', zip: '', bonus_amount: '' });
+      setAddingLocationBonus(false);
+      loadPayRatesData();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error saving location bonus: ' + err.message);
+    }
   };
 
   const deleteLocationBonus = async (id) => {
     if (!(await confirm('Delete this location bonus?'))) return;
-    await supabase.from('bonuses').delete().eq('id', id);
-    loadPayRatesData();
-    if (onPayRatesChanged) onPayRatesChanged();
+    try {
+      const { error } = await supabase.from('bonuses').delete().eq('id', id);
+      if (error) throw error;
+      loadPayRatesData();
+      if (onPayRatesChanged) onPayRatesChanged();
+    } catch (err) {
+      notify('Error deleting location bonus: ' + err.message);
+    }
   };
 
   // --- Locations state ---
@@ -883,20 +922,22 @@ export default function SettingsView({
         .single();
 
       if (existingTz) {
-        await supabase
+        const { error } = await supabase
           .from('settings')
-          .update({ 
+          .update({
             setting_value: timezone,
             updated_at: new Date().toISOString()
           })
           .eq('setting_key', 'timezone');
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('settings')
           .insert([{
             setting_key: 'timezone',
             setting_value: timezone
           }]);
+        if (error) throw error;
       }
 
       // Save time format
@@ -907,20 +948,22 @@ export default function SettingsView({
         .single();
 
       if (existingFormat) {
-        await supabase
+        const { error } = await supabase
           .from('settings')
-          .update({ 
+          .update({
             setting_value: timeFormat,
             updated_at: new Date().toISOString()
           })
           .eq('setting_key', 'time_format');
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('settings')
           .insert([{
             setting_key: 'time_format',
             setting_value: timeFormat
           }]);
+        if (error) throw error;
       }
 
     } catch (error) {
@@ -1959,9 +2002,11 @@ export default function SettingsView({
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();
                   if (existingPmt) {
-                    await supabase.from('settings').update({ setting_value: paymentTrackingEnabled.toString(), updated_at: new Date().toISOString() }).eq('setting_key', 'payment_tracking_enabled');
+                    const { error } = await supabase.from('settings').update({ setting_value: paymentTrackingEnabled.toString(), updated_at: new Date().toISOString() }).eq('setting_key', 'payment_tracking_enabled');
+                    if (error) throw error;
                   } else {
-                    await supabase.from('settings').insert([{ setting_key: 'payment_tracking_enabled', setting_value: paymentTrackingEnabled.toString() }]);
+                    const { error } = await supabase.from('settings').insert([{ setting_key: 'payment_tracking_enabled', setting_value: paymentTrackingEnabled.toString() }]);
+                    if (error) throw error;
                   }
                   notify('All settings saved!');
                 } catch (err) {

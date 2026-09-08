@@ -312,8 +312,12 @@ export default function WorkerPortalView({  loggedInWorker,
     };
 
     const switchPosition = async (assignment, newPositionKey) => {
-      const eventDate = new Date(assignment.event.date);
-      const today = new Date();
+      // Same UTC-vs-local parsing bug cancelAssignment had (see its comment
+      // above) -- parseDateSafe/local-midnight avoids shifting the 7-day
+      // cutoff by a day in negative-UTC-offset zones.
+      const eventDate = parseDateSafe(assignment.event.date);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
       
       // Check if within 7 days

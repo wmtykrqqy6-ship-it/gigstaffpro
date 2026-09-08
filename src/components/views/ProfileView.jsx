@@ -3,6 +3,7 @@ import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Sa
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
+import { parseDateSafe } from '../../utils/dateHelpers';
 import { useToast } from '../ui/Toast';
 
 // workerAuthMode: accepted here for use in a later step (migration-aware
@@ -125,7 +126,11 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
     if (!isAssignmentFilled(a.status)) return false;
     const event = events.find(e => e.id === a.event_id);
     if (!event) return false;
-    const eventDate = new Date(event.date);
+    // parseDateSafe treats "YYYY-MM-DD" as local, not UTC -- the raw
+    // new Date(event.date) this used before parses as UTC midnight, which
+    // in negative-UTC-offset zones shifts today's date back a calendar day,
+    // making a same-day event register as already "past" before it starts.
+    const eventDate = parseDateSafe(event.date);
     eventDate.setHours(0, 0, 0, 0);
     return eventDate < today;
   }).length;
@@ -164,7 +169,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         if (!isAssignmentFilled(a.status)) return false;
         const ev = events.find(e => e.id === a.event_id);
         if (!ev) return false;
-        return new Date(ev.date).getFullYear() === reportYear;
+        return parseDateSafe(ev.date).getFullYear() === reportYear;
       });
 
       if (yearAssignments.length === 0) {
@@ -264,7 +269,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         const miles = distanceMap[ev.id];
         if (miles != null) totalMiles += miles;
 
-        const dateStr = new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const dateStr = parseDateSafe(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const eventName = (ev.name || '').substring(0, 28);
         const addr = (ev.address || 'N/A').substring(0, 35);
         const milesStr = miles != null ? `${miles} mi` : 'N/A';
