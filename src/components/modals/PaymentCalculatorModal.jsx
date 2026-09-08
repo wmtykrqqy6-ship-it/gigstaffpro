@@ -243,11 +243,16 @@ export default function PaymentCalculatorModal({
             });
             
             if (pendingApps.length > 0) {
-              // Convert all pending to standby
-              await supabase
+              // Convert all pending to standby. Best-effort cleanup -- the
+              // assignment above already succeeded, so a failure here just
+              // means those applications stay visually pending a bit longer
+              // rather than corrupting anything; log it rather than blocking
+              // the main success flow.
+              const { error: standbyError } = await supabase
                 .from('assignments')
                 .update({ status: 'standby' })
                 .in('id', pendingApps.map(a => a.id));
+              if (standbyError) console.error('Error converting pending applications to standby:', standbyError);
             }
           }
         }

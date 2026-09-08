@@ -57,10 +57,11 @@ export default function AssignWorkersModal({
   const handleSaveHost = async (newHostId) => {
     setSavingHost(true);
     try {
-      await supabase
+      const { error } = await supabase
         .from('events')
         .update({ host_worker_id: newHostId || null })
         .eq('id', event.id);
+      if (error) throw error;
       setSelectedHostId(newHostId);
     } catch (error) {
       notify('Error saving host: ' + error.message);
@@ -649,13 +650,20 @@ export default function AssignWorkersModal({
                                               
                                               if (!shouldRemoveOther) return;
                                               
-                                              // Remove from conflicting event first
+                                              // Remove from conflicting event first -- if this silently
+                                              // fails, promoting below would leave the worker double-booked
+                                              // (still holding the old conflicting assignment) instead of
+                                              // preventing exactly that.
                                               const conflictAssignment = workerOtherAssignments.find(a => a.event_id === conflictEvent.id);
                                               if (conflictAssignment) {
-                                                await supabase
+                                                const { error: conflictDeleteError } = await supabase
                                                   .from('assignments')
                                                   .delete()
                                                   .eq('id', conflictAssignment.id);
+                                                if (conflictDeleteError) {
+                                                  notify('Error removing conflicting assignment: ' + conflictDeleteError.message);
+                                                  return;
+                                                }
                                               }
                                             }
                                             

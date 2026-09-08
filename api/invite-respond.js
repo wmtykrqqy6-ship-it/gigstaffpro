@@ -168,7 +168,27 @@ export default async function handler(req, res) {
       return res.status(200).send(alreadyRespondedPage('You already accepted this invitation!'));
     }
 
-    // 3. Create the assignment — safe now, this request is the sole winner of the claim
+    // 3. Re-check the position's fill count fresh, right before inserting.
+    // filledForPositionBeforeThis (step 0) is stale by now -- it was read
+    // before the atomic claim above, and other invitees for this same
+    // multi-seat position can have accepted in that window. Over-inviting a
+    // position and letting the fastest N acceptances win is the deliberate
+    // design (InviteWorkersModal.jsx's "invite whole rank" flow), so a late
+    // acceptance on an already-full position goes to standby instead of
+    // overbooking it -- mirroring the isFull -> standby branch
+    // api/worker-actions.js's handleApply already uses for the same case.
+    const freshAssignmentsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${encodeURIComponent(invite.event_id)}&select=id,position,status`,
+      { headers }
+    );
+    const freshAssignments = await freshAssignmentsRes.json();
+    const filledForPositionNow = (freshAssignments || []).filter(a =>
+      !UNFILLED.includes(a.status) &&
+      (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
+    ).length;
+    const assignmentStatus = filledForPositionNow >= neededCount ? 'standby' : 'approved';
+
+    // 4. Create the assignment — safe now, this request is the sole winner of the claim
     await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=minimal' },
@@ -176,17 +196,20 @@ export default async function handler(req, res) {
         event_id: invite.event_id,
         worker_id: invite.worker_id,
         position: invite.position_key,
-        status: 'approved'
+        status: assignmentStatus
       })
     });
 
-    // 4. Expire any other pending invites for this same event+position slot,
-    // but only once the slot is actually full — this assignment just filled
-    // one seat, so the running count is filledForPositionBeforeThis + 1.
-    // Expiring unconditionally here would kill every other still-pending
-    // invite for a multi-seat position (e.g. 3 Dealer slots, 5 invited) the
-    // moment the FIRST one accepts, even with real seats still open.
-    if (filledForPositionBeforeThis + 1 >= neededCount) {
+    // 5. Expire any other pending invites for this same event+position slot,
+    // but only once the slot is actually full -- an 'approved' assignment
+    // just filled one seat, so the running count is filledForPositionNow + 1;
+    // a 'standby' assignment (this accept came in after the position was
+    // already full) didn't fill anything, so the count stays as-is. Expiring
+    // unconditionally here would kill every other still-pending invite for a
+    // multi-seat position (e.g. 3 Dealer slots, 5 invited) the moment the
+    // FIRST one accepts, even with real seats still open.
+    const filledAfterThis = filledForPositionNow + (assignmentStatus === 'approved' ? 1 : 0);
+    if (filledAfterThis >= neededCount) {
       const posRes = await fetch(
         `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${encodeURIComponent(invite.event_id)}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
         { headers }
@@ -201,7 +224,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5. Send confirmation email with calendar link, and gather the same
+    // 6. Send confirmation email with calendar link, and gather the same
     // event name / position / calendar link for the landing page below --
     // so the worker sees what they just accepted immediately, not only in
     // an email they may not check right away.
@@ -272,7 +295,9 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               from: 'Vegas on Wheels <noreply@gigstaffpro.com>',
               to: worker.email,
-              subject: `✅ Confirmed: ${event.name}`,
+              subject: assignmentStatus === 'approved'
+                ? `✅ Confirmed: ${event.name}`
+                : `You're on standby: ${event.name}`,
               html: confirmHtml
             })
           });
@@ -282,12 +307,22 @@ export default async function handler(req, res) {
       // Confirmation email failure is non-critical — worker is still confirmed
     }
 
-    return res.status(200).send(successPage(
-      '✅ Invitation Accepted!',
-      "You're confirmed for this event. Log in to the staff portal to view your upcoming schedule.",
-      'accepted',
-      { eventName: confirmedEventName, positionLabel: confirmedPositionLabel, calUrl: confirmedCalUrl }
-    ));
+    // The position filled up between this invite going out and being
+    // accepted (see the fresh re-check above) -- tell the worker they're on
+    // standby, not confirmed, so this page and email don't overpromise a
+    // slot they don't actually have.
+    return res.status(200).send(assignmentStatus === 'approved'
+      ? successPage(
+          '✅ Invitation Accepted!',
+          "You're confirmed for this event. Log in to the staff portal to view your upcoming schedule.",
+          'accepted',
+          { eventName: confirmedEventName, positionLabel: confirmedPositionLabel, calUrl: confirmedCalUrl }
+        )
+      : successPage(
+          'Added to Standby',
+          "This position filled up just before your acceptance came in, so you've been added to standby instead — you'll be notified if a spot opens up. Log in to the staff portal to view your status.",
+          'accepted'
+        ));
   } else {
     // Declined
     await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${encodeURIComponent(invite.id)}`, {

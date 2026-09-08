@@ -364,7 +364,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         
         if (nonCombinableExisting.length > 0) {
           const existingPosition = getPositionLabel(nonCombinableExisting[0].position);
-          const statusText = nonCombinableExisting[0].status === 'approved' ? 'assigned to' :
+          const statusText = ['approved', 'confirmed'].includes(nonCombinableExisting[0].status) ? 'assigned to' :
                             nonCombinableExisting[0].status === 'standby' ? 'on standby for' : 'applied for';
           notify(
             `⚠️ ALREADY ${statusText.toUpperCase()}!\n\n` +
