@@ -405,20 +405,27 @@ const handleClearAllNotifications = async () => {
 const handleSaveWorker = async (formData) => {
   setSavingWorker(true);
   try {
+    // Store phone as digits-only, matching the convention api/worker-actions.js's
+    // self-service signup already uses -- an earlier version of this dup-check
+    // compared a cleaned value against workers.phone as inserted here (raw,
+    // punctuation and all), so it silently missed real duplicates and left
+    // admin-added workers in a different phone format than self-signup ones.
+    let saveData = formData;
     if (formData.phone) {
       const cleanPhone = String(formData.phone).replace(/\D/g, '');
       const { data: existing, error: existingError } = await supabase
-        .from('workers').select('id').eq('phone', cleanPhone);
+        .from('workers').select('id').or(`phone.eq.${cleanPhone},phone.eq.${formData.phone}`);
       if (existingError) throw existingError;
       if (existing && existing.length > 0) {
         notify('A worker with this phone number already exists.');
         return false;
       }
+      saveData = { ...formData, phone: cleanPhone };
     }
 
     const { error } = await supabase
       .from('workers')
-      .insert([formData]);
+      .insert([saveData]);
 
     if (error) throw error;
 

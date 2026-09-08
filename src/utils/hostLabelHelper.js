@@ -44,14 +44,14 @@ export const loadHostLabelFromServer = async () => {
 };
 
 // Admin-only (settings_admin_write RLS policy enforces this server-side
-// regardless). Persists org-wide and updates this session's local cache
-// immediately so the current render picks it up without a reload. Throws
-// on failure so the caller can warn the admin the change didn't save
-// org-wide (the local cache update above still applies to their own
-// browser either way).
+// regardless). Persists org-wide, then updates this session's local cache
+// so the current render picks it up without a reload. The cache write
+// happens only after the server write succeeds -- caching optimistically
+// beforehand would show the admin their own browser as "saved" even when
+// the server write actually failed, with nothing to correct it. Throws on
+// failure so the caller can warn the admin the change didn't save.
 export const setHostLabel = async (label) => {
   const clean = (label || 'Host').trim();
-  cacheLocally(clean);
 
   const { data: existing } = await supabase
     .from('settings')
@@ -71,6 +71,8 @@ export const setHostLabel = async (label) => {
       .insert([{ setting_key: SETTING_KEY, setting_value: clean }]);
     if (error) throw error;
   }
+
+  cacheLocally(clean);
 };
 
 // Plural form: "Hosts", "Managers", "Team Leads", "Pit Bosses"

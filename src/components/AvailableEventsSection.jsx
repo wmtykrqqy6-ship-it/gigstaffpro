@@ -345,10 +345,14 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       const positionKey = getPositionKey(position);
       const isCombinablePosition = combinablePositions.includes(positionKey);
       
-      const sameEventAssignments = assignments.filter(a => 
-        a.worker_id === currentWorker.id && 
+      // Any active claim counts here, not just approved/pending/standby --
+      // that narrower set omits 'confirmed' (a legitimate assignment
+      // status), which let an already-confirmed worker apply again for a
+      // second non-combinable position at the same event with no warning.
+      const sameEventAssignments = assignments.filter(a =>
+        a.worker_id === currentWorker.id &&
         a.event_id === event.id &&
-        ['approved', 'pending', 'standby'].includes(a.status)
+        !['rejected', 'cancelled'].includes(a.status)
       );
       
       if (sameEventAssignments.length > 0 && !isCombinablePosition) {

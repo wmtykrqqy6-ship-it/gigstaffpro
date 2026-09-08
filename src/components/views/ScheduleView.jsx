@@ -378,7 +378,7 @@ export default function ScheduleView({
                       <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                         <span className="flex items-center space-x-1">
                           <Calendar size={14} />
-                          <span>{new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          <span>{parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                         </span>
                         <span className="flex items-center space-x-1">
                           <Clock size={14} />

@@ -65,9 +65,9 @@ export default async function handler(req, res) {
     // every assignment against this event (to see whether the invited
     // position has since filled).
     const [inviteEventRes, workerAssignmentsRes, eventAssignmentsRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=id,name,date,time,end_time,positions`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/assignments?worker_id=eq.${invite.worker_id}&select=event_id,status`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${invite.event_id}&select=id,position,status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${encodeURIComponent(invite.event_id)}&select=id,name,date,time,end_time,positions`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?worker_id=eq.${encodeURIComponent(invite.worker_id)}&select=event_id,status`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${encodeURIComponent(invite.event_id)}&select=id,position,status`, { headers }),
     ]);
     const [inviteEvents, workerAssignments, eventAssignments] = await Promise.all([
       inviteEventRes.json(), workerAssignmentsRes.json(), eventAssignmentsRes.json(),
@@ -75,6 +75,12 @@ export default async function handler(req, res) {
     const inviteEvent = inviteEvents?.[0];
 
     const UNFILLED = ['standby', 'pending', 'rejected', 'cancelled'];
+    const posDef = (inviteEvent?.positions || []).find(p => p.key === invite.position_key || p.name === invite.position_key);
+    const neededCount = (posDef && posDef.count) || 1;
+    const filledForPositionBeforeThis = (eventAssignments || []).filter(a =>
+      !UNFILLED.includes(a.status) &&
+      (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
+    ).length;
 
     // The response window exists to keep staffing moving -- it's what
     // triggers the admin's "notify next rank" prompt in the dashboard --
@@ -83,15 +89,8 @@ export default async function handler(req, res) {
     // since the invite went out; otherwise the elapsed window is irrelevant
     // and the accept proceeds normally below.
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      const posDef = (inviteEvent?.positions || []).find(p => p.key === invite.position_key || p.name === invite.position_key);
-      const neededCount = (posDef && posDef.count) || 1;
-      const filledForPosition = (eventAssignments || []).filter(a =>
-        !UNFILLED.includes(a.status) &&
-        (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
-      ).length;
-
-      if (filledForPosition >= neededCount) {
-        await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
+      if (filledForPositionBeforeThis >= neededCount) {
+        await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${encodeURIComponent(invite.id)}`, {
           method: 'PATCH', headers,
           body: JSON.stringify({ status: 'expired' })
         });
@@ -154,7 +153,7 @@ export default async function handler(req, res) {
     // filter is enforced by Postgres itself, so only one concurrent request can ever
     // match and update the row — everyone else gets zero rows back.
     const claimRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}&status=eq.pending`,
+      `${SUPABASE_URL}/rest/v1/invitations?id=eq.${encodeURIComponent(invite.id)}&status=eq.pending`,
       {
         method: 'PATCH',
         headers: { ...headers, Prefer: 'return=representation' },
@@ -181,18 +180,25 @@ export default async function handler(req, res) {
       })
     });
 
-    // 4. Expire any other pending invites for this same event+position slot if now full
-    const posRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${invite.event_id}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
-      { headers }
-    );
-    const others = await posRes.json();
-    if (others?.length > 0) {
-      const ids = others.map(i => i.id);
-      await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=in.(${ids.join(',')})`, {
-        method: 'PATCH', headers,
-        body: JSON.stringify({ status: 'expired' })
-      });
+    // 4. Expire any other pending invites for this same event+position slot,
+    // but only once the slot is actually full — this assignment just filled
+    // one seat, so the running count is filledForPositionBeforeThis + 1.
+    // Expiring unconditionally here would kill every other still-pending
+    // invite for a multi-seat position (e.g. 3 Dealer slots, 5 invited) the
+    // moment the FIRST one accepts, even with real seats still open.
+    if (filledForPositionBeforeThis + 1 >= neededCount) {
+      const posRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/invitations?event_id=eq.${encodeURIComponent(invite.event_id)}&position_key=eq.${encodeURIComponent(invite.position_key)}&status=eq.pending&select=id`,
+        { headers }
+      );
+      const others = await posRes.json();
+      if (others?.length > 0) {
+        const ids = others.map(i => i.id);
+        await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=in.(${ids.join(',')})`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ status: 'expired' })
+        });
+      }
     }
 
     // 5. Send confirmation email with calendar link, and gather the same
@@ -203,12 +209,12 @@ export default async function handler(req, res) {
     const confirmedPositionLabel = invite.position_key
       ? invite.position_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
       : null;
-    const confirmedCalUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${invite.event_id}&position=${encodeURIComponent(confirmedPositionLabel || '')}`;
+    const confirmedCalUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${encodeURIComponent(invite.event_id)}&position=${encodeURIComponent(confirmedPositionLabel || '')}`;
 
     try {
       const [eventRes, workerRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${invite.event_id}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`, { headers }),
-        fetch(`${SUPABASE_URL}/rest/v1/workers?id=eq.${invite.worker_id}&select=name,email&limit=1`, { headers })
+        fetch(`${SUPABASE_URL}/rest/v1/events?id=eq.${encodeURIComponent(invite.event_id)}&select=name,date,time,end_time,venue,address,dress_code,parking&limit=1`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/workers?id=eq.${encodeURIComponent(invite.worker_id)}&select=name,email&limit=1`, { headers })
       ]);
       const [events, workers] = await Promise.all([eventRes.json(), workerRes.json()]);
       const event = events?.[0];
@@ -233,7 +239,7 @@ export default async function handler(req, res) {
         const positionLabel = invite.position_key
           ? invite.position_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
           : 'your position';
-        const calUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${invite.event_id}&position=${encodeURIComponent(positionLabel)}`;
+        const calUrl = `https://gigstaffpro.vercel.app/api/calendar-event?event_id=${encodeURIComponent(invite.event_id)}&position=${encodeURIComponent(positionLabel)}`;
 
         const rows = [
           ['📅', 'Date', fmtDate(event.date)],
@@ -284,7 +290,7 @@ export default async function handler(req, res) {
     ));
   } else {
     // Declined
-    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${invite.id}`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/invitations?id=eq.${encodeURIComponent(invite.id)}`, {
       method: 'PATCH', headers,
       body: JSON.stringify({ status: 'declined', responded_at: new Date().toISOString() })
     });

@@ -5,26 +5,9 @@
 // site's visitors' browsers silently ride on this app's billed Google Maps
 // key. Rate limiting (below) caps abuse from direct/scripted callers, which
 // CORS can't do anyway since it's a browser-only mechanism.
-const RATE_LIMIT_MAX = 30;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const rateLimitBuckets = new Map();
+import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 
-function isRateLimited(ip) {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(ip);
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitBuckets.set(ip, { count: 1, windowStart: now });
-    return false;
-  }
-  bucket.count += 1;
-  return bucket.count > RATE_LIMIT_MAX;
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return String(forwarded).split(',')[0].trim();
-  return req.socket?.remoteAddress || 'unknown';
-}
+const isRateLimited = createRateLimiter(30, 60 * 1000);
 
 export default async function handler(req, res) {
   const ip = getClientIp(req);

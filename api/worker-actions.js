@@ -46,6 +46,31 @@ const positionMatches = (workerSkillKey, positionKey) => {
 
 const toKey = (label) => String(label || '').toLowerCase().replace(/\s+/g, '_');
 
+// Duplicate-application guard: a fast double-tap can fire two apply
+// requests before either insert lands, both passing handleApply's checks
+// off the same stale pre-insert snapshot. Re-check by creation order after
+// the fact — if an earlier active assignment already claims this same spot
+// for this worker, the later insert lost the race; delete it and return the
+// earlier one's status instead of leaving a duplicate row. Shared by both
+// insert paths in handleApply (the standby/full-event path and the
+// pending-or-approved path) so a double-tap is caught on either branch.
+async function dedupeApplyInsert(supabase, { eventId, workerId, pKey, insertedId, isCombinable }) {
+  const { data: dupCheck } = await supabase
+    .from('assignments')
+    .select('id, position, status, created_at')
+    .eq('event_id', eventId)
+    .eq('worker_id', workerId);
+  const activeDup = (dupCheck || [])
+    .filter(a => !['rejected', 'cancelled'].includes(a.status))
+    .filter(a => isCombinable ? toKey(a.position) === pKey : true)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  if (activeDup.length > 1 && activeDup[0].id !== insertedId) {
+    await supabase.from('assignments').delete().eq('id', insertedId);
+    return activeDup[0];
+  }
+  return null;
+}
+
 async function handleApply(supabase, { eventId, workerId, position }) {
   if (!eventId || !workerId || !position) {
     return { status: 400, body: { ok: false, error: 'eventId, workerId and position are required' } };
@@ -112,10 +137,18 @@ async function handleApply(supabase, { eventId, workerId, position }) {
       }
     }
 
-    const { error: insertError } = await supabase.from('assignments').insert([{
+    const { data: standbyInserted, error: insertError } = await supabase.from('assignments').insert([{
       event_id: eventId, worker_id: workerId, position: pKey, status: 'standby', applied_at: new Date().toISOString(),
-    }]);
+    }]).select('id, created_at').single();
     if (insertError) throw insertError;
+
+    const standbyLoser = await dedupeApplyInsert(supabase, {
+      eventId, workerId, pKey, insertedId: standbyInserted.id, isCombinable: COMBINABLE_POSITIONS.includes(pKey),
+    });
+    if (standbyLoser) {
+      return { status: 200, body: { ok: true, result: standbyLoser.status, message: 'You already applied to this event.' } };
+    }
+
     return { status: 200, body: { ok: true, result: 'standby' } };
   }
 
@@ -132,12 +165,17 @@ async function handleApply(supabase, { eventId, workerId, position }) {
 
   const isCombinable = COMBINABLE_POSITIONS.includes(pKey);
   if (!isCombinable) {
+    // Any active claim blocks a second non-combinable position at the same
+    // event — not just the narrower 'approved'/'pending'/'standby' set,
+    // which omits 'confirmed' (a legitimate status assignments can carry;
+    // see isAssignmentFilled in src/utils/positionHelpers.js) and let an
+    // already-confirmed worker double-book a second position with no check.
     const nonCombinableExisting = workerSameEventAssignments.filter(a =>
-      ['approved', 'pending', 'standby'].includes(a.status) && !COMBINABLE_POSITIONS.includes(toKey(a.position))
+      !['rejected', 'cancelled'].includes(a.status) && !COMBINABLE_POSITIONS.includes(toKey(a.position))
     );
     if (nonCombinableExisting.length > 0) {
       const existing = nonCombinableExisting[0];
-      const statusText = existing.status === 'approved' ? 'assigned to' : existing.status === 'standby' ? 'on standby for' : 'applied for';
+      const statusText = ['approved', 'confirmed'].includes(existing.status) ? 'assigned to' : existing.status === 'standby' ? 'on standby for' : 'applied for';
       return { status: 400, body: { ok: false, error: `You are already ${statusText} "${existing.position}" at this event. Workers can only work one position per event.` } };
     }
   }
@@ -152,26 +190,11 @@ async function handleApply(supabase, { eventId, workerId, position }) {
   }]).select('id, created_at').single();
   if (insertError) throw insertError;
 
-  // Duplicate-application guard: a fast double-tap can fire two apply
-  // requests before either insert lands, both passing the checks above off
-  // the same stale pre-insert snapshot. Re-check by creation order after
-  // the fact — if an earlier active assignment already claims this same
-  // spot for this worker, this insert lost the race; delete it and hand
-  // back the earlier one's status instead of leaving a duplicate row.
+  // Duplicate-application guard — see dedupeApplyInsert above.
   {
-    const { data: dupCheck } = await supabase
-      .from('assignments')
-      .select('id, position, status, created_at')
-      .eq('event_id', eventId)
-      .eq('worker_id', workerId);
-    const activeDup = (dupCheck || [])
-      .filter(a => !['rejected', 'cancelled'].includes(a.status))
-      .filter(a => isCombinable ? toKey(a.position) === pKey : true)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    if (activeDup.length > 1 && activeDup[0].id !== inserted.id) {
-      await supabase.from('assignments').delete().eq('id', inserted.id);
-      const existing = activeDup[0];
-      return { status: 200, body: { ok: true, result: existing.status, message: 'You already applied to this event.' } };
+    const loser = await dedupeApplyInsert(supabase, { eventId, workerId, pKey, insertedId: inserted.id, isCombinable });
+    if (loser) {
+      return { status: 200, body: { ok: true, result: loser.status, message: 'You already applied to this event.' } };
     }
   }
 

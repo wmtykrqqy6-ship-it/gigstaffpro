@@ -283,7 +283,7 @@ export default function PaymentsView({
           'Worker Email': assignment.worker.email,
           'Worker Phone': assignment.worker.phone,
           'Event Name': assignment.event.name,
-          'Event Date': new Date(assignment.event.date).toLocaleDateString('en-US'),
+          'Event Date': parseDateSafe(assignment.event.date).toLocaleDateString('en-US'),
           'Venue': assignment.event.venue,
           'Position': assignment.position,
           'Hours': assignment.hours || 0,
@@ -644,7 +644,7 @@ export default function PaymentsView({
                         <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">{getPositionLabel(assignment.position)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {assignment.hours || 0} hrs
@@ -713,7 +713,7 @@ export default function PaymentsView({
                       </h3>
                       {groupBy === 'event' && (
                         <p className="text-sm text-gray-600">
-                          {group.event.venue} • {new Date(group.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {group.event.venue} • {parseDateSafe(group.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
                       )}
                       {groupBy === 'worker' && (
@@ -758,7 +758,7 @@ export default function PaymentsView({
                         </p>
                         {groupBy === 'worker' && (
                           <p className="text-sm text-gray-600">
-                            {new Date(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {assignment.event.venue}
+                            {parseDateSafe(assignment.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {assignment.event.venue}
                           </p>
                         )}
                         <p className="text-xs text-gray-500 mt-1">

@@ -531,12 +531,13 @@ export default function WorkerPortalView({  loggedInWorker,
 
       setRespondingInvite(invitation.id);
       try {
-        await supabase.from('invitations')
+        const { error } = await supabase.from('invitations')
           .update({
             status: response,
             responded_at: new Date().toISOString()
           })
           .eq('id', invitation.id);
+        if (error) throw error;
         setPendingInvites(prev => prev.filter(i => i.id !== invitation.id));
         if (onReloadAssignments) onReloadAssignments();
         // Unlike the email Accept link, accepting here doesn't create the

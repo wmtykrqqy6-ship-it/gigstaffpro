@@ -117,7 +117,7 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
         }
 
         // Log the change
-        await supabase
+        const { error: logError } = await supabase
           .from('reliability_log')
           .insert([{
             worker_id: worker.id,
@@ -129,15 +129,23 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
             new_rating: parseFloat(newRating.toFixed(2))
           }]);
 
-        // Mark record as applied
-        await supabase
+        if (logError) throw logError;
+
+        // Mark record as applied. This MUST succeed once the reliability
+        // change above has landed — if it doesn't, the record stays
+        // rating_applied:false forever and every future retry of this loop
+        // re-applies the same change on top of the worker's already-updated
+        // rating, silently corrupting it.
+        const { error: appliedError } = await supabase
           .from('attendance_records')
           .update({ rating_applied: true })
           .eq('id', record.id);
+
+        if (appliedError) throw appliedError;
       }
 
       // Mark report as reviewed
-      await supabase
+      const { error: reviewError } = await supabase
         .from('post_event_reports')
         .update({
           reviewed_by_admin: true,
@@ -145,9 +153,17 @@ export default function ReportsView({ events, assignments, workers, timeFormat }
         })
         .eq('id', report.id);
 
+      if (reviewError) throw reviewError;
+
       await loadReports();
       notify('✅ Report approved! Reliability ratings have been updated.');
     } catch (error) {
+      // Refresh from the DB even on failure — a partial run above may have
+      // already updated some workers' reliability and marked their records
+      // rating_applied:true. Without this, the component's stale
+      // attendanceRecords state would let a retry re-apply those same
+      // changes a second time (see the rating_applied check's comment).
+      await loadReports();
       notify('Error approving report: ' + error.message);
     } finally {
       setApprovingId(null);

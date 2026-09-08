@@ -132,7 +132,8 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
 
   const markJoined = async (invite) => {
     try {
-      await supabase.from('worker_invites').update({ status: 'joined' }).eq('id', invite.id);
+      const { error } = await supabase.from('worker_invites').update({ status: 'joined' }).eq('id', invite.id);
+      if (error) throw error;
       await loadInvites();
     } catch (err) { notify('Error: ' + err.message); }
   };
@@ -140,7 +141,8 @@ export default function BulkInviteModal({ open, onClose, onSessionExpired }) {
   const deleteInvite = async (id) => {
     if (!(await confirm('Remove this invite record?'))) return;
     try {
-      await supabase.from('worker_invites').delete().eq('id', id);
+      const { error } = await supabase.from('worker_invites').delete().eq('id', id);
+      if (error) throw error;
       await loadInvites();
     } catch (err) { notify('Error: ' + err.message); }
   };

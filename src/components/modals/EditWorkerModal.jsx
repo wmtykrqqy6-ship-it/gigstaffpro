@@ -95,6 +95,37 @@ export default function EditWorkerModal({
       notify('Please select at least one skill');
       return;
     }
+
+    // The mount-time isMigratedWorker check above is best-effort and fails
+    // open (leaves the field editable) on any error, and can also go stale
+    // if the worker gets migrated while this modal is sitting open. Since
+    // RLS only lets a migrated worker's own auth_user_id read their
+    // worker_auth_links row -- not an admin's session -- there's no way to
+    // check this client-side with real authority; this endpoint runs the
+    // check with service role instead. Re-verify right before the write and
+    // fail CLOSED (block the save) rather than open, since this is the
+    // actual enforcement point, not just UI.
+    if (formData.phone !== (worker.phone || '')) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const res = await fetch('/api/admin-worker-migration-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ workerId: worker.id }),
+        });
+        if (!res.ok) throw new Error('status check failed');
+        const data = await res.json();
+        if (data.migrated) {
+          notify("This worker uses secure login — their phone number is linked to it and can't be changed here.");
+          return;
+        }
+      } catch (_) {
+        notify('Could not verify this worker\'s login status — try again before changing their phone number.');
+        return;
+      }
+    }
+
     setSaving(true);
     const { error } = await supabase
       .from('workers')

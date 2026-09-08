@@ -622,14 +622,17 @@ ${reInvitePayHtml}
           `Remove them from "${conflictEvent?.name}" and confirm here instead?`
         );
         if (!proceed) return;
-        await supabase.from('assignments').delete().eq('id', conflictAssignment.id);
+        const { error: deleteError } = await supabase.from('assignments').delete().eq('id', conflictAssignment.id);
+        if (deleteError) { notify('Error removing conflicting assignment: ' + deleteError.message); return; }
       }
     }
 
     setConfirming(invitation.id);
     try {
-      await supabase.from('assignments').insert({ event_id: event.id, worker_id: invitation.worker_id, position: invitation.position_key, status: 'confirmed' });
-      await supabase.from('invitations').update({ status: 'confirmed', responded_at: new Date().toISOString() }).eq('id', invitation.id);
+      const { error: insertError } = await supabase.from('assignments').insert({ event_id: event.id, worker_id: invitation.worker_id, position: invitation.position_key, status: 'confirmed' });
+      if (insertError) throw insertError;
+      const { error: updateError } = await supabase.from('invitations').update({ status: 'confirmed', responded_at: new Date().toISOString() }).eq('id', invitation.id);
+      if (updateError) throw updateError;
       const otherAccepted = acceptedInvites.filter(i => i.id !== invitation.id);
       if (otherAccepted.length > 0) await supabase.from('invitations').update({ status: 'standby' }).in('id', otherAccepted.map(i => i.id));
       await loadInvitations();
