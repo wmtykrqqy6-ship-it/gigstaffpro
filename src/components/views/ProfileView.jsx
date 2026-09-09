@@ -711,11 +711,11 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           <div>
             <p className="text-sm text-gray-500 mb-1">Last Worked</p>
             <p className="text-lg font-medium text-gray-900">
-              {worker.last_worked 
-                ? new Date(worker.last_worked).toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
+              {worker.last_worked
+                ? parseDateSafe(worker.last_worked).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
                   })
                 : 'N/A'}
             </p>

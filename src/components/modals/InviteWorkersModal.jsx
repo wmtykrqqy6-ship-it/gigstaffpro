@@ -222,7 +222,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     if (!confirmSend) return;
     setSending(true);
     try {
-      await supabase.from('invitations').insert(buildInviteRecords(confirmSend.workerIds));
+      const { error: insertError } = await supabase.from('invitations').insert(buildInviteRecords(confirmSend.workerIds));
+      if (insertError) throw insertError;
 
       // Send email to workers who have an email address
       // Resolve to human-readable label immediately
@@ -402,13 +403,14 @@ ${invitePayHtml}
     try {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + windowHours);
-      await supabase.from('invitations').update({
+      const { error: reInviteError } = await supabase.from('invitations').update({
         status: 'pending',
         responded_at: null,
         invited_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
         window_hours: windowHours
       }).eq('id', inv.id);
+      if (reInviteError) throw reInviteError;
 
       // Re-send email if worker has one
       const worker = workers.find(w => w.id === inv.worker_id);
@@ -574,11 +576,15 @@ ${reInvitePayHtml}
       }
 
       if (emailRes.ok) {
-        // Stamp reminder_sent_at so auto-cron won't double-send
-        await supabase
+        // Stamp reminder_sent_at so auto-cron won't double-send. The email
+        // already sent successfully by this point, so a failure here isn't
+        // surfaced as "reminder failed" (it didn't) -- just logged, since the
+        // worst case is the auto-cron system sending a second reminder later.
+        const { error: stampError } = await supabase
           .from('invitations')
           .update({ reminder_sent_at: new Date().toISOString() })
           .eq('id', inv.id);
+        if (stampError) console.error('Error stamping reminder_sent_at:', stampError);
         await loadInvitations();
       } else {
         notify('Failed to send reminder. Please try again.');

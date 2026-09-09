@@ -186,12 +186,21 @@ export default async function handler(req, res) {
       !UNFILLED.includes(a.status) &&
       (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
     ).length;
-    const assignmentStatus = filledForPositionNow >= neededCount ? 'standby' : 'approved';
+    let assignmentStatus = filledForPositionNow >= neededCount ? 'standby' : 'approved';
 
-    // 4. Create the assignment — safe now, this request is the sole winner of the claim
-    await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
+    // 4. Create the assignment — safe now, this request is the sole winner of
+    // the per-invitation claim above. That claim only guarantees THIS
+    // invitation can't double-accept; it doesn't stop two DIFFERENT pending
+    // invitations for the same multi-seat position from both reading
+    // filledForPositionNow before either insert lands, both computing
+    // 'approved', and both landing -- overbooking the position by one seat.
+    // Narrower window than the bug this fix replaced (one REST round-trip
+    // instead of the whole response window), but still reachable right after
+    // a rank-cascade invite blast. Return the inserted row so the race-guard
+    // below (step 4b) can demote it if it lost.
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/assignments`, {
       method: 'POST',
-      headers: { ...headers, Prefer: 'return=minimal' },
+      headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify({
         event_id: invite.event_id,
         worker_id: invite.worker_id,
@@ -199,6 +208,37 @@ export default async function handler(req, res) {
         status: assignmentStatus
       })
     });
+    const insertedRows = await insertRes.json();
+    const insertedAssignment = insertedRows?.[0];
+
+    // 4b. Race guard: re-count by creation order after the fact, mirroring
+    // api/worker-actions.js's handleApply isFirstCome guard, and demote
+    // anyone who overshot capacity to standby instead of leaving the
+    // position overbooked. Only needed when this insert actually claimed a
+    // seat -- an insert that already went to standby above can't overbook.
+    if (assignmentStatus === 'approved' && insertedAssignment) {
+      const raceCheckRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/assignments?event_id=eq.${encodeURIComponent(invite.event_id)}&select=id,position,status,created_at`,
+        { headers }
+      );
+      const raceCheck = await raceCheckRes.json();
+      const winners = (raceCheck || [])
+        .filter(a =>
+          !UNFILLED.includes(a.status) &&
+          (a.position === invite.position_key || (posDef && (a.position === posDef.key || a.position === posDef.name)))
+        )
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .slice(0, neededCount)
+        .map(a => a.id);
+
+      if (!winners.includes(insertedAssignment.id)) {
+        await fetch(`${SUPABASE_URL}/rest/v1/assignments?id=eq.${encodeURIComponent(insertedAssignment.id)}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ status: 'standby' })
+        });
+        assignmentStatus = 'standby';
+      }
+    }
 
     // 5. Expire any other pending invites for this same event+position slot,
     // but only once the slot is actually full -- an 'approved' assignment
