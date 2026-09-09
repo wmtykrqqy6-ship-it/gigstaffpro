@@ -14,7 +14,13 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -s -X POST \
+          status=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
-            https://gigstaffpro.vercel.app/api/send-availability-notifications
+            https://gigstaffpro.vercel.app/api/send-availability-notifications)
+          echo "HTTP status: $status"
+          cat /tmp/response.txt
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::send-availability-notifications returned HTTP $status"
+            exit 1
+          fi

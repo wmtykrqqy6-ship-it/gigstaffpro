@@ -1,10 +1,16 @@
 name: Send Event Reminders
 
+# Disabled (schedule trigger removed) as of 2026-09-09. This predates and
+# duplicates api/send-shift-reminders.js (created 2026-05-13), which sends
+# the same pre-shift reminders through a richer 96h/48h/24h/4h tiered
+# system with proper dedup via the shift_reminders_sent table. This
+# workflow was calling a separate Supabase Edge Function
+# (send-event-reminders) whose source isn't tracked in this repo, so it
+# couldn't be audited or kept in sync -- most likely sending workers a
+# second, duplicate reminder for every shift. Kept as workflow_dispatch
+# only so it can still be run manually if ever needed for reference.
 on:
-  schedule:
-    # Run every hour at :05 minutes past the hour
-    - cron: '5 * * * *'
-  workflow_dispatch: # Allows manual triggering for testing
+  workflow_dispatch: # Manual trigger only -- automatic schedule removed, see note above
 
 jobs:
   send-reminders:

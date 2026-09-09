@@ -14,7 +14,13 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -s -o /dev/null -w "%{http_code}" -X POST \
+          status=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
-            https://gigstaffpro.vercel.app/api/send-shift-reminders
+            https://gigstaffpro.vercel.app/api/send-shift-reminders)
+          echo "HTTP status: $status"
+          cat /tmp/response.txt
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::send-shift-reminders returned HTTP $status"
+            exit 1
+          fi
