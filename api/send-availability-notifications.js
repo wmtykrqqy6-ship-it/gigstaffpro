@@ -5,7 +5,7 @@
 // Deduplication: tracks sent notifications in event_availability_notifications table.
 
 import { escapeHtml } from './_lib/escapeHtml.js';
-import { renderEmailShell } from './_lib/emailShell.js';
+import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
@@ -45,6 +45,7 @@ async function sendEmail({ to, subject, html }) {
       to: [to],
       subject,
       html,
+      text: htmlToPlainText(html),
     }),
   });
   return res.ok;

@@ -3,7 +3,7 @@
 // URL: /api/invite-respond?token=<uuid>&action=accepted  OR  &action=declined
 
 import { escapeHtml } from './_lib/escapeHtml.js';
-import { renderEmailShell } from './_lib/emailShell.js';
+import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 // Service-role, not anon: this handler creates/updates assignments and
@@ -338,7 +338,8 @@ export default async function handler(req, res) {
               subject: assignmentStatus === 'approved'
                 ? `✅ Confirmed: ${event.name}`
                 : `You're on standby: ${event.name}`,
-              html: confirmHtml
+              html: confirmHtml,
+              text: htmlToPlainText(confirmHtml)
             })
           });
         }

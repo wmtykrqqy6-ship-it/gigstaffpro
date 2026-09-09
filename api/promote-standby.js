@@ -21,7 +21,7 @@
 
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 import { escapeHtml } from './_lib/escapeHtml.js';
-import { renderEmailShell } from './_lib/emailShell.js';
+import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -198,7 +198,8 @@ export default async function handler(req, res) {
               from: 'Vegas on Wheels <noreply@gigstaffpro.com>',
               to: worker.email,
               subject: `🎉 You're confirmed: ${event.name}`,
-              html: promoHtml
+              html: promoHtml,
+              text: htmlToPlainText(promoHtml)
             })
           });
         }

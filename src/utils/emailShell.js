@@ -21,3 +21,23 @@ export function renderEmailShell({ subtitle, bodyHtml, headerEmoji = '🎰' }) {
 </div>
 </body></html>`;
 }
+
+// Derives a plain-text alternative from the final HTML -- see api/_lib/
+// emailShell.js's copy of this function for why this exists.
+export function htmlToPlainText(html) {
+  return String(html || '')
+    .replace(/<(br|\/p|\/div|\/h[1-6]|\/li|\/tr)\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<a\s+[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gis, '$2 ($1)')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}

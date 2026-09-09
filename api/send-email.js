@@ -4,6 +4,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
+import { htmlToPlainText } from './_lib/emailShell.js';
 
 export const config = {
   api: {
@@ -142,7 +143,8 @@ export default async function handler(req, res) {
         from: 'Vegas on Wheels <noreply@gigstaffpro.com>',
         to: [trimmedTo],
         subject: trimmedSubject,
-        html
+        html,
+        text: htmlToPlainText(html)
       })
     });
 
