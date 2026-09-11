@@ -312,34 +312,45 @@ export default function WorkerPortalView({  loggedInWorker,
     };
 
     const switchPosition = async (assignment, newPositionKey) => {
-      // Same UTC-vs-local parsing bug cancelAssignment had (see its comment
-      // above) -- parseDateSafe/local-midnight avoids shifting the 7-day
-      // cutoff by a day in negative-UTC-offset zones.
-      const eventDate = parseDateSafe(assignment.event.date);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-      
-      // Check if within 7 days
-      if (daysUntil < 7) {
-        notify(
-          `⚠️ Cannot Switch Position\n\n` +
-          `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
-          `Position changes within 7 days require admin approval.\n` +
-          `Please contact your admin directly.`
-        );
-        return;
+      const isFromStandby = assignment.status === 'standby';
+
+      // The 7-day cutoff only applies to an already-confirmed worker
+      // rearranging between two open slots -- it doesn't apply when
+      // claiming an opening off the standby list (see the matching
+      // server-side comment in handleSwitchPosition for why: that's
+      // exactly the scenario this exists for, and late cancellations often
+      // open a spot inside this window).
+      if (!isFromStandby) {
+        // Same UTC-vs-local parsing bug cancelAssignment had (see its
+        // comment above) -- parseDateSafe/local-midnight avoids shifting
+        // the 7-day cutoff by a day in negative-UTC-offset zones.
+        const eventDate = parseDateSafe(assignment.event.date);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const daysUntil = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntil < 7) {
+          notify(
+            `⚠️ Cannot Switch Position\n\n` +
+            `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away.\n\n` +
+            `Position changes within 7 days require admin approval.\n` +
+            `Please contact your admin directly.`
+          );
+          return;
+        }
       }
 
       const newPositionLabel = getPositionLabel(newPositionKey);
       const currentPositionLabel = getPositionLabel(assignment.position);
 
-      if (!(await confirm(
-        `Switch position for "${assignment.event.name}"?\n\n` +
-        `From: ${currentPositionLabel}\n` +
-        `To: ${newPositionLabel}\n\n` +
-        `This change will take effect immediately.`
-      ))) {
+      const confirmMessage = isFromStandby
+        ? `Claim the open ${newPositionLabel} spot for "${assignment.event.name}"?\n\nYou'll leave the standby list for ${currentPositionLabel}.`
+        : `Switch position for "${assignment.event.name}"?\n\n` +
+          `From: ${currentPositionLabel}\n` +
+          `To: ${newPositionLabel}\n\n` +
+          `This change will take effect immediately.`;
+
+      if (!(await confirm(confirmMessage))) {
         return;
       }
 
@@ -350,10 +361,24 @@ export default function WorkerPortalView({  loggedInWorker,
           body: JSON.stringify({ action: 'switchPosition', assignmentId: assignment.id, workerId: currentWorker.id, newPosition: newPositionKey })
         });
         const result = await res.json();
-        if (!result.ok) throw new Error(result.error || 'Switch failed');
+
+        if (!result.ok) {
+          // Lost the race for a just-opened spot (someone else claimed it
+          // first) is an expected outcome, not really an "error" -- notify
+          // plainly rather than through the generic error-prefixed path.
+          notify(result.error || 'Switch failed');
+          onReloadAssignments();
+          return;
+        }
 
         onReloadAssignments();
-        notify(`✓ Position switched to ${newPositionLabel}!`);
+        if (isFromStandby) {
+          notify(result.newStatus === 'approved'
+            ? `✓ You're confirmed for ${newPositionLabel}!`
+            : `✓ Applied for ${newPositionLabel} — pending admin approval.`);
+        } else {
+          notify(`✓ Position switched to ${newPositionLabel}!`);
+        }
       } catch (error) {
         notify('Error switching position: ' + error.message);
       }
@@ -850,6 +875,51 @@ export default function WorkerPortalView({  loggedInWorker,
                             {getPositionLabel(assignment.position)}
                           </span>
                         </div>
+
+                        {/* Claim an open position instead of waiting on standby */}
+                        {(() => {
+                          const eventPositions = assignment.event.positions || [];
+                          const eventAssignments = assignments.filter(a => a.event_id === assignment.event.id && isAssignmentFilled(a.status));
+
+                          const openPositions = eventPositions.filter(pos => {
+                            const posKey = pos.key || pos.name || pos;
+                            if (posKey === assignment.position) return false;
+                            const hasSkill = currentWorker.skills?.some(skill => positionMatches(skill, posKey));
+                            if (!hasSkill) return false;
+                            const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                            return assignedCount < (pos.count || 0);
+                          });
+
+                          if (openPositions.length === 0) return null;
+
+                          return (
+                            <div className="mt-2 pt-2 border-t border-orange-200">
+                              <p className="text-xs font-medium text-gray-600 mb-1.5">Open now — claim instead?</p>
+                              <div className="space-y-1.5">
+                                {openPositions.map(pos => {
+                                  const posKey = pos.key || pos.name || pos;
+                                  const posLabel = getPositionLabel(posKey);
+                                  const assignedCount = eventAssignments.filter(a => a.position === posKey).length;
+                                  const needed = pos.count || 0;
+                                  return (
+                                    <div key={posKey} className="flex items-center justify-between bg-white rounded border border-gray-200 px-2 py-1.5">
+                                      <div>
+                                        <p className="text-xs font-medium text-gray-900">{posLabel}</p>
+                                        <p className="text-[11px] text-gray-500">{assignedCount} of {needed} spots filled</p>
+                                      </div>
+                                      <button
+                                        onClick={() => switchPosition(assignment, posKey)}
+                                        className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2.5 py-1 bg-blue-50 rounded hover:bg-blue-100"
+                                      >
+                                        Claim
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <button
                         onClick={async () => {

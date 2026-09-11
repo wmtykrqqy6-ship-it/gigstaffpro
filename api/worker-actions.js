@@ -307,19 +307,27 @@ async function handleSwitchPosition(supabase, { assignmentId, workerId, newPosit
   if (!assignment || assignment.worker_id !== workerId) {
     return { status: 404, body: { ok: false, error: 'Assignment not found' } };
   }
-  if (!isFilled(assignment.status)) {
+  const wasStandby = assignment.status === 'standby';
+  if (!isFilled(assignment.status) && !wasStandby) {
     return { status: 400, body: { ok: false, error: 'This assignment is not currently confirmed' } };
   }
 
   const { data: event, error: eventError } = await supabase
-    .from('events').select('id, date, positions').eq('id', assignment.event_id).maybeSingle();
+    .from('events').select('id, date, positions, staffing_mode').eq('id', assignment.event_id).maybeSingle();
   if (eventError) throw eventError;
   if (!event) return { status: 404, body: { ok: false, error: 'Event not found' } };
 
-  const [y, m, d] = event.date.split('-').map(Number);
-  const daysUntil = Math.ceil((new Date(y, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24));
-  if (daysUntil < 7) {
-    return { status: 400, body: { ok: false, error: `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away. Position changes within 7 days require admin approval — contact your admin directly.` } };
+  // The 7-day cutoff exists to stop a worker who's already confirmed from
+  // causing last-minute schedule churn. It doesn't apply here -- a standby
+  // worker claiming a newly-open spot is the exact scenario this feature
+  // exists for, and openings from a cancellation are often discovered
+  // *inside* that same 7-day window.
+  if (!wasStandby) {
+    const [y, m, d] = event.date.split('-').map(Number);
+    const daysUntil = Math.ceil((new Date(y, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24));
+    if (daysUntil < 7) {
+      return { status: 400, body: { ok: false, error: `This event is ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away. Position changes within 7 days require admin approval — contact your admin directly.` } };
+    }
   }
 
   const posDef = (event.positions || []).find(p => (p.key || p.name) === newPosition);
@@ -337,9 +345,51 @@ async function handleSwitchPosition(supabase, { assignmentId, workerId, newPosit
     return { status: 400, body: { ok: false, error: 'That position is already full' } };
   }
 
-  const { error: updateError } = await supabase.from('assignments').update({ position: newPosition }).eq('id', assignmentId);
+  // A standby worker claiming an open slot is a fresh claim on that
+  // position, not just a relabel -- it needs to respect the event's own
+  // staffing rules the same way a brand-new application would: instant
+  // 'approved' for first-come events, 'pending' for admin-approval events
+  // (the admin still gets the final say there, same as any other
+  // applicant). An already-confirmed worker switching between two open
+  // slots they're already approved for keeps their existing status as-is.
+  const newStatus = wasStandby
+    ? (event.staffing_mode === 'first-come' ? 'approved' : 'pending')
+    : assignment.status;
+
+  const { error: updateError } = await supabase.from('assignments')
+    .update({ position: newPosition, status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', assignmentId);
   if (updateError) throw updateError;
-  return { status: 200, body: { ok: true } };
+
+  // Race guard: two standby workers can both pass the capacity check above
+  // before either write lands, both claiming the same single opening.
+  // Only matters when this switch just claimed real capacity ('approved') --
+  // two 'pending' applications contending for one spot is the normal,
+  // already-handled admin-approval flow, not an overbooking risk. Mirrors
+  // the same re-count-by-creation-order-and-demote pattern used in
+  // handleApply's isFirstCome guard and invite-respond.js's accept-path
+  // guard.
+  if (newStatus === 'approved') {
+    const { data: raceCheck } = await supabase
+      .from('assignments').select('id, status, position, updated_at, created_at').eq('event_id', event.id);
+    const winners = (raceCheck || [])
+      .filter(a => a.position === newPosition && isFilled(a.status))
+      .sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at))
+      .slice(0, needed)
+      .map(a => a.id);
+
+    if (!winners.includes(assignmentId)) {
+      // Lost the race -- put them back on standby for their original
+      // position rather than leaving them incorrectly marked 'approved'
+      // for a slot that's actually full.
+      await supabase.from('assignments')
+        .update({ position: assignment.position, status: 'standby' })
+        .eq('id', assignmentId);
+      return { status: 200, body: { ok: false, error: 'Someone else claimed that spot just before you. You are still on standby for your original position.' } };
+    }
+  }
+
+  return { status: 200, body: { ok: true, newStatus } };
 }
 
 async function handleCheckIn(supabase, { assignmentId, workerId }) {
