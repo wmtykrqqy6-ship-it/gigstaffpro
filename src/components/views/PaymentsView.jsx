@@ -330,28 +330,164 @@ export default function PaymentsView({
       }
     };
 
+    // Turns a set of {header: value} rows into a downloadable CSV file.
+    // Shared by the two payout-summary exports below -- both need the same
+    // comma/quote escaping exportToCSV already has, just for a different
+    // (grouped, not per-shift) row shape.
+    const downloadCSV = (rows, filenamePrefix) => {
+      if (rows.length === 0) return;
+      const headers = Object.keys(rows[0]);
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row =>
+          headers.map(header => {
+            const value = row[header];
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // Both payout summaries below only look at the currently filtered set
+    // (respects the Event/Date/Worker filters already on this page) --
+    // scope to one event the day before it runs, exactly how checks
+    // actually get printed, by filtering to that event first.
+    const unclassifiedWorkerNames = [...new Set(
+      filteredAssignments
+        .filter(a => !a.worker.payment_type)
+        .map(a => a.worker.name)
+    )];
+
+    const exportContractorChecks = () => {
+      const grouped = {};
+      filteredAssignments
+        .filter(a => a.worker.payment_type === 'contractor')
+        .forEach(a => {
+          const key = a.worker_id;
+          if (!grouped[key]) {
+            grouped[key] = { name: a.worker.name, events: new Set(), total: 0 };
+          }
+          grouped[key].events.add(a.event.name);
+          grouped[key].total += a.total_pay || 0;
+        });
+
+      const rows = Object.values(grouped)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(g => ({
+          'Worker Name': g.name,
+          'Event(s)': [...g.events].join('; '),
+          'Amount': g.total.toFixed(2)
+        }));
+
+      if (rows.length === 0) {
+        notify('No contractor pay in the current filter to export.');
+        return;
+      }
+      downloadCSV(rows, 'contractor_checks');
+      if (unclassifiedWorkerNames.length > 0) {
+        notify(`Exported. Note: ${unclassifiedWorkerNames.length} worker(s) in this filter have no Pay Type set and were left off both exports: ${unclassifiedWorkerNames.join(', ')}`);
+      }
+    };
+
+    const exportEmployeeHours = () => {
+      const grouped = {};
+      filteredAssignments
+        .filter(a => a.worker.payment_type === 'employee')
+        .forEach(a => {
+          const key = a.worker_id;
+          if (!grouped[key]) {
+            grouped[key] = { name: a.worker.name, events: new Set(), hours: 0 };
+          }
+          grouped[key].events.add(a.event.name);
+          grouped[key].hours += a.hours || 0;
+        });
+
+      // Deliberately no dollar amount here -- QuickBooks Payroll computes
+      // an employee's actual check (withholding, taxes) from hours, not
+      // this app. Showing a "total pay" number here would look like a
+      // final check amount when it isn't one.
+      const rows = Object.values(grouped)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(g => ({
+          'Worker Name': g.name,
+          'Event(s)': [...g.events].join('; '),
+          'Hours': g.hours.toFixed(2)
+        }));
+
+      if (rows.length === 0) {
+        notify('No employee hours in the current filter to export.');
+        return;
+      }
+      downloadCSV(rows, 'employee_hours');
+      if (unclassifiedWorkerNames.length > 0) {
+        notify(`Exported. Note: ${unclassifiedWorkerNames.length} worker(s) in this filter have no Pay Type set and were left off both exports: ${unclassifiedWorkerNames.join(', ')}`);
+      }
+    };
+
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-3">
           <h2 className="text-3xl font-bold text-gray-900">Payment Tracking</h2>
-          <button
-            onClick={exportToCSV}
-            disabled={filteredAssignments.length === 0 || exportingCSV}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {exportingCSV ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Exporting...</span>
-              </>
-            ) : (
-              <>
-                <Download size={18} />
-                <span>Export to CSV</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={exportContractorChecks}
+              disabled={filteredAssignments.length === 0}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              title="One row per contractor, total pay summed across everything they worked in the current filter -- filter to one event first to match how checks get printed"
+            >
+              <Download size={18} />
+              <span>Contractor Check Summary</span>
+            </button>
+            <button
+              onClick={exportEmployeeHours}
+              disabled={filteredAssignments.length === 0}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              title="Hours only, for QuickBooks Payroll -- no dollar amount, since payroll calculates the actual check"
+            >
+              <Download size={18} />
+              <span>Employee Hours</span>
+            </button>
+            <button
+              onClick={exportToCSV}
+              disabled={filteredAssignments.length === 0 || exportingCSV}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {exportingCSV ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={18} />
+                  <span>Export to CSV</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
+
+        {unclassifiedWorkerNames.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertCircle size={18} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-yellow-800">
+              <strong>{unclassifiedWorkerNames.length} worker{unclassifiedWorkerNames.length !== 1 ? 's' : ''}</strong> in the current filter {unclassifiedWorkerNames.length !== 1 ? "don't" : "doesn't"} have a Pay Type set (Contractor or Employee) yet, so they won't appear on either summary export above: {unclassifiedWorkerNames.join(', ')}. Set it on their profile in Staff.
+            </p>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

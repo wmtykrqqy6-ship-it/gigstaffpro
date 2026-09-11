@@ -122,4 +122,4 @@ export const SUCCESS_MESSAGES = {
 // wildcard select fails outright rather than silently narrowing itself.
 // This applies to inserts/updates chained with .select() too, since that
 // also triggers a RETURNING * under the hood.
-export const WORKER_COLUMNS = 'id, name, phone, email, skills, rank, reliability, total_gigs, no_shows, last_worked, notes, certifications, preferred_contact, earnings, created_at, updated_at, is_active, address, shirt_size, photo_url, is_host, role, home_warehouse_id, home_location_id';
+export const WORKER_COLUMNS = 'id, name, phone, email, skills, rank, reliability, total_gigs, no_shows, last_worked, notes, certifications, preferred_contact, earnings, created_at, updated_at, is_active, address, shirt_size, photo_url, is_host, role, home_warehouse_id, home_location_id, payment_type';

@@ -17,7 +17,8 @@ export default function AddWorkerModal({
     skills: [],
     rank: 1,
     reliability: 5.0,
-    total_gigs: 0
+    total_gigs: 0,
+    payment_type: 'contractor'
   });
 
   // Use positions from settings as available skills
@@ -40,7 +41,8 @@ export default function AddWorkerModal({
         skills: [],
         rank: 1,
         reliability: 5.0,
-        total_gigs: 0
+        total_gigs: 0,
+        payment_type: 'contractor'
       });
     }
   };
@@ -141,6 +143,20 @@ export default function AddWorkerModal({
                   <option key={level} value={level}>Level {level}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pay Type *</label>
+              <select
+                required
+                value={formData.payment_type}
+                onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="contractor">Contractor (1099, paid by check)</option>
+                <option value="employee">Employee (W-2, paid through QuickBooks Payroll)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Determines which Payments export this worker appears on.</p>
             </div>
 
             <div className="flex space-x-3 pt-4">

@@ -20,6 +20,7 @@ export default function EditWorkerModal({
     rank: 1,
     home_location_id: null,
     is_host: false,
+    payment_type: '',
   });
   const [saving, setSaving] = useState(false);
   const [isMigratedWorker, setIsMigratedWorker] = useState(false);
@@ -35,6 +36,7 @@ export default function EditWorkerModal({
         rank: worker.rank || 1,
         home_location_id: worker.home_location_id || null,
         is_host: worker.is_host === true,
+        payment_type: worker.payment_type || '',
       });
     }
   }, [worker]);
@@ -137,6 +139,7 @@ export default function EditWorkerModal({
         rank: formData.rank,
         home_location_id: formData.home_location_id || null,
         is_host: formData.is_host,
+        payment_type: formData.payment_type || null,
       })
       .eq('id', worker.id);
 
@@ -284,6 +287,20 @@ export default function EditWorkerModal({
                   <option key={level} value={level}>Level {level}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pay Type</label>
+              <select
+                value={formData.payment_type}
+                onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">Not set yet</option>
+                <option value="contractor">Contractor (1099, paid by check)</option>
+                <option value="employee">Employee (W-2, paid through QuickBooks Payroll)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Determines which Payments export this worker appears on.</p>
             </div>
 
             <div className="flex space-x-3 pt-4">
