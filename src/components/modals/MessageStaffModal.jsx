@@ -21,6 +21,7 @@ export default function MessageStaffModal({
   workers,
   events,
   assignments,
+  presetEvent = null,
   onClose,
   onSessionExpired,
 }) {
@@ -46,8 +47,11 @@ export default function MessageStaffModal({
   // own locations/worker_locations rather than threading them down as props.
   useEffect(() => {
     if (!open) return;
-    setAudienceType('all');
-    setSelectedEventId('');
+    // Opened from a specific event's "Message Staff" button (next to
+    // Assign Staff) -- skip straight to that event instead of making the
+    // admin re-pick it from the dropdown they were just looking at.
+    setAudienceType(presetEvent ? 'event' : 'all');
+    setSelectedEventId(presetEvent ? presetEvent.id : '');
     setEventInviteeIds(new Set());
     setRankAll(true);
     setSelectedRanks(new Set());
@@ -75,7 +79,7 @@ export default function MessageStaffModal({
         });
         setWorkerLocationMap(map);
       });
-  }, [open]);
+  }, [open, presetEvent]);
 
   // "Staff of Event" needs everyone with any claim on that event --
   // assigned/standby (already loaded as a prop) AND invited (not loaded

@@ -96,6 +96,7 @@ const GigStaffPro = () => {
   const [adminAuthMessage, setAdminAuthMessage] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedEventForInvite, setSelectedEventForInvite] = useState(null);
+  const [selectedEventForMessage, setSelectedEventForMessage] = useState(null);
   const [locations, setLocations] = useState([]);
   const [activeLocation, setActiveLocation] = useState(() => {
     return localStorage.getItem('gigstaffpro_active_location') || 'all';
@@ -1286,7 +1287,7 @@ setAppPositions(storedPositions);
           activeLocation={activeLocation}
           onShowBulkInvite={() => setShowBulkInvite(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
-          onShowMessageStaff={() => setShowMessageStaff(true)}
+          onShowMessageStaff={() => { setSelectedEventForMessage(null); setShowMessageStaff(true); }}
           onSetPin={(worker) => {
             setSelectedWorkerForPin(worker);
             setShowSetPinModal(true);
@@ -1321,6 +1322,10 @@ setAppPositions(storedPositions);
           onOpenEditEvent={(event) => {
             setSelectedEvent(event);
             setShowEditEvent(true);
+          }}
+          onOpenMessageStaffModal={(event) => {
+            setSelectedEventForMessage(event);
+            setShowMessageStaff(true);
           }}
           onDeleteEvent={deleteEvent}
         />
@@ -1670,7 +1675,8 @@ setAppPositions(storedPositions);
         workers={workers}
         events={events}
         assignments={assignments}
-        onClose={() => setShowMessageStaff(false)}
+        presetEvent={selectedEventForMessage}
+        onClose={() => { setShowMessageStaff(false); setSelectedEventForMessage(null); }}
         onSessionExpired={handleAdminSessionExpired}
       />
       <SetPinModal

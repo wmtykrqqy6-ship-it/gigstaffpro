@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Send, SlidersHorizontal, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, User, Phone, Plus, Edit, Trash2, Send, SlidersHorizontal, AlertCircle, MessageSquare } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionKey, getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { supabase } from '../../supabaseClient';
@@ -13,6 +13,7 @@ export default function EventsView({
   onOpenAssignModal,
   onOpenInviteModal,
   onOpenEditEvent,
+  onOpenMessageStaffModal,
   onDeleteEvent,
   activeLocation = 'all'
 }) {
@@ -84,6 +85,10 @@ export default function EventsView({
 
   const openAssignModal = (event) => {
     onOpenAssignModal(event);
+  };
+
+  const openMessageStaffModal = (event) => {
+    onOpenMessageStaffModal(event);
   };
 
   // Get date range for filtering
@@ -404,14 +409,23 @@ export default function EventsView({
                       </span>
                     )}
                   </div>
-                  {/* Row 3: Assign Staff - full width on mobile */}
-                  <button 
-                    onClick={() => openAssignModal(event)}
-                    className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center space-x-2 text-sm font-medium"
-                  >
-                    <Users size={16} />
-                    <span>Assign Staff</span>
-                  </button>
+                  {/* Row 3: Assign Staff / Message Staff - full width on mobile */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={() => openAssignModal(event)}
+                      className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center space-x-2 text-sm font-medium"
+                    >
+                      <Users size={16} />
+                      <span>Assign Staff</span>
+                    </button>
+                    <button
+                      onClick={() => openMessageStaffModal(event)}
+                      className="w-full sm:w-auto bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 flex items-center justify-center space-x-2 text-sm font-medium"
+                    >
+                      <MessageSquare size={16} />
+                      <span>Message Staff</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
