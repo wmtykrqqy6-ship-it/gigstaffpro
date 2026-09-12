@@ -25,6 +25,7 @@ import LoginScreen from './components/LoginScreen';
 import NotificationsModal from './components/NotificationsModal';
 import SetPinModal from './components/modals/SetPinModal';
 import BulkInviteModal from './components/modals/BulkInviteModal';
+import MessageStaffModal from './components/modals/MessageStaffModal';
 import EditWorkerModal from './components/modals/EditWorkerModal';
 import AddEventModal from './components/modals/AddEventModal';
 import EditEventModal from './components/modals/EditEventModal';
@@ -69,6 +70,7 @@ const GigStaffPro = () => {
   const [showEditWorker, setShowEditWorker] = useState(false);
   const [showEditEvent, setShowEditEvent] = useState(false);
   const [showBulkInvite, setShowBulkInvite] = useState(false);
+  const [showMessageStaff, setShowMessageStaff] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
@@ -1284,6 +1286,7 @@ setAppPositions(storedPositions);
           activeLocation={activeLocation}
           onShowBulkInvite={() => setShowBulkInvite(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
+          onShowMessageStaff={() => setShowMessageStaff(true)}
           onSetPin={(worker) => {
             setSelectedWorkerForPin(worker);
             setShowSetPinModal(true);
@@ -1660,6 +1663,14 @@ setAppPositions(storedPositions);
         positions={positions}
         onClose={() => setShowBulkInvite(false)}
         onSuccess={null}
+        onSessionExpired={handleAdminSessionExpired}
+      />
+      <MessageStaffModal
+        open={showMessageStaff}
+        workers={workers}
+        events={events}
+        assignments={assignments}
+        onClose={() => setShowMessageStaff(false)}
         onSessionExpired={handleAdminSessionExpired}
       />
       <SetPinModal

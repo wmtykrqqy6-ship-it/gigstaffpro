@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck, MessageSquare } from 'lucide-react';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
@@ -22,6 +22,7 @@ export default function StaffView({
   assignments = [],
   onShowBulkInvite,
   onShowAddWorker,
+  onShowMessageStaff,
   onSetPin,
   onEditWorker,
   onDeleteWorker,
@@ -203,14 +204,21 @@ export default function StaffView({
         
         {/* Buttons - Stacked on Mobile, Side-by-side on Desktop */}
         <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
-          <button 
+          <button
+            onClick={onShowMessageStaff}
+            className="w-full md:w-auto bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 flex items-center justify-center space-x-2 transition-colors"
+          >
+            <MessageSquare size={20} />
+            <span>Message Staff</span>
+          </button>
+          <button
             onClick={onShowBulkInvite}
             className="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 transition-colors"
           >
             <Mail size={20} />
             <span>Invite Worker</span>
           </button>
-          <button 
+          <button
             onClick={onShowAddWorker}
             className="w-full md:w-auto bg-red-900 text-white px-6 py-3 rounded-lg hover:bg-red-800 flex items-center justify-center space-x-2 transition-colors"
           >
