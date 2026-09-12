@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
-  Calendar, Users, AlertCircle, Plus, Clock, 
-  MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList, UserPlus
+  Calendar, Users, AlertCircle, Plus, Clock,
+  MapPin, ChevronDown, CheckCircle, AlignJustify, History, ClipboardList, UserPlus, MessageSquare
 } from 'lucide-react';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
@@ -237,6 +237,7 @@ export default function DashboardView({
   onNavigate,
   onShowAddEvent,
   onShowAddWorker,
+  onShowMessageStaff,
   onOpenAssignModal,
   activeLocation = 'all'
 }) {
@@ -402,6 +403,13 @@ export default function DashboardView({
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
         <div className="flex space-x-2">
+          <button
+            onClick={onShowMessageStaff}
+            className="flex-1 sm:flex-none bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center justify-center space-x-2 text-sm"
+          >
+            <MessageSquare size={18} />
+            <span>Message Staff</span>
+          </button>
           <button
             onClick={onShowAddEvent}
             className="flex-1 sm:flex-none bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center justify-center space-x-2 text-sm"

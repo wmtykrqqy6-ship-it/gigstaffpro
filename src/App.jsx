@@ -1269,6 +1269,7 @@ setAppPositions(storedPositions);
           onNavigate={navigate}
           onShowAddEvent={() => setShowAddEvent(true)}
           onShowAddWorker={() => setShowAddWorker(true)}
+          onShowMessageStaff={() => { setSelectedEventForMessage(null); setShowMessageStaff(true); }}
           activeLocation={activeLocation}
           onOpenAssignModal={(event) => {
             setSelectedEvent(event);
