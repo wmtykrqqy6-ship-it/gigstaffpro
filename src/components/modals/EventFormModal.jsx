@@ -451,23 +451,23 @@ export default function EventFormModal({
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                       <input
                         type="time"
                         required
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                       <input
                         type="time"
                         value={formData.end_time}
                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
                   </div>
