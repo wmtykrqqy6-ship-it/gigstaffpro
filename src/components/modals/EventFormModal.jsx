@@ -49,6 +49,11 @@ export default function EventFormModal({
     meeting_point_lng: null
   });
   const [saving, setSaving] = useState(false);
+  // Tracks whether the admin has directly edited End Time this session --
+  // once true, changing Start Time stops overwriting it. Lets Start Time
+  // keep auto-filling a sensible End Time (most events run 3 hours) without
+  // clobbering a value the admin deliberately chose.
+  const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
   const [locations, setLocations] = useState([]);
   const [venues, setVenues] = useState([]);
   const [clients, setClients] = useState([]);
@@ -154,6 +159,7 @@ export default function EventFormModal({
       meeting_point_lat: event.meeting_point_lat || null,
       meeting_point_lng: event.meeting_point_lng || null
     });
+    setEndTimeManuallySet(false);
   }, [event]);
 
   const handleClientInput = (val) => {
@@ -211,6 +217,43 @@ export default function EventFormModal({
   const getPositionCount = (positionKey) => {
     const found = formData.positions.find(p => p.key === positionKey);
     return found ? found.count : 0;
+  };
+
+  // Events almost always land on a quarter-hour, so snap typed/picked times
+  // to the nearest 15 minutes instead of allowing e.g. 8:37.
+  const roundToNearestQuarterHour = (timeStr) => {
+    if (!timeStr) return timeStr;
+    const [h, m] = timeStr.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return timeStr;
+    const total = ((Math.round((h * 60 + m) / 15) * 15) % 1440 + 1440) % 1440;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  const addHoursToTime = (timeStr, hours) => {
+    if (!timeStr) return '';
+    const [h, m] = timeStr.split(':').map(Number);
+    const total = ((h * 60 + m + hours * 60) % 1440 + 1440) % 1440;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  const handleStartTimeChange = (rawValue) => {
+    const rounded = roundToNearestQuarterHour(rawValue);
+    setFormData(f => {
+      // Most events run 3 hours, so default End Time off of Start Time --
+      // but never override a value the admin already set on purpose
+      // (either typed directly, or already saved on the event being edited).
+      const shouldAutoFillEnd = !endTimeManuallySet && (!isEdit || !f.end_time);
+      return {
+        ...f,
+        time: rounded,
+        end_time: shouldAutoFillEnd && rounded ? addHoursToTime(rounded, 3) : f.end_time
+      };
+    });
+  };
+
+  const handleEndTimeChange = (rawValue) => {
+    setEndTimeManuallySet(true);
+    setFormData(f => ({ ...f, end_time: roundToNearestQuarterHour(rawValue) }));
   };
 
   // Auto-assign nearest warehouse by distance
@@ -314,6 +357,7 @@ export default function EventFormModal({
     setShowSaveVenuePrompt(false);
     setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
     setVenueSaved(false);
+    setEndTimeManuallySet(false);
     if (onSuccess) onSuccess();
     onClose();
   };
@@ -468,9 +512,10 @@ export default function EventFormModal({
                       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
                         <input
                           type="time"
+                          step="900"
                           required
                           value={formData.time}
-                          onChange={(e) => setFormData({...formData, time: e.target.value})}
+                          onChange={(e) => handleStartTimeChange(e.target.value)}
                           className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
                         />
                       </div>
@@ -480,8 +525,9 @@ export default function EventFormModal({
                       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
                         <input
                           type="time"
+                          step="900"
                           value={formData.end_time}
-                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                          onChange={(e) => handleEndTimeChange(e.target.value)}
                           className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
                         />
                       </div>
