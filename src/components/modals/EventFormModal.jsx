@@ -236,12 +236,25 @@ export default function EventFormModal({
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   };
 
+  // Rounding happens on blur, not on every keystroke -- the native time
+  // input assembles a typed value (e.g. "37" for minutes) across multiple
+  // onChange events, and overwriting its value mid-typing with an already-
+  // rounded one resets the field's own segment state, making it impossible
+  // to type a two-digit minute at all.
   const handleStartTimeChange = (rawValue) => {
-    const rounded = roundToNearestQuarterHour(rawValue);
     setFormData(f => {
-      // Most events run 3 hours, so default End Time off of Start Time --
-      // but never override a value the admin already set on purpose
-      // (either typed directly, or already saved on the event being edited).
+      const shouldAutoFillEnd = !endTimeManuallySet && (!isEdit || !f.end_time);
+      return {
+        ...f,
+        time: rawValue,
+        end_time: shouldAutoFillEnd && rawValue ? addHoursToTime(rawValue, 3) : f.end_time
+      };
+    });
+  };
+
+  const handleStartTimeBlur = () => {
+    setFormData(f => {
+      const rounded = roundToNearestQuarterHour(f.time);
       const shouldAutoFillEnd = !endTimeManuallySet && (!isEdit || !f.end_time);
       return {
         ...f,
@@ -253,7 +266,11 @@ export default function EventFormModal({
 
   const handleEndTimeChange = (rawValue) => {
     setEndTimeManuallySet(true);
-    setFormData(f => ({ ...f, end_time: roundToNearestQuarterHour(rawValue) }));
+    setFormData(f => ({ ...f, end_time: rawValue }));
+  };
+
+  const handleEndTimeBlur = () => {
+    setFormData(f => ({ ...f, end_time: roundToNearestQuarterHour(f.end_time) }));
   };
 
   // Auto-assign nearest warehouse by distance
@@ -516,6 +533,7 @@ export default function EventFormModal({
                           required
                           value={formData.time}
                           onChange={(e) => handleStartTimeChange(e.target.value)}
+                          onBlur={handleStartTimeBlur}
                           className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
                         />
                       </div>
@@ -528,6 +546,7 @@ export default function EventFormModal({
                           step="900"
                           value={formData.end_time}
                           onChange={(e) => handleEndTimeChange(e.target.value)}
+                          onBlur={handleEndTimeBlur}
                           className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
                         />
                       </div>
