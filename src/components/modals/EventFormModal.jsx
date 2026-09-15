@@ -450,7 +450,7 @@ export default function EventFormModal({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 min-w-0">
                     <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                       <input
