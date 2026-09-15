@@ -439,35 +439,35 @@ export default function EventFormModal({
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0 overflow-hidden">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
                     <input
                       type="date"
                       required
                       value={formData.date}
                       onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 min-w-0">
-                    <div className="min-w-0">
+                    <div className="min-w-0 overflow-hidden">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                       <input
                         type="time"
                         required
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
-                        className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 overflow-hidden">
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                       <input
                         type="time"
                         value={formData.end_time}
                         onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                        className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
                   </div>
