@@ -244,12 +244,12 @@ export default function ScheduleView({
 
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <h2 className="text-3xl font-bold text-gray-900">Schedule</h2>
-          <div className="flex space-x-2">
+          <div className="flex gap-2">
             <button
               onClick={() => setViewMode('calendar')}
-              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg flex items-center justify-center space-x-2 ${
                 viewMode === 'calendar'
                   ? 'bg-red-900 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -260,7 +260,7 @@ export default function ScheduleView({
             </button>
             <button
               onClick={() => setViewMode('agenda')}
-              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg flex items-center justify-center space-x-2 ${
                 viewMode === 'agenda'
                   ? 'bg-red-900 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -271,7 +271,7 @@ export default function ScheduleView({
             </button>
             <button
               onClick={() => setViewMode('worker')}
-              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg flex items-center justify-center space-x-2 ${
                 viewMode === 'worker'
                   ? 'bg-red-900 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
