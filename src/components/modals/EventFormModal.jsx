@@ -439,36 +439,52 @@ export default function EventFormModal({
                     />
                   </div>
 
-                  <div className="min-w-0 overflow-hidden">
+                  <div className="min-w-0">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    />
+                    {/* Border/rounding/focus-ring live on this wrapper, not the
+                        input -- iOS Safari's native date/time control can render
+                        a hair wider than its box internally, and overflow-hidden
+                        alone (previous attempt) clipped the input's own right-side
+                        rounded corner right along with that overflow, leaving a
+                        flat/"unfinished" edge. Keeping the visible border on a
+                        plain div (immune to that WebKit sizing quirk) and letting
+                        the borderless input's overflow get silently clipped inside
+                        it fixes the corner without depending on the input's own
+                        box being pixel-exact. */}
+                    <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
+                      <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 min-w-0">
-                    <div className="min-w-0 overflow-hidden">
+                    <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                      <input
-                        type="time"
-                        required
-                        value={formData.time}
-                        onChange={(e) => setFormData({...formData, time: e.target.value})}
-                        className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
+                        <input
+                          type="time"
+                          required
+                          value={formData.time}
+                          onChange={(e) => setFormData({...formData, time: e.target.value})}
+                          className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
+                        />
+                      </div>
                     </div>
-                    <div className="min-w-0 overflow-hidden">
+                    <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <input
-                        type="time"
-                        value={formData.end_time}
-                        onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                        className="w-full max-w-full min-w-0 box-border px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
+                        <input
+                          type="time"
+                          value={formData.end_time}
+                          onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                          className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
