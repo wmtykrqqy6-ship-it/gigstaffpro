@@ -6,10 +6,13 @@ import {
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
 import MonthCalendar from '../MonthCalendar';
+import EventsAgendaList from '../EventsAgendaList';
 
 // --- Inline Schedule Section ---
 function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssignModal, onNavigate }) {
-  const [viewMode, setViewMode] = useState('calendar');
+  // Month grid gets cramped at phone width, so mobile starts on the flat
+  // Agenda list instead -- desktop still defaults to Calendar.
+  const [viewMode, setViewMode] = useState(() => window.innerWidth < 768 ? 'agenda' : 'calendar'); // 'calendar' | 'agenda' | 'list'
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const today = new Date();
@@ -50,13 +53,13 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
                 <span className="hidden sm:inline">Calendar</span>
               </button>
               <button
-                onClick={() => setViewMode('list')}
+                onClick={() => setViewMode('agenda')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
-                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                  viewMode === 'agenda' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <AlignJustify size={14} />
-                <span className="hidden sm:inline">List</span>
+                <span className="hidden sm:inline">Agenda</span>
               </button>
             </div>
             <button
@@ -76,6 +79,13 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
           viewDate={selectedDate}
           onViewDateChange={setSelectedDate}
           onDayClick={() => setViewMode('list')}
+        />
+      ) : viewMode === 'agenda' ? (
+        <EventsAgendaList
+          events={events}
+          assignments={assignments}
+          timeFormat={timeFormat}
+          onSelectEvent={onOpenAssignModal}
         />
       ) : (
         <div className="bg-white rounded-lg shadow p-4 md:p-6">

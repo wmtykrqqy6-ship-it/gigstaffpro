@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle, AlignJustify } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import AssignWorkersModal from '../modals/AssignWorkersModal';
 import MonthCalendar from '../MonthCalendar';
+import EventsAgendaList from '../EventsAgendaList';
 
 export default function ScheduleView({
   events,
@@ -16,7 +17,9 @@ export default function ScheduleView({
   onUnassign,
   onSavePaymentSettings
 }) {
-    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
+    // Month grid gets cramped at phone width, so mobile starts on the flat
+    // Agenda list instead -- desktop still defaults to Calendar.
+    const [viewMode, setViewMode] = useState(() => window.innerWidth < 768 ? 'agenda' : 'calendar'); // 'calendar' | 'agenda' | 'list' | 'worker'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedWorker, setSelectedWorker] = useState(null);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -256,6 +259,17 @@ export default function ScheduleView({
               <span>Calendar</span>
             </button>
             <button
+              onClick={() => setViewMode('agenda')}
+              className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+                viewMode === 'agenda'
+                  ? 'bg-red-900 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              <AlignJustify size={18} />
+              <span>Agenda</span>
+            </button>
+            <button
               onClick={() => setViewMode('worker')}
               className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
                 viewMode === 'worker'
@@ -276,6 +290,14 @@ export default function ScheduleView({
             viewDate={selectedDate}
             onViewDateChange={setSelectedDate}
             onDayClick={() => setViewMode('list')}
+          />
+        )}
+        {viewMode === 'agenda' && (
+          <EventsAgendaList
+            events={events}
+            assignments={assignments}
+            timeFormat={timeFormat}
+            onSelectEvent={(event) => setSelectedEvent(event)}
           />
         )}
         {viewMode === 'list' && <ListView />}
