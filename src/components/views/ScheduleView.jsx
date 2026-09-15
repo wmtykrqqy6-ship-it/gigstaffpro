@@ -3,6 +3,7 @@ import { Calendar, ChevronDown, Users, Clock, MapPin, CheckCircle } from 'lucide
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import AssignWorkersModal from '../modals/AssignWorkersModal';
+import MonthCalendar from '../MonthCalendar';
 
 export default function ScheduleView({
   events,
@@ -41,170 +42,6 @@ export default function ScheduleView({
         const event = events.find(e => e.id === assignment.event_id);
         return { ...assignment, event };
       }).filter(a => a.event); // Only include assignments with valid events
-    };
-
-    // Generate calendar days for current month
-    const generateCalendarDays = () => {
-      const year = selectedDate.getFullYear();
-      const month = selectedDate.getMonth();
-      
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      const daysInMonth = lastDay.getDate();
-      const startingDayOfWeek = firstDay.getDay();
-      
-      const days = [];
-      
-      // Add empty cells for days before month starts
-      for (let i = 0; i < startingDayOfWeek; i++) {
-        days.push(null);
-      }
-      
-      // Add days of the month
-      for (let day = 1; day <= daysInMonth; day++) {
-        days.push(new Date(year, month, day));
-      }
-      
-      return days;
-    };
-
-    const changeMonth = (direction) => {
-      const newDate = new Date(selectedDate);
-      newDate.setMonth(newDate.getMonth() + direction);
-      setSelectedDate(newDate);
-    };
-
-    const formatMonthYear = (date) => {
-      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    };
-
-    const isToday = (date) => {
-      if (!date) return false;
-      const today = new Date();
-      return date.toDateString() === today.toDateString();
-    };
-
-    const CalendarView = () => {
-      const days = generateCalendarDays();
-      const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-      return (
-        <div className="bg-white rounded-lg shadow p-6">
-          {/* Calendar Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">{formatMonthYear(selectedDate)}</h3>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => changeMonth(-1)}
-                className="p-2 hover:bg-gray-100 rounded"
-              >
-                <ChevronDown size={20} className="transform rotate-90" />
-              </button>
-              <button
-                onClick={() => setSelectedDate(new Date())}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium"
-              >
-                Today
-              </button>
-              <button
-                onClick={() => changeMonth(1)}
-                className="p-2 hover:bg-gray-100 rounded"
-              >
-                <ChevronDown size={20} className="transform -rotate-90" />
-              </button>
-            </div>
-          </div>
-
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-2">
-            {/* Week day headers */}
-            {weekDays.map(day => (
-              <div key={day} className="text-center font-semibold text-gray-700 py-2">
-                {day}
-              </div>
-            ))}
-            
-            {/* Calendar days */}
-            {days.map((date, index) => {
-              if (!date) {
-                return <div key={`empty-${index}`} className="min-h-24 p-2 bg-gray-50 rounded"></div>;
-              }
-              
-              const dayEvents = getEventsForDate(date);
-              const hasEvents = dayEvents.length > 0;
-              
-              // Sort events by start time
-              const sortedDayEvents = [...dayEvents].sort((a, b) => {
-                const timeA = a.time || '00:00';
-                const timeB = b.time || '00:00';
-                return timeA.localeCompare(timeB);
-              });
-              
-              return (
-                <div
-                  key={date.toISOString()}
-                  className={`min-h-24 p-2 border rounded cursor-pointer transition-colors ${
-                    isToday(date)
-                      ? 'bg-red-50 border-red-300 ring-2 ring-red-200'
-                      : hasEvents
-                      ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                      : 'bg-white hover:bg-gray-50'
-                  }`}
-                  onClick={() => {
-                    setSelectedDate(date);
-                    if (hasEvents) {
-                      setViewMode('list');
-                    }
-                  }}
-                >
-                  <div className="text-sm font-semibold text-gray-900 mb-1">
-                    {date.getDate()}
-                  </div>
-                  {sortedDayEvents.slice(0, 2).map(event => {
-                    const eventAssignments = assignments.filter(a => a.event_id === event.id);
-                    const totalNeeded = event.positions?.reduce((sum, p) => sum + p.count, 0) || 0;
-                    const filled = eventAssignments.filter(a => isAssignmentFilled(a.status)).length;
-                    const isFullyStaffed = filled >= totalNeeded && totalNeeded > 0;
-                    
-                    return (
-                      <div
-                        key={event.id}
-                        className={`text-xs p-1 rounded mb-1 truncate ${
-                          isFullyStaffed ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
-                        }`}
-                        title={event.name}
-                      >
-                        {event.name}
-                      </div>
-                    );
-                  })}
-                  {dayEvents.length > 2 && (
-                    <div className="text-xs text-gray-600 font-medium">
-                      +{dayEvents.length - 2} more
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Legend */}
-          <div className="flex items-center space-x-4 mt-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-green-600 rounded"></div>
-              <span className="text-gray-700">Fully Staffed</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-              <span className="text-gray-700">Needs Staff</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-red-50 border-2 border-red-300 rounded"></div>
-              <span className="text-gray-700">Today</span>
-            </div>
-          </div>
-        </div>
-      );
     };
 
     const ListView = () => {
@@ -432,7 +269,15 @@ export default function ScheduleView({
           </div>
         </div>
 
-        {viewMode === 'calendar' && <CalendarView />}
+        {viewMode === 'calendar' && (
+          <MonthCalendar
+            events={events}
+            assignments={assignments}
+            viewDate={selectedDate}
+            onViewDateChange={setSelectedDate}
+            onDayClick={() => setViewMode('list')}
+          />
+        )}
         {viewMode === 'list' && <ListView />}
         {viewMode === 'worker' && <WorkerScheduleView />}
 

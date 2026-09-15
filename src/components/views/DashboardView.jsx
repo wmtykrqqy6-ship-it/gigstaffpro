@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { formatTime, parseDateSafe } from '../../utils/dateHelpers';
+import MonthCalendar from '../MonthCalendar';
 
 // --- Inline Schedule Section ---
 function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssignModal, onNavigate }) {
@@ -13,36 +14,6 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const getEventsForDate = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    return events.filter(e => (e.date || '').split('T')[0] === dateStr);
-  };
-
-  const generateCalendarDays = () => {
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-    for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
-    for (let d = 1; d <= lastDay.getDate(); d++) days.push(new Date(year, month, d));
-    return days;
-  };
-
-  const changeMonth = (dir) => {
-    const d = new Date(selectedDate);
-    d.setMonth(d.getMonth() + dir);
-    setSelectedDate(d);
-  };
-
-  const isToday = (date) => date && date.toDateString() === new Date().toDateString();
-
-  const days = generateCalendarDays();
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // List view: events for selected date
   const selectedDateStr = (() => {
@@ -56,109 +27,58 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 md:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-gray-900">Schedule</h3>
-        <div className="flex items-center space-x-2">
-          {/* Toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+    // MonthCalendar (calendar mode) is a full white card of its own --
+    // matching the Schedule page's Calendar view exactly, which is what
+    // this widget was upgraded to use instead of its own smaller/simplified
+    // copy of the same day-grid logic. Header and List mode each get their
+    // own card at this outer level too, rather than nesting MonthCalendar's
+    // card inside a second card (double shadow/padding/rounded corners).
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 md:p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold text-gray-900">Schedule</h3>
+          <div className="flex items-center space-x-2">
+            {/* Toggle */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
+                  viewMode === 'calendar' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Calendar size={14} />
+                <span className="hidden sm:inline">Calendar</span>
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <AlignJustify size={14} />
+                <span className="hidden sm:inline">List</span>
+              </button>
+            </div>
             <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
-                viewMode === 'calendar' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-              }`}
+              onClick={() => onNavigate('schedule')}
+              className="text-xs text-red-900 hover:underline font-medium"
             >
-              <Calendar size={14} />
-              <span className="hidden sm:inline">Calendar</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center space-x-1 ${
-                viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <AlignJustify size={14} />
-              <span className="hidden sm:inline">List</span>
+              Full view →
             </button>
           </div>
-          <button
-            onClick={() => onNavigate('schedule')}
-            className="text-xs text-red-900 hover:underline font-medium"
-          >
-            Full view →
-          </button>
         </div>
       </div>
 
       {viewMode === 'calendar' ? (
-        <>
-          {/* Month nav */}
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-lg font-semibold text-gray-800">
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </h4>
-            <div className="flex items-center space-x-1">
-              <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded">
-                <ChevronDown size={18} className="rotate-90" />
-              </button>
-              <button onClick={() => setSelectedDate(new Date())} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-medium">
-                Today
-              </button>
-              <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded">
-                <ChevronDown size={18} className="-rotate-90" />
-              </button>
-            </div>
-          </div>
-          {/* Grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {weekDays.map(d => (
-              <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d.charAt(0)}</div>
-            ))}
-            {days.map((date, i) => {
-              if (!date) return <div key={`e-${i}`} className="min-h-10 md:min-h-14 bg-gray-50 rounded" />;
-              const dayEvts = getEventsForDate(date);
-              const isPast = date < new Date(today);
-              return (
-                <div
-                  key={date.toISOString()}
-                  onClick={() => { setSelectedDate(date); if (dayEvts.length) setViewMode('list'); }}
-                  className={`min-h-10 md:min-h-14 p-1 border rounded cursor-pointer transition-colors ${
-                    isToday(date) ? 'bg-red-50 border-red-300 ring-1 ring-red-200'
-                    : isPast ? 'bg-gray-50 border-gray-100'
-                    : dayEvts.length ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                    : 'bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`text-xs font-semibold mb-0.5 ${isPast && !isToday(date) ? 'text-gray-300' : 'text-gray-800'}`}>
-                    {date.getDate()}
-                  </div>
-                  {dayEvts.slice(0, 2).map(ev => {
-                    const filled = assignments.filter(a => a.event_id === ev.id && isAssignmentFilled(a.status)).length;
-                    const total = ev.positions?.reduce((s, p) => s + (p.count || 1), 0) || 0;
-                    return (
-                      <div key={ev.id} className={`text-xs p-0.5 rounded mb-0.5 truncate ${
-                        isPast
-                          ? 'bg-gray-300 text-gray-500'
-                          : filled >= total && total > 0 ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'
-                      }`}>
-                        {ev.name}
-                      </div>
-                    );
-                  })}
-                  {dayEvts.length > 2 && <div className="text-xs text-gray-400">+{dayEvts.length - 2}</div>}
-                </div>
-              );
-            })}
-          </div>
-          {/* Legend */}
-          <div className="flex items-center space-x-4 mt-3 text-xs text-gray-600">
-            <span className="flex items-center space-x-1"><span className="w-3 h-3 bg-green-600 rounded inline-block" /> Staffed</span>
-            <span className="flex items-center space-x-1"><span className="w-3 h-3 bg-yellow-500 rounded inline-block" /> Needs Staff</span>
-          </div>
-        </>
+        <MonthCalendar
+          events={events}
+          assignments={assignments}
+          viewDate={selectedDate}
+          onViewDateChange={setSelectedDate}
+          onDayClick={() => setViewMode('list')}
+        />
       ) : (
-        <>
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           {/* List view header */}
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-base font-semibold text-gray-800">
@@ -221,7 +141,7 @@ function ScheduleSection({ events, assignments, workers, timeFormat, onOpenAssig
               })}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
