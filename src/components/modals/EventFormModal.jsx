@@ -17,6 +17,10 @@ export default function EventFormModal({
   positions,
   workers = [],
   warehouses = [],
+  // Create mode only: values to prefill (e.g. from a Goodshuffle pull sheet
+  // import), and a callback given the new event's id right after insert.
+  initialData = null,
+  onCreated,
   onClose,
   onSuccess
 }) {
@@ -104,6 +108,13 @@ export default function EventFormModal({
       .order('name')
       .then(({ data }) => setClients(data || []));
   }, [open, isEdit]);
+
+  // Create mode only: apply prefill values when the modal opens with them.
+  useEffect(() => {
+    if (!open || isEdit || !initialData) return;
+    setFormData(f => ({ ...f, ...initialData }));
+    setEndTimeManuallySet(!!initialData.end_time);
+  }, [open, isEdit, initialData]);
 
   // Edit mode only: populate the form whenever the event to edit changes.
   useEffect(() => {
@@ -327,6 +338,7 @@ export default function EventFormModal({
         const { data: inserted, error } = await supabase.from('events').insert([saveData]).select('id').single();
         if (error) throw error;
         insertedId = inserted?.id || null;
+        if (insertedId && onCreated) await onCreated(insertedId);
       }
 
       // Create-only: best-effort, notify workers of ranks whose access

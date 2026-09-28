@@ -39,6 +39,7 @@ import EventsView from './components/views/EventsView';
 import StaffView from './components/views/StaffView';
 import PaymentsView from './components/views/PaymentsView';
 import ScheduleView from './components/views/ScheduleView';
+import LogisticsView from './components/views/LogisticsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
@@ -1344,6 +1345,18 @@ setAppPositions(storedPositions);
           onAssign={handleAssignWorker}
           onUnassign={handleUnassignWorker}
           onSavePaymentSettings={handleSaveEventPaymentSettings}
+        />
+      );
+    }
+    if (currentView === 'logistics') {
+      return (
+        <LogisticsView
+          events={events}
+          positions={positions}
+          workers={workers}
+          timeFormat={timeFormat}
+          activeLocation={activeLocation}
+          onEventsChanged={loadEvents}
         />
       );
     }
