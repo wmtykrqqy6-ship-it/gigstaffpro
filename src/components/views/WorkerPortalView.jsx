@@ -8,6 +8,7 @@ import AvailableEventsSection from '../AvailableEventsSection';
 import ProfileView from './ProfileView';
 import HistoryView from './HistoryView';
 import PostEventReportModal from '../modals/PostEventReportModal';
+import CrewRoute from '../logistics/CrewRoute';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
@@ -607,6 +608,9 @@ export default function WorkerPortalView({  loggedInWorker,
           />
         ) : (
           <>
+        {/* Setup crew's truck route (renders nothing unless they're on a truck team) */}
+        <CrewRoute worker={currentWorker} events={events} workers={workers} assignments={assignments} timeFormat={timeFormat} />
+
         {/* Pending Invites Banner - highest priority */}
         {pendingInvites.length > 0 && (
           <div className="bg-white rounded-lg shadow border-l-4 border-red-900 p-6">

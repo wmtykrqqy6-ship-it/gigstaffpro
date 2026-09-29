@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown, X,
-  AlertTriangle, XCircle, CheckCircle, Warehouse, Users, Minus
+  AlertTriangle, XCircle, CheckCircle, Warehouse, Users, Minus, Printer
 } from 'lucide-react';
+import LoadSheet from './LoadSheet';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
@@ -53,6 +54,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   const [busy, setBusy] = useState(false);
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [sheetLoadIds, setSheetLoadIds] = useState(null); // load ids shown in the load sheet overlay
 
   const dayEvents = useMemo(
     () => schedulable.filter(e => dateOnly(e.date) === date).sort((a, b) => (a.time || '').localeCompare(b.time || '')),
@@ -187,6 +189,18 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
     act(() => deleteLoad(load.id));
   };
 
+  // Trips in truck-priority then trip order, for "All load sheets".
+  const sheetOrder = activeTrucks.flatMap(t => {
+    const run = day.runs.find(r => r.truck_id === t.id);
+    return run ? day.loads.filter(l => l.run_id === run.id).sort((a, b) => a.sequence - b.sequence) : [];
+  });
+  const sheets = (sheetLoadIds || []).map(id => {
+    const load = day.loads.find(l => l.id === id);
+    const run = load && day.runs.find(r => r.id === load.run_id);
+    const truck = run && trucksById[run.truck_id];
+    return load && run && truck ? { load, run, truck } : null;
+  }).filter(Boolean);
+
   if (schemaMissing) {
     return (
       <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 text-sm">
@@ -219,6 +233,14 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
           {parseDateSafe(date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
         </span>
         <span className="text-xs text-gray-500">· {dayEvents.length} event{dayEvents.length === 1 ? '' : 's'}</span>
+        {day.loads.length > 0 && (
+          <button
+            onClick={() => setSheetLoadIds(sheetOrder.map(l => l.id))}
+            className="ml-auto text-sm px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 inline-flex items-center gap-1.5"
+          >
+            <Printer size={14} /> All load sheets
+          </button>
+        )}
       </div>
 
       {loadError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">Error loading the day: {loadError}</div>}
@@ -323,11 +345,24 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
                 onDeleteStop={(stop) => act(() => deleteStops([stop.id]))}
                 onMoveStop={(stopId, dir) => handleMoveStop(run, stopId, dir)}
                 onAddEveningStop={(type, eventId) => handleAddEveningStop(run, type, eventId)}
+                onOpenLoadSheet={(load) => setSheetLoadIds([load.id])}
               />
             );
           })}
         </div>
       )}
+
+      <LoadSheet
+        open={!!sheetLoadIds}
+        onClose={() => setSheetLoadIds(null)}
+        date={date}
+        sheets={sheets}
+        ctx={{ loads: day.loads, allocations: day.allocations, equipmentByEvent }}
+        stops={day.stops}
+        eventsById={eventsById}
+        workersById={workersById}
+        timeFormat={timeFormat}
+      />
     </div>
   );
 }
@@ -337,7 +372,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 function TruckColumn({
   truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, workersById, assignments,
   conflicts, timeFormat, onCreateRun, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
-  onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop
+  onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet
 }) {
   const [notes, setNotes] = useState(run?.notes || '');
   useEffect(() => setNotes(run?.notes || ''), [run?.notes]);
@@ -475,6 +510,7 @@ function TruckColumn({
                 Trip {load.sequence}{load.sequence > 1 ? ' (reload)' : ''}
               </div>
               <div className="flex items-center gap-1.5">
+                <button onClick={() => onOpenLoadSheet(load)} className="p-1 text-gray-400 hover:text-gray-700" title="Load sheet"><Printer size={14} /></button>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${style.badge}`}>{style.label}</span>
                 {load.sequence > 1 && (
                   <button onClick={() => onDeleteTrip(load)} className="p-1 text-gray-400 hover:text-red-700" title="Remove trip"><Trash2 size={13} /></button>

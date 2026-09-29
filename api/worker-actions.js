@@ -14,6 +14,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
+import { handleRouteCheck, handleRouteStopStatus } from './_lib/routeActions.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -570,6 +571,12 @@ export default async function handler(req, res) {
         break;
       case 'signup':
         result = await handleSignup(supabase, params);
+        break;
+      case 'routeCheck':
+        result = await handleRouteCheck(supabase, params);
+        break;
+      case 'routeStopStatus':
+        result = await handleRouteStopStatus(supabase, params);
         break;
       default:
         return res.status(400).json({ ok: false, error: 'Unknown action' });

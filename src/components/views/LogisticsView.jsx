@@ -6,6 +6,7 @@ import { groupEquipment } from '../../utils/logistics/importMatch';
 import { FitsOnBadges, CapacityBreakdown, equipmentSummaryText } from '../logistics/CapacityDisplay';
 import ImportPullSheetModal from '../logistics/ImportPullSheetModal';
 import DispatchBoard from '../logistics/DispatchBoard';
+import ReturnsPanel from '../logistics/ReturnsPanel';
 import TruckSettings from '../logistics/TruckSettings';
 import CatalogSettings from '../logistics/CatalogSettings';
 import {
@@ -120,6 +121,7 @@ export default function LogisticsView({
         {[
           { id: 'dispatch', label: '🗓️ Dispatch' },
           { id: 'events', label: '📦 Event Equipment' },
+          { id: 'returns', label: '↩️ Returns' },
           { id: 'trucks', label: '🚚 Trucks' },
           { id: 'catalog', label: '🏷️ Catalog' }
         ].map(t => (
@@ -202,6 +204,7 @@ export default function LogisticsView({
           activeLocation={activeLocation}
         />
       )}
+      {!schemaMissing && tab === 'returns' && <ReturnsPanel events={events} trucks={trucks} workers={workers} />}
       {!schemaMissing && tab === 'trucks' && <TruckSettings trucks={trucks} onChanged={reload} />}
       {!schemaMissing && tab === 'catalog' && <CatalogSettings catalog={catalog} onChanged={reload} />}
 

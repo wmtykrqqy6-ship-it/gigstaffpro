@@ -89,8 +89,18 @@ const must = ({ data, error }) => {
 };
 
 // Everything planned for one date: runs, their loads, allocations and stops.
-export async function loadDispatchDay(date) {
-  const runs = must(await supabase.from('daily_runs').select('*').eq('run_date', date)) || [];
+export function loadDispatchDay(date) {
+  return loadDispatchRange(date, date);
+}
+
+// Same, for a date range (inclusive) -- used by the Returns tab.
+export async function loadDispatchRange(fromDate, toDate) {
+  const runs = must(await supabase.from('daily_runs').select('*').gte('run_date', fromDate).lte('run_date', toDate)) || [];
+  return loadRunDetails(runs);
+}
+
+// Loads, allocations and stops for a set of runs.
+async function loadRunDetails(runs) {
   if (!runs.length) return { runs, loads: [], allocations: [], stops: [] };
   const runIds = runs.map(r => r.id);
   const [loads, stops] = await Promise.all([
@@ -161,4 +171,43 @@ export async function deleteStops(stopIds) {
 // Persist a new stop order: [{ id, sequence }] -- only rows that changed.
 export async function resequenceStops(changes) {
   await Promise.all(changes.map(c => supabase.from('run_stops').update({ sequence: c.sequence }).eq('id', c.id).then(must)));
+}
+
+// ---- Field views (phase 3) ------------------------------------------------
+
+export const FIELD_MIGRATION = '20260929120000_add_logistics_field_views.sql';
+
+export async function loadChecks(stopIds) {
+  if (!stopIds.length) return [];
+  const rows = [];
+  for (let i = 0; i < stopIds.length; i += 100) {
+    rows.push(...(must(await supabase.from('route_item_checks').select('*').in('stop_id', stopIds.slice(i, i + 100))) || []));
+  }
+  return rows;
+}
+
+// A worker's runs in a date window, plus the full day plan for each of those
+// dates (a split event's per-truck share depends on the other trucks too).
+export async function loadWorkerRoutes(workerId, fromDate, toDate) {
+  // Interpolated into a PostgREST filter string below, so only a UUID.
+  if (!/^[0-9a-f-]{36}$/i.test(String(workerId))) return { mine: [], day: { runs: [], loads: [], allocations: [], stops: [] } };
+  const mine = must(await supabase
+    .from('daily_runs')
+    .select('*')
+    .or(`worker1_id.eq.${workerId},worker2_id.eq.${workerId}`)
+    .gte('run_date', fromDate)
+    .lte('run_date', toDate)
+    .order('run_date')) || [];
+  if (!mine.length) return { mine, day: { runs: [], loads: [], allocations: [], stops: [] } };
+  const dates = [...new Set(mine.map(r => r.run_date))];
+  const allRuns = must(await supabase.from('daily_runs').select('*').in('run_date', dates)) || [];
+  return { mine, day: await loadRunDetails(allRuns) };
+}
+
+// Admin correction from the Returns tab (e.g. "found it at the warehouse").
+export async function saveReturnCheck(row) {
+  must(await supabase.from('route_item_checks').upsert(
+    [{ ...row, check_type: 'returned', checked_by_worker_id: null, checked_at: new Date().toISOString() }],
+    { onConflict: 'stop_id,item_key,check_type' }
+  ));
 }

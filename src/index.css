@@ -15,3 +15,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* Load sheets (Logistics): while a sheet is open, printing shows only it. */
+@media print {
+  body.printing-sheet > *:not(#print-root) {
+    display: none !important;
+  }
+  body.printing-sheet #print-root {
+    position: static !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  .print-page-break {
+    break-after: page;
+  }
+}
