@@ -3,7 +3,8 @@ import {
   toMinutes, stopWindow, eventWindow, formatMinutes,
   requiredCounts, allocatedCounts, allocationStatus, formatCounts, checkLoad,
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
-  orderRunStops, sequenceChanges, moveStop, planAddEventToLoad
+  orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
+  DRIVER_POSITION_KEY, driverRuleActive, isDriver, eligibleDrivers
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -354,5 +355,35 @@ describe('planAddEventToLoad', () => {
       ]
     });
     expect(plan.stops.map(s => [s.stop_type, s.load_id, s.sequence])).toEqual([['deliver', 'lY2', 3]]);
+  });
+});
+
+describe('Setup Driver rule', () => {
+  const POSITIONS = [{ key: 'blackjack', label: 'Blackjack' }, { key: 'setup_driver', label: 'Setup Driver' }];
+  const ana = { id: 'w1', name: 'Ana', skills: ['blackjack', 'setup_driver'] };
+  const ben = { id: 'w2', name: 'Ben', skills: ['blackjack'] };
+  const cy = { id: 'w3', name: 'Cy', skills: ['setup_driver'], is_active: false };
+
+  it('the key matches what Settings -> Positions makes from "Setup Driver"', () => {
+    expect('Setup Driver'.trim().toLowerCase().replace(/\s+/g, '_')).toBe(DRIVER_POSITION_KEY);
+  });
+
+  it('only active Setup Drivers are eligible once the position exists', () => {
+    expect(eligibleDrivers([ana, ben, cy], POSITIONS).map(w => w.name)).toEqual(['Ana']);
+    expect(isDriver(ben)).toBe(false);
+  });
+
+  it('before the position exists, everyone active is eligible', () => {
+    expect(driverRuleActive([{ key: 'blackjack' }])).toBe(false);
+    expect(eligibleDrivers([ana, ben, cy], [{ key: 'blackjack' }]).map(w => w.name)).toEqual(['Ana', 'Ben']);
+  });
+
+  it('warns about a non-driver on a truck, only when the rule is active', () => {
+    const day = cleanDay();
+    day.workersById = { ...WORKERS, w1: { ...WORKERS.w1, skills: ['setup_driver'] }, w2: { ...WORKERS.w2, skills: ['blackjack'] },
+      w3: { ...WORKERS.w3, skills: ['setup_driver'] }, w4: { ...WORKERS.w4, skills: ['setup_driver'] } };
+    expect(computeDayConflicts(day)).toEqual([]); // no positions passed -> rule off
+    const c = computeDayConflicts({ ...day, positions: POSITIONS });
+    expect(c).toEqual([expect.objectContaining({ level: 'warning', code: 'not-a-driver', runId: 'rB', message: "Ben is on Black but isn't marked as a Setup Driver" })]);
   });
 });

@@ -198,6 +198,7 @@ export default function LogisticsView({
           trucks={trucks}
           workers={workers}
           assignments={assignments}
+          positions={positions}
           timeFormat={timeFormat}
         />
       )}

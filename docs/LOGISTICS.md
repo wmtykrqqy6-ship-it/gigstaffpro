@@ -105,6 +105,11 @@ allocations will need this to become an in-place update so allocations survive.
 Logistics → **Dispatch**. One day at a time, one column per active truck.
 
 - **Run** (`daily_runs`): a truck on a day with its 2-person setup team. One per truck per day.
+- **Setup Drivers:** only workers with the **Setup Driver** skill can be put on a truck team. It's an
+  ordinary position (Settings → Positions, named exactly "Setup Driver" → key `setup_driver`) ticked on
+  the worker's profile; only admins can change skills. Until that position exists the dropdowns list
+  everyone. Someone already on a team without the skill stays listed and gets a warning, so nobody is
+  dropped silently.
 - **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
 - **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
   Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,
@@ -177,4 +182,4 @@ the plan. "Found it" / "Mark all found" records items as returned.
 - How do chairs, the archway, and decorations appear on pull sheets? *Not in the sample; the importer asks the first time it sees each name.*
 - ~~Do Madison events run from the Milwaukee warehouse with the same trucks?~~ **Answered 2026-09-28:** yes, every truck comes from Milwaukee for now.
 - Should drivers see other teams' routes, or only their own? *Current: only their own.*
-- Should missing returns also email the warehouse manager? *Current: in-app Returns tab only.* (Also: there's no separate warehouse-manager role — they use an admin login.)
+- ~~Should missing returns also email the warehouse manager?~~ **Answered 2026-09-28:** no. Equipment is almost never lost, and when it is the venue calls. The Returns tab is enough. (The warehouse manager uses an admin login.)

@@ -11,7 +11,7 @@ import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelper
 import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
-  sequenceChanges, moveStop, planAddEventToLoad
+  sequenceChanges, moveStop, planAddEventToLoad, eligibleDrivers, driverRuleActive, isDriver
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
@@ -37,7 +37,7 @@ const EMPTY_DAY = { runs: [], loads: [], allocations: [], stops: [] };
 // so the board always shows all markets' events (it deliberately ignores
 // the app's market switcher -- a Madison event hidden by the switcher could
 // otherwise go unplanned without a "no truck" warning).
-export default function DispatchBoard({ events = [], trucks = [], workers = [], assignments = [], timeFormat }) {
+export default function DispatchBoard({ events = [], trucks = [], workers = [], assignments = [], positions = [], timeFormat }) {
   const notify = useToast();
   const confirm = useConfirm();
 
@@ -130,8 +130,9 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
     allocations: day.allocations,
     stops: day.stops,
     assignments,
-    workersById
-  }), [date, dayEvents, eventsById, equipmentByEvent, trucks, day, assignments, workersById]);
+    workersById,
+    positions
+  }), [date, dayEvents, eventsById, equipmentByEvent, trucks, day, assignments, workersById, positions]);
 
   // ---- actions ----
   const handleAddEventToLoad = (run, load, eventId) => act(async () => {
@@ -333,6 +334,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
                 eventsById={eventsById}
                 equipmentByEvent={equipmentByEvent}
                 workers={workers}
+                positions={positions}
                 workersById={workersById}
                 assignments={assignments}
                 conflicts={conflicts}
@@ -374,7 +376,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 // ---------------------------------------------------------------------------
 
 function TruckColumn({
-  truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, workersById, assignments,
+  truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, positions, workersById, assignments,
   conflicts, timeFormat, onCreateRun, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
   onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet
 }) {
@@ -420,24 +422,34 @@ function TruckColumn({
     (dealingToday[s.workerId] ||= []).push(eventsById[s.eventId]?.name);
   }
   const otherRunWorkers = new Set(day.runs.filter(r => r.id !== run.id).flatMap(r => [r.worker1_id, r.worker2_id]).filter(Boolean));
-  const activeWorkers = workers.filter(w => w.is_active !== false).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Only Setup Drivers can be picked once that position exists (Settings ->
+  // Positions). Someone already on the team who isn't one stays listed so
+  // they aren't silently dropped -- the board warns about them instead.
+  const ruleActive = driverRuleActive(positions);
+  const drivers = eligibleDrivers(workers, positions).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-  const workerSelect = (field, otherField) => (
-    <select
-      value={run[field] || ''}
-      onChange={(e) => onUpdateRun({ [field]: e.target.value || null })}
-      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
-    >
-      <option value="">— Select —</option>
-      {activeWorkers.filter(w => w.id !== run[otherField]).map(w => (
-        <option key={w.id} value={w.id}>
-          {w.name}
-          {otherRunWorkers.has(w.id) ? ' (on another truck)' : ''}
-          {dealingToday[w.id] ? ` (dealing ${dealingToday[w.id].join(', ')})` : ''}
-        </option>
-      ))}
-    </select>
-  );
+  const workerSelect = (field, otherField) => {
+    const current = workersById[run[field]];
+    const options = drivers.filter(w => w.id !== run[otherField]);
+    if (current && !options.some(w => w.id === current.id)) options.unshift(current);
+    return (
+      <select
+        value={run[field] || ''}
+        onChange={(e) => onUpdateRun({ [field]: e.target.value || null })}
+        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+      >
+        <option value="">— Select —</option>
+        {options.map(w => (
+          <option key={w.id} value={w.id}>
+            {w.name}
+            {ruleActive && !isDriver(w) ? ' (not a Setup Driver)' : ''}
+            {otherRunWorkers.has(w.id) ? ' (on another truck)' : ''}
+            {dealingToday[w.id] ? ` (dealing ${dealingToday[w.id].join(', ')})` : ''}
+          </option>
+        ))}
+      </select>
+    );
+  };
 
   const stopRow = (stop, sectionStops) => {
     const ev = eventsById[stop.event_id];
@@ -497,6 +509,14 @@ function TruckColumn({
           {workerSelect('worker1_id', 'worker2_id')}
           {workerSelect('worker2_id', 'worker1_id')}
         </div>
+        {!ruleActive && (
+          <p className="text-[11px] text-gray-500 mt-1">
+            Showing everyone. Add a position named <strong>Setup Driver</strong> in Settings → Positions and tick it on your drivers to limit this list.
+          </p>
+        )}
+        {ruleActive && drivers.length === 0 && (
+          <p className="text-[11px] text-amber-700 mt-1">No Setup Drivers yet — tick “Setup Driver” on workers in Staff → Edit.</p>
+        )}
       </div>
 
       {/* Trips */}
