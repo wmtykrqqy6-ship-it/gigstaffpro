@@ -58,7 +58,7 @@ export function FitsOnBadges({ results, suggestion }) {
   );
 }
 
-function ZoneBar({ label, used, capacity, stretch, detail }) {
+export function ZoneBar({ label, used, capacity, stretch, detail }) {
   const max = Math.max(stretch || capacity, used, 1);
   const pct = Math.min(100, (used / max) * 100);
   const capPct = (capacity / max) * 100;

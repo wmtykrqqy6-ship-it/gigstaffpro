@@ -5,6 +5,7 @@ import { checkAllTrucks, summarizeEquipment } from '../../utils/logistics/capaci
 import { groupEquipment } from '../../utils/logistics/importMatch';
 import { FitsOnBadges, CapacityBreakdown, equipmentSummaryText } from '../logistics/CapacityDisplay';
 import ImportPullSheetModal from '../logistics/ImportPullSheetModal';
+import DispatchBoard from '../logistics/DispatchBoard';
 import TruckSettings from '../logistics/TruckSettings';
 import CatalogSettings from '../logistics/CatalogSettings';
 import {
@@ -23,11 +24,12 @@ export default function LogisticsView({
   events = [],
   positions,
   workers,
+  assignments = [],
   timeFormat,
   activeLocation = 'all',
   onEventsChanged
 }) {
-  const [tab, setTab] = useState('events');
+  const [tab, setTab] = useState('dispatch');
   const [trucks, setTrucks] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [equipment, setEquipment] = useState([]);
@@ -116,6 +118,7 @@ export default function LogisticsView({
 
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {[
+          { id: 'dispatch', label: '🗓️ Dispatch' },
           { id: 'events', label: '📦 Event Equipment' },
           { id: 'trucks', label: '🚚 Trucks' },
           { id: 'catalog', label: '🏷️ Catalog' }
@@ -189,6 +192,16 @@ export default function LogisticsView({
         </div>
       )}
 
+      {!schemaMissing && tab === 'dispatch' && (
+        <DispatchBoard
+          events={events}
+          trucks={trucks}
+          workers={workers}
+          assignments={assignments}
+          timeFormat={timeFormat}
+          activeLocation={activeLocation}
+        />
+      )}
       {!schemaMissing && tab === 'trucks' && <TruckSettings trucks={trucks} onChanged={reload} />}
       {!schemaMissing && tab === 'catalog' && <CatalogSettings catalog={catalog} onChanged={reload} />}
 

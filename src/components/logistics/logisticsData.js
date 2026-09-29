@@ -78,3 +78,87 @@ export async function linkEventToInvoice(eventId, { invoice, deliveryType, addre
   const { error } = await supabase.from('events').update(patch).eq('id', eventId);
   if (error) throw error;
 }
+
+// ---- Dispatch board (phase 2) ---------------------------------------------
+
+export const DISPATCH_MIGRATION = '20260928120000_add_logistics_dispatch.sql';
+
+const must = ({ data, error }) => {
+  if (error) throw error;
+  return data;
+};
+
+// Everything planned for one date: runs, their loads, allocations and stops.
+export async function loadDispatchDay(date) {
+  const runs = must(await supabase.from('daily_runs').select('*').eq('run_date', date)) || [];
+  if (!runs.length) return { runs, loads: [], allocations: [], stops: [] };
+  const runIds = runs.map(r => r.id);
+  const [loads, stops] = await Promise.all([
+    supabase.from('run_loads').select('*').in('run_id', runIds).order('sequence').then(must),
+    supabase.from('run_stops').select('*').in('run_id', runIds).order('sequence').then(must)
+  ]);
+  const loadIds = (loads || []).map(l => l.id);
+  const allocations = loadIds.length
+    ? must(await supabase.from('load_allocations').select('*').in('load_id', loadIds)) || []
+    : [];
+  return { runs, loads: loads || [], allocations, stops: stops || [] };
+}
+
+// Creates the run plus its first load (the morning trip).
+export async function createRun(date, truckId) {
+  const run = must(await supabase.from('daily_runs').insert([{ run_date: date, truck_id: truckId }]).select().single());
+  must(await supabase.from('run_loads').insert([{ run_id: run.id, sequence: 1 }]));
+  return run;
+}
+
+export async function updateRun(runId, patch) {
+  must(await supabase.from('daily_runs').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', runId));
+}
+
+export async function deleteRun(runId) {
+  must(await supabase.from('daily_runs').delete().eq('id', runId));
+}
+
+export async function addLoad(runId, sequence) {
+  return must(await supabase.from('run_loads').insert([{ run_id: runId, sequence }]).select().single());
+}
+
+export async function deleteLoad(loadId) {
+  must(await supabase.from('run_loads').delete().eq('id', loadId));
+}
+
+// Set how many of one size class from an event ride on a load.
+export async function setAllocation(loadId, eventId, sizeClass, quantity) {
+  must(await supabase.from('load_allocations').upsert(
+    [{ load_id: loadId, event_id: eventId, size_class: sizeClass, quantity: Math.max(0, quantity), updated_at: new Date().toISOString() }],
+    { onConflict: 'load_id,event_id,size_class' }
+  ));
+}
+
+export async function insertAllocations(rows) {
+  if (!rows.length) return;
+  must(await supabase.from('load_allocations').upsert(rows, { onConflict: 'load_id,event_id,size_class' }));
+}
+
+export async function deleteAllocationsFor(loadId, eventId) {
+  must(await supabase.from('load_allocations').delete().eq('load_id', loadId).eq('event_id', eventId));
+}
+
+export async function insertStops(rows) {
+  if (!rows.length) return;
+  must(await supabase.from('run_stops').insert(rows));
+}
+
+export async function updateStop(stopId, patch) {
+  must(await supabase.from('run_stops').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', stopId));
+}
+
+export async function deleteStops(stopIds) {
+  if (!stopIds.length) return;
+  must(await supabase.from('run_stops').delete().in('id', stopIds));
+}
+
+// Persist a new stop order: [{ id, sequence }] -- only rows that changed.
+export async function resequenceStops(changes) {
+  await Promise.all(changes.map(c => supabase.from('run_stops').update({ sequence: c.sequence }).eq('id', c.id).then(must)));
+}

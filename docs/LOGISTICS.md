@@ -7,8 +7,8 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 — Foundation | Migration + seeds, pull sheet parser, import (create / update-with-diff / attach), per-event "Fits on" check, truck + catalog settings | Built on `feature/logistics` |
-| 2 — Dispatch board | Day view by truck, 2-person teams, runs/loads/stops, split events, reloads, conflict warnings | Not started |
+| 1 — Foundation | Migration + seeds, pull sheet parser, import (create / update-with-diff / attach), per-event "Fits on" check, truck + catalog settings | Committed on `feature/logistics` (bdb06e0) |
+| 2 — Dispatch board | Day view by truck, 2-person teams, runs/loads/stops, split events, reloads, conflict warnings | Built on `feature/logistics`, uncommitted |
 | 3 — Field views | Warehouse load sheet, crew route in worker portal, delivered/returned check-offs, missing-item flags | Not started |
 
 ## Where things live
@@ -20,8 +20,9 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 | Browser PDF text extraction (pdf.js, lazy-loaded) | `src/utils/logistics/pdfText.js` |
 | Catalog name → size class | `src/utils/logistics/catalog.js` |
 | Import matching + equipment diff | `src/utils/logistics/importMatch.js` |
+| Dispatch: allocations, stop order, conflicts (pure, tested) | `src/utils/logistics/dispatch.js` |
 | UI | `src/components/views/LogisticsView.jsx`, `src/components/logistics/*` |
-| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql` |
+| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql` |
 | Test fixtures (3 real pull sheets + their receipts) | `src/utils/logistics/__fixtures__/` |
 
 ## Capacity rules (per load = one trip out of the warehouse)
@@ -76,6 +77,43 @@ offers "Keep the event's current address instead".
 
 Re-import replaces an event's equipment (delete + insert, not atomic). Phase 2
 allocations will need this to become an in-place update so allocations survive.
+
+## Dispatch board (phase 2)
+
+Logistics → **Dispatch**. One day at a time, one column per active truck.
+
+- **Run** (`daily_runs`): a truck on a day with its 2-person setup team. One per truck per day.
+- **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
+- **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
+  Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,
+  and a re-imported pull sheet can't orphan the plan. Differences show up immediately as
+  "not loaded" or "extra".
+- **Stops** (`run_stops`): delivery stops live under their trip; work and pickup stops are in the
+  "After deliveries" section (pickup gear never rides with delivery gear). Loading an event onto a
+  trip adds its delivery stop and a pickup at the event's end time, plus a work stop if a team member
+  is already staffed on that event. Work stops show the team member's assignment and position.
+- Stop times before 5:00 AM count as after midnight (late pickups).
+
+Conflict checks (`computeDayConflicts`):
+
+| Check | Level |
+|---|---|
+| Event with gear but no truck | error |
+| Trip over capacity (red) / using stretch or blackjack-in-craps (yellow) | error / warning |
+| Team member delivering/picking up elsewhere while dealing a party | error |
+| Pickup before the event ends | error |
+| Same worker on two trucks | error |
+| Gear not loaded / more loaded than the pull sheet lists | warning |
+| Truck carries an event's gear but has no delivery stop for it | warning |
+| No pickup scheduled | warning |
+| Delivery runs past the event start | warning |
+| Team member dealing but no work stop (truck parked there) | warning |
+| Work stop where neither team member is staffed | warning |
+| Missing or one-person team | warning |
+| Stop times going backwards | warning |
+
+Events on the board follow the market switcher (so the trucks aren't double-counted for Madison until
+that question is answered).
 
 ## Open questions (for Dylan)
 
