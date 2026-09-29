@@ -1356,7 +1356,6 @@ setAppPositions(storedPositions);
           workers={workers}
           assignments={assignments}
           timeFormat={timeFormat}
-          activeLocation={activeLocation}
           onEventsChanged={loadEvents}
         />
       );

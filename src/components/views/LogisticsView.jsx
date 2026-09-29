@@ -27,7 +27,6 @@ export default function LogisticsView({
   workers,
   assignments = [],
   timeFormat,
-  activeLocation = 'all',
   onEventsChanged
 }) {
   const [tab, setTab] = useState('dispatch');
@@ -44,11 +43,10 @@ export default function LogisticsView({
   const upcoming = useMemo(() => {
     const today = todayStr();
     return events
-      .filter(e => (activeLocation === 'all' || e.location_id === activeLocation))
       .filter(e => e.status !== 'archived' && e.status !== 'cancelled')
       .filter(e => (e.date || '').split('T')[0] >= today)
       .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
-  }, [events, activeLocation]);
+  }, [events]);
 
   const upcomingIds = useMemo(() => upcoming.map(e => e.id).join(','), [upcoming]);
 
@@ -201,12 +199,11 @@ export default function LogisticsView({
           workers={workers}
           assignments={assignments}
           timeFormat={timeFormat}
-          activeLocation={activeLocation}
         />
       )}
       {!schemaMissing && tab === 'returns' && <ReturnsPanel events={events} trucks={trucks} workers={workers} />}
       {!schemaMissing && tab === 'trucks' && <TruckSettings trucks={trucks} onChanged={reload} />}
-      {!schemaMissing && tab === 'catalog' && <CatalogSettings catalog={catalog} onChanged={reload} />}
+      {!schemaMissing && tab === 'catalog' && <CatalogSettings catalog={catalog} positions={positions} onChanged={reload} />}
 
       <ImportPullSheetModal
         open={showImport}
@@ -218,6 +215,7 @@ export default function LogisticsView({
         equipmentByEvent={equipmentByEvent}
         positions={positions}
         workers={workers}
+        assignments={assignments}
         timeFormat={timeFormat}
       />
     </div>

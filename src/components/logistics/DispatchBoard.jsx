@@ -33,13 +33,17 @@ const STOP_STYLES = {
 
 const EMPTY_DAY = { runs: [], loads: [], allocations: [], stops: [] };
 
-export default function DispatchBoard({ events = [], trucks = [], workers = [], assignments = [], timeFormat, activeLocation = 'all' }) {
+// Every truck runs out of the Milwaukee warehouse and serves every market,
+// so the board always shows all markets' events (it deliberately ignores
+// the app's market switcher -- a Madison event hidden by the switcher could
+// otherwise go unplanned without a "no truck" warning).
+export default function DispatchBoard({ events = [], trucks = [], workers = [], assignments = [], timeFormat }) {
   const notify = useToast();
   const confirm = useConfirm();
 
   const schedulable = useMemo(
-    () => events.filter(e => e.status !== 'cancelled' && (activeLocation === 'all' || e.location_id === activeLocation)),
-    [events, activeLocation]
+    () => events.filter(e => e.status !== 'cancelled'),
+    [events]
   );
 
   // Default to the next day (today or later) that has events.

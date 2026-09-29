@@ -11,9 +11,14 @@ import {
 } from '../../utils/logistics/catalog';
 import { findImportMatch, diffEquipment, formatDiff } from '../../utils/logistics/importMatch';
 import { checkAllTrucks, summarizeEquipment } from '../../utils/logistics/capacity';
+import {
+  buildStaffingMap, suggestStaffing, staffingFromItems, toPositionList,
+  proposeStaffing, staffingWarnings
+} from '../../utils/logistics/staffing';
+import { getPositionLabel } from '../../utils/positionHelpers';
 import { FitsOnBadges, equipmentSummaryText } from './CapacityDisplay';
 import {
-  saveCatalogEntries, replaceEventEquipment, linkEventToInvoice,
+  saveCatalogEntries, replaceEventEquipment, linkEventToInvoice, updateEventPositions,
   isMissingSchemaError, LOGISTICS_MIGRATION
 } from './logisticsData';
 
@@ -35,6 +40,7 @@ export default function ImportPullSheetModal({
   equipmentByEvent = {},
   positions,
   workers,
+  assignments = [],
   timeFormat
 }) {
   const notify = useToast();
@@ -51,6 +57,9 @@ export default function ImportPullSheetModal({
   // Snapshot handed to the event form (kept stable so it's applied once).
   const [createPrefill, setCreatePrefill] = useState(null);
   const [keepExistingAddress, setKeepExistingAddress] = useState(false);
+  // Existing events' staffing is only changed when the admin says so:
+  // null (not chosen yet) | 'apply' | 'skip'.
+  const [staffingChoice, setStaffingChoice] = useState(null);
 
   const reset = () => {
     setStep('upload');
@@ -65,6 +74,7 @@ export default function ImportPullSheetModal({
     setAddress('');
     setCreatePrefill(null);
     setKeepExistingAddress(false);
+    setStaffingChoice(null);
   };
 
   const close = () => {
@@ -104,6 +114,33 @@ export default function ImportPullSheetModal({
   const match = useMemo(() => (parsed ? findImportMatch(parsed, events) : null), [parsed, events]);
   const streetMissing = cleanAddress(address).streetMissing;
 
+  // Staffing from tables. Needs the catalog staffing columns
+  // (20260930120000_add_catalog_staffing.sql); before that migration the
+  // import works exactly as before, just without staffing.
+  const staffingEnabled = catalog.some(row => 'staff_per_unit' in row);
+  const unknownStaffing = (name) => suggestStaffing(name, answers[normalizeItemName(name)], positions);
+  const staffingMap = useMemo(() => {
+    const map = buildStaffingMap(catalog);
+    for (const u of unknown) {
+      const d = unknownStaffing(u.name);
+      if (d.position_key && d.staff_per_unit > 0) map.set(normalizeItemName(u.name), d);
+    }
+    return map;
+  }, [catalog, unknown, answers, positions]);
+  const suggestedStaff = useMemo(
+    () => (staffingEnabled ? staffingFromItems(items, staffingMap) : {}),
+    [staffingEnabled, items, staffingMap]
+  );
+
+  // Proposed staffing change for an existing event (re-import: apply the
+  // table difference; attach: raise to what the tables need, never lower).
+  const staffingProposal = (event, mode) => {
+    if (!staffingEnabled || !event) return { positions: [], changes: [], warnings: [] };
+    const before = mode === 'delta' ? staffingFromItems(equipmentByEvent[event.id] || [], staffingMap) : {};
+    const proposal = proposeStaffing({ current: event.positions || [], before, after: suggestedStaff, mode });
+    return { ...proposal, warnings: staffingWarnings(proposal.changes, assignments, event.id) };
+  };
+
   // The pull sheet is the source of truth for the address: when the address
   // field has a street, it's written to the event (create, attach, and
   // re-import alike) unless the user chooses to keep a different address the
@@ -118,7 +155,11 @@ export default function ImportPullSheetModal({
   };
 
   const saveAnswers = async () => {
-    await saveCatalogEntries(unknown.map(u => ({ name: u.name, size_class: answers[normalizeItemName(u.name)] })));
+    await saveCatalogEntries(unknown.map(u => ({
+      name: u.name,
+      size_class: answers[normalizeItemName(u.name)],
+      ...(staffingEnabled ? unknownStaffing(u.name) : {})
+    })));
   };
 
   const handleUpdate = async () => {
@@ -127,6 +168,9 @@ export default function ImportPullSheetModal({
     try {
       await saveAnswers();
       await replaceEventEquipment(match.event.id, items);
+      const staffing = staffingProposal(match.event, 'delta');
+      const applyStaff = staffingChoice === 'apply' && staffing.changes.length > 0;
+      if (applyStaff) await updateEventPositions(match.event.id, staffing.positions);
       const newAddress = addressToWrite(match.event);
       if (newAddress) {
         await linkEventToInvoice(match.event.id, {
@@ -135,7 +179,7 @@ export default function ImportPullSheetModal({
           address: newAddress
         });
       }
-      notify(`Updated ${newAddress ? 'equipment and address' : 'equipment'} for ${match.event.name}.`);
+      notify(`Updated ${[ 'equipment', newAddress && 'address', applyStaff && 'staffing'].filter(Boolean).join(', ')} for ${match.event.name}.`);
       onImported?.();
       close();
     } catch (err) {
@@ -161,6 +205,8 @@ export default function ImportPullSheetModal({
         venue: event.venue ? null : parsed.address.venue
       });
       await replaceEventEquipment(event.id, items);
+      const staffing = staffingProposal(event, 'atLeast');
+      if (staffingChoice === 'apply' && staffing.changes.length) await updateEventPositions(event.id, staffing.positions);
       notify(`Attached pull sheet #${parsed.invoice} to ${event.name}.`);
       onImported?.();
       close();
@@ -188,7 +234,8 @@ export default function ImportPullSheetModal({
         time: parsed.startTime || '',
         end_time: parsed.endTime || '',
         address: address.trim(),
-        venue: parsed.address.venue || ''
+        venue: parsed.address.venue || '',
+        ...(staffingEnabled ? { positions: toPositionList(suggestedStaff) } : {})
       });
       setStep('create-form');
     } catch (err) {
@@ -231,6 +278,9 @@ export default function ImportPullSheetModal({
     (parsed.startTime && (match.event.time || '').slice(0, 5) !== parsed.startTime)
   );
   const warnings = (parsed?.warnings || []).filter(w => !(/Street address/.test(w) && !streetMissing));
+  const updateStaffing = match?.type === 'update' ? staffingProposal(match.event, 'delta') : null;
+  const staffSummary = toPositionList(suggestedStaff).map(p => `${p.count} ${getPositionLabel(p.key)}`).join(', ');
+  const needsStaffingChoice = (proposal) => proposal && proposal.changes.length > 0 && staffingChoice === null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
@@ -390,6 +440,12 @@ export default function ImportPullSheetModal({
                   </div>
                 </div>
 
+                {staffingEnabled && staffSummary && (
+                  <p className="text-sm text-gray-700">
+                    <span className="font-semibold text-gray-900">Staffing from tables:</span> {staffSummary}
+                  </p>
+                )}
+
                 {/* What happens next */}
                 {match.type === 'update' && (
                   <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
@@ -405,9 +461,10 @@ export default function ImportPullSheetModal({
                         )}
                       </div>
                     </div>
+                    <StaffingDecision proposal={updateStaffing} choice={staffingChoice} onChoose={setStaffingChoice} />
                     <button
                       onClick={handleUpdate}
-                      disabled={busy || unclassified}
+                      disabled={busy || unclassified || needsStaffingChoice(updateStaffing)}
                       className="mt-3 bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 text-sm disabled:opacity-50"
                     >
                       {busy ? 'Saving…' : 'Update equipment'}
@@ -420,11 +477,13 @@ export default function ImportPullSheetModal({
                     <p className="text-sm text-gray-700">
                       {match.candidates.length === 1 ? 'An event' : `${match.candidates.length} events`} on {formatDate(parsed.date)} {match.candidates.length === 1 ? "doesn't" : "don't"} have a Goodshuffle invoice yet:
                     </p>
-                    {match.candidates.map(ev => (
+                    {match.candidates.map(ev => {
+                      const proposal = staffingProposal(ev, 'atLeast');
+                      return (
+                      <div key={ev.id} className="space-y-2">
                       <button
-                        key={ev.id}
                         onClick={() => handleAttach(ev)}
-                        disabled={busy || unclassified}
+                        disabled={busy || unclassified || needsStaffingChoice(proposal)}
                         className="w-full flex items-center justify-between gap-2 text-left border border-gray-200 rounded-lg px-3 py-2 hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
                       >
                         <span className="text-sm">
@@ -433,7 +492,10 @@ export default function ImportPullSheetModal({
                         </span>
                         <Link2 size={16} className="text-gray-400 flex-shrink-0" />
                       </button>
-                    ))}
+                      <StaffingDecision proposal={proposal} choice={staffingChoice} onChoose={setStaffingChoice} eventName={match.candidates.length > 1 ? ev.name : null} />
+                      </div>
+                      );
+                    })}
                     <button
                       onClick={handleContinueToCreate}
                       disabled={busy || unclassified}
@@ -445,7 +507,10 @@ export default function ImportPullSheetModal({
                 )}
 
                 {match.type === 'create' && (
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {staffingEnabled && staffSummary && (
+                      <p className="text-xs text-gray-500 mr-auto">Staffing is prefilled in the form — add extra dealers there for bigger events.</p>
+                    )}
                     <button
                       onClick={handleContinueToCreate}
                       disabled={busy || unclassified}
@@ -462,6 +527,37 @@ export default function ImportPullSheetModal({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown when importing into an existing event would change its staffing.
+// Nothing is changed until the admin picks "Apply".
+function StaffingDecision({ proposal, choice, onChoose, eventName = null }) {
+  if (!proposal || !proposal.changes.length) return null;
+  return (
+    <div className="border border-purple-200 bg-purple-50 rounded-lg p-3 text-sm text-purple-900">
+      <div className="font-semibold">Staffing{eventName ? ` for ${eventName}` : ''} would change:</div>
+      <ul className="mt-1 space-y-0.5">
+        {proposal.changes.map(c => (
+          <li key={c.key}>{getPositionLabel(c.key)}: {c.from} → <strong>{c.to}</strong></li>
+        ))}
+      </ul>
+      {proposal.warnings.map(w => (
+        <div key={w.key} className="mt-1 text-amber-800">
+          ⚠ {w.filled} people are already assigned as {getPositionLabel(w.key)} — lowering to {w.to} won't remove anyone; adjust them in Assign.
+        </div>
+      ))}
+      <div className="mt-2 flex flex-wrap gap-4">
+        <label className="flex items-center gap-2">
+          <input type="radio" name="staffing-choice" checked={choice === 'apply'} onChange={() => onChoose('apply')} />
+          Apply these changes
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="staffing-choice" checked={choice === 'skip'} onChange={() => onChoose('skip')} />
+          Leave staffing as is
+        </label>
       </div>
     </div>
   );

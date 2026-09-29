@@ -24,8 +24,28 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 | Field views: per-trip item lists, load sheet order, returns (pure, tested) | `src/utils/logistics/fieldViews.js` |
 | Crew check-off endpoint logic (tested) | `api/_lib/routeActions.js` (actions `routeCheck`, `routeStopStatus` in `api/worker-actions.js`) |
 | UI | `src/components/views/LogisticsView.jsx`, `src/components/logistics/*` |
-| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql` |
+| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql`, `20260930120000_add_catalog_staffing.sql` |
 | Test fixtures (3 real pull sheets + their receipts) | `src/utils/logistics/__fixtures__/` |
+
+## Staffing from pull sheets
+
+Each catalog item can need staff: a position (from Settings → Positions) and a count per table.
+Seeded from the Goodshuffle descriptions and confirmed 2026-09-28: craps = 2 dealers; blackjack,
+roulette and poker = 1. Vegas on Wheels' positions are named after games (`blackjack`, `craps`,
+`roulette`, `poker`, `let_it_ride`, `money_wheel`, …), so a new table is matched to a position by
+name (most specific wins: "3 Card Poker Table" → 3 Card Poker), falling back to its size class.
+Editable per item on the Catalog tab. Logic: `src/utils/logistics/staffing.js` (tested).
+
+- **New event from a pull sheet:** the event form opens with staffing prefilled. Add extra dealers
+  there for bigger events.
+- **Re-import that changes the tables:** staffing is never changed without asking. The import shows
+  each change ("Blackjack: 10 → 12") with Apply / Leave as is. Only the difference in tables is
+  applied, so dealers added by hand stay. Lowering below the number of people already assigned shows
+  a warning (nobody is unassigned automatically).
+- **Attaching to a manually staffed event:** offers to raise positions to what the tables need; never
+  lowers.
+- Needs migration `20260930120000_add_catalog_staffing.sql`; before it's run, imports work as before
+  without staffing.
 
 ## Capacity rules (per load = one trip out of the warehouse)
 
@@ -114,8 +134,8 @@ Conflict checks (`computeDayConflicts`):
 | Missing or one-person team | warning |
 | Stop times going backwards | warning |
 
-Events on the board follow the market switcher (so the trucks aren't double-counted for Madison until
-that question is answered).
+All trucks run out of the Milwaukee warehouse and serve every market (confirmed 2026-09-28), so
+Logistics always shows every market's events and ignores the market switcher.
 
 ## Field views (phase 3)
 
@@ -155,6 +175,6 @@ the plan. "Found it" / "Mark all found" records items as returned.
 
 - Can the stretch craps slot hold chairs or blackjack overflow, or only craps tables? *Current: any craps-zone use, with a warning.*
 - How do chairs, the archway, and decorations appear on pull sheets? *Not in the sample; the importer asks the first time it sees each name.*
-- Do Madison events run from the Milwaukee warehouse with the same trucks? *Trucks have no location yet.*
+- ~~Do Madison events run from the Milwaukee warehouse with the same trucks?~~ **Answered 2026-09-28:** yes, every truck comes from Milwaukee for now.
 - Should drivers see other teams' routes, or only their own? *Current: only their own.*
 - Should missing returns also email the warehouse manager? *Current: in-app Returns tab only.* (Also: there's no separate warehouse-manager role — they use an admin login.)

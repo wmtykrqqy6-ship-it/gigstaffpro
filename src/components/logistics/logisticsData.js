@@ -42,7 +42,8 @@ export async function loadEventEquipment(eventIds) {
   return rows;
 }
 
-// answers: [{ name, size_class }]
+// answers: [{ name, size_class, position_key?, staff_per_unit? }] -- the
+// staffing fields are only sent when given (they need the staffing migration).
 export async function saveCatalogEntries(answers) {
   if (!answers.length) return;
   const { error } = await supabase.from('equipment_catalog').upsert(
@@ -50,6 +51,7 @@ export async function saveCatalogEntries(answers) {
       goodshuffle_name: a.name.trim(),
       name_key: normalizeItemName(a.name),
       size_class: a.size_class,
+      ...('staff_per_unit' in a ? { position_key: a.position_key || null, staff_per_unit: a.staff_per_unit || 0 } : {}),
       updated_at: new Date().toISOString()
     })),
     { onConflict: 'name_key' }
@@ -71,6 +73,13 @@ export async function replaceEventEquipment(eventId, classifiedItems) {
 
 // address/venue are only written when given, so callers can leave an
 // event's existing values alone by passing null.
+// Replace an event's staffing positions ([{ key, count }]). Only called after
+// the admin explicitly chose to apply a proposed change.
+export async function updateEventPositions(eventId, positions) {
+  const { error } = await supabase.from('events').update({ positions }).eq('id', eventId);
+  if (error) throw error;
+}
+
 export async function linkEventToInvoice(eventId, { invoice, deliveryType, address, venue }) {
   const patch = { goodshuffle_invoice: invoice || null, delivery_type: deliveryType || null };
   if (address) patch.address = address;
