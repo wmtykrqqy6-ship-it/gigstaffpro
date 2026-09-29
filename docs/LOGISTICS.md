@@ -1,0 +1,160 @@
+# Delivery Logistics
+
+Admin nav → **Logistics**. Plans which truck carries which casino tables, using
+Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
+
+## Status
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 — Foundation | Migration + seeds, pull sheet parser, import (create / update-with-diff / attach), per-event "Fits on" check, truck + catalog settings | Committed on `feature/logistics` (bdb06e0) |
+| 2 — Dispatch board | Day view by truck, 2-person teams, runs/loads/stops, split events, reloads, conflict warnings | Committed on `feature/logistics` (bfa803b) |
+| 3 — Field views | Warehouse load sheet, crew route in worker portal, delivered/returned check-offs, missing-item flags | Built on `feature/logistics`, uncommitted |
+
+## Where things live
+
+| What | File |
+|---|---|
+| Capacity check (pure, tested) | `src/utils/logistics/capacity.js` |
+| Pull sheet parser (pure, tested against fixtures) | `src/utils/logistics/pullSheetParser.js` |
+| Browser PDF text extraction (pdf.js, lazy-loaded) | `src/utils/logistics/pdfText.js` |
+| Catalog name → size class | `src/utils/logistics/catalog.js` |
+| Import matching + equipment diff | `src/utils/logistics/importMatch.js` |
+| Dispatch: allocations, stop order, conflicts (pure, tested) | `src/utils/logistics/dispatch.js` |
+| Field views: per-trip item lists, load sheet order, returns (pure, tested) | `src/utils/logistics/fieldViews.js` |
+| Crew check-off endpoint logic (tested) | `api/_lib/routeActions.js` (actions `routeCheck`, `routeStopStatus` in `api/worker-actions.js`) |
+| UI | `src/components/views/LogisticsView.jsx`, `src/components/logistics/*` |
+| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql` |
+| Test fixtures (3 real pull sheets + their receipts) | `src/utils/logistics/__fixtures__/` |
+
+## Capacity rules (per load = one trip out of the warehouse)
+
+| Truck | Craps | Craps stretch | Roulette | Poker | Blackjack zone | Archway |
+|---|---|---|---|---|---|---|
+| Yellow (priority 1) | 1 | 2 | 2 | 2 | 10 | no |
+| Black (2) | 2 | 3 | 2 | 2 | 14 | no |
+| White (3) | 4 | 4 (no stretch) | 2 | 2 | 20 | yes |
+
+1. Craps units = craps tables + ceil(chairs / 50).
+2. Roulette/poker beyond their zone → blackjack zone, 1 slot each (no warning).
+3. Blackjack-size tables (+ that overflow) fill the blackjack zone; the rest goes into craps units at 6 per unit (round up) → **yellow**.
+4. Craps units above normal, up to stretch → **yellow**. Above stretch → **red**.
+5. Archway on a truck without `can_carry_archway` → **red**.
+6. Decor, accessories, packages: no capacity cost.
+7. Suggested truck = first **green** in priority order; if none, first yellow (flagged).
+
+Capacities are editable under Logistics → Trucks.
+
+## Pull sheet parsing notes
+
+pdf.js returns positioned text. Quantities are in a narrow left column
+(x≈37), vertically centered on each item's block; item names sit at x≈125
+and accessories are indented to x≈140 (Goodshuffle's ↑ arrow is an image, so
+indentation is the signal). Names use a larger font than description lines.
+The event name + invoice come from the page footer
+(`… - Pawelek Sample Quote (#231849935)`); the year comes from the rental
+date range.
+
+Address: read from the delivery block at the top of page 1; if that copy has
+no street line, the repeat in the Logistics section is used. (That section's
+heading can sit at the bottom of page 1 with its content on page 2.)
+`undefined` parts are dropped. A street line starts with a house number,
+including Wisconsin grid addresses (`W175N11086 Stonewood Dr`). Any line/part
+before the street is treated as the venue name and prefills the event's Venue.
+The import only asks for a street address when neither copy has one.
+
+The receipt PDF (`fulfillment-confirmation-sheet-*.pdf`) is detected and rejected.
+
+## Import flow
+
+1. Upload pull sheet → parse → classify unknown item names (asked once, saved to `equipment_catalog`).
+2. Event with same `goodshuffle_invoice` → replace its equipment, showing a diff (`+2 Blackjack Table, −1 Roulette Table`). Date/time differences are shown, not auto-applied.
+3. Else same-date events with no invoice → "Attach to …?".
+
+The pull sheet is the source of truth for the address: whenever it has a street
+address, that address is written to the event on create, attach and re-import.
+If the event already has a different address, the review screen shows both and
+offers "Keep the event's current address instead".
+4. Else → the normal Create Event form, prefilled. Staffing/positions work as before.
+
+Re-import replaces an event's equipment (delete + insert, not atomic). Phase 2
+allocations will need this to become an in-place update so allocations survive.
+
+## Dispatch board (phase 2)
+
+Logistics → **Dispatch**. One day at a time, one column per active truck.
+
+- **Run** (`daily_runs`): a truck on a day with its 2-person setup team. One per truck per day.
+- **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
+- **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
+  Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,
+  and a re-imported pull sheet can't orphan the plan. Differences show up immediately as
+  "not loaded" or "extra".
+- **Stops** (`run_stops`): delivery stops live under their trip; work and pickup stops are in the
+  "After deliveries" section (pickup gear never rides with delivery gear). Loading an event onto a
+  trip adds its delivery stop and a pickup at the event's end time, plus a work stop if a team member
+  is already staffed on that event. Work stops show the team member's assignment and position.
+- Stop times before 5:00 AM count as after midnight (late pickups).
+
+Conflict checks (`computeDayConflicts`):
+
+| Check | Level |
+|---|---|
+| Event with gear but no truck | error |
+| Trip over capacity (red) / using stretch or blackjack-in-craps (yellow) | error / warning |
+| Team member delivering/picking up elsewhere while dealing a party | error |
+| Pickup before the event ends | error |
+| Same worker on two trucks | error |
+| Gear not loaded / more loaded than the pull sheet lists | warning |
+| Truck carries an event's gear but has no delivery stop for it | warning |
+| No pickup scheduled | warning |
+| Delivery runs past the event start | warning |
+| Team member dealing but no work stop (truck parked there) | warning |
+| Work stop where neither team member is staffed | warning |
+| Missing or one-person team | warning |
+| Stop times going backwards | warning |
+
+Events on the board follow the market switcher (so the trucks aren't double-counted for Madison until
+that question is answered).
+
+## Field views (phase 3)
+
+**Item lists per trip.** The plan stores table counts per size class; `splitEventAcrossLoads` turns that
+back into named lines. Tables fill the event's pull-sheet rows in order, trip by trip, and each table
+row's accessories follow proportionally (largest-remainder rounding, so a split always adds back up to
+the pull sheet exactly). Anything loaded beyond the pull sheet shows as "(extra — not on pull sheet)".
+
+**Warehouse load sheet.** Printer icon on each trip, or "All load sheets" for the day (one page per
+trip). Events are listed in load order, last delivery stop first, with every table and accessory and a
+checkbox, plus the delivery order and the truck's notes. Printing shows only the sheet.
+
+**Crew route (worker portal).** A "Your route today" card at the top of the worker dashboard for
+anyone on a truck team (upcoming days within a week show collapsed). Stops are in order, with trip
+reload markers, times, a Google Maps link, and the gear list. The crew checks items off as they unload
+(delivered) and load up (returned); on a pickup they can lower a count for a short return. "Mark stop
+done" per stop. Check-offs open only on the route's day (and until 6 AM the next morning for late
+pickups). Crews see only their own route.
+
+Check-offs write through `api/worker-actions.js` (service role), which checks the worker is on that
+run's team and that it's the right day. Like the existing `checkIn` action it trusts the worker id the
+browser sends; there's no worker session token yet (see that file's header).
+
+**Returns.** Logistics → Returns lists pickups from the last 14 days:
+
+| State | Meaning |
+|---|---|
+| Missing items | Crew checked in (or marked the pickup done) and something is short or unchecked |
+| Never checked in | The day has passed and nothing was checked at that pickup |
+| Pickup pending | Not happened yet |
+| All back | Everything returned in full |
+
+What should come back is what the truck actually delivered (if deliveries were checked off), otherwise
+the plan. "Found it" / "Mark all found" records items as returned.
+
+## Open questions (for Dylan)
+
+- Can the stretch craps slot hold chairs or blackjack overflow, or only craps tables? *Current: any craps-zone use, with a warning.*
+- How do chairs, the archway, and decorations appear on pull sheets? *Not in the sample; the importer asks the first time it sees each name.*
+- Do Madison events run from the Milwaukee warehouse with the same trucks? *Trucks have no location yet.*
+- Should drivers see other teams' routes, or only their own? *Current: only their own.*
+- Should missing returns also email the warehouse manager? *Current: in-app Returns tab only.* (Also: there's no separate warehouse-manager role — they use an admin login.)

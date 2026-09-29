@@ -9,7 +9,8 @@ import {
   Settings,
   ClipboardList,
   MapPin,
-  ChevronDown
+  ChevronDown,
+  Truck
 } from 'lucide-react';
 
 export default function Navigation({
@@ -38,6 +39,7 @@ export default function Navigation({
     { id: 'staff', label: 'Staff', icon: Users },
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'schedule', label: 'Schedule', icon: Clock },
+    { id: 'logistics', label: 'Logistics', icon: Truck },
     { id: 'applications', label: 'Applications', icon: FileText, badge: pendingApplicationsCount },
     { id: 'reports', label: 'Reports', icon: ClipboardList, badge: pendingReportsCount },
     ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
