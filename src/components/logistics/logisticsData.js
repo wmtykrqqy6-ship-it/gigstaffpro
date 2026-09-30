@@ -123,9 +123,10 @@ async function loadRunDetails(runs) {
   return { runs, loads: loads || [], allocations, stops: stops || [] };
 }
 
-// Creates the run plus its first load (the morning trip).
-export async function createRun(date, truckId) {
-  const run = must(await supabase.from('daily_runs').insert([{ run_date: date, truck_id: truckId }]).select().single());
+// Creates the run plus its first load (the morning trip). `extra` carries
+// e.g. { is_personal: true } for a personal-vehicle delivery.
+export async function createRun(date, truckId, extra = {}) {
+  const run = must(await supabase.from('daily_runs').insert([{ run_date: date, truck_id: truckId, ...extra }]).select().single());
   must(await supabase.from('run_loads').insert([{ run_id: run.id, sequence: 1 }]));
   return run;
 }

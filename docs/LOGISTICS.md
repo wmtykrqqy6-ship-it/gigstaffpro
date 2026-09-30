@@ -24,7 +24,7 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 | Field views: per-trip item lists, load sheet order, returns (pure, tested) | `src/utils/logistics/fieldViews.js` |
 | Crew check-off endpoint logic (tested) | `api/_lib/routeActions.js` (actions `routeCheck`, `routeStopStatus` in `api/worker-actions.js`) |
 | UI | `src/components/views/LogisticsView.jsx`, `src/components/logistics/*` |
-| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql`, `20260930120000_add_catalog_staffing.sql` |
+| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql`, `20260930120000_add_catalog_staffing.sql`, `20261001120000_add_solo_and_personal_vehicle_runs.sql` |
 | Test fixtures (3 real pull sheets + their receipts) | `src/utils/logistics/__fixtures__/` |
 
 ## Staffing from pull sheets
@@ -112,6 +112,14 @@ Logistics → **Dispatch**. One day at a time, one column per active truck.
   are matched by key or label — live keys are `driver` ("Set Up Driver") and `set_up` ("Set Up"). Until a
   driver position exists the dropdowns list everyone. Someone already in a spot without the skill stays
   listed and gets a warning, so nobody is dropped silently.
+- **One-person deliveries (confirmed 2026-09-30):** small events are sometimes delivered by one person.
+  - *Solo truck:* the **Solo** switch on a truck's team hides the Set Up spot and silences the
+    one-person warning. An empty Set Up spot without Solo still warns.
+  - *Personal vehicle:* "+ Personal vehicle delivery" adds a column with no truck and one crew member
+    (Set Up or Set Up Driver). Several per day are allowed. Loads are checked against the
+    **Personal vehicle** row on the Trucks tab — its capacities start at 0 and are entered by the
+    office (what fits in a car); it's never suggested as a truck. Stops, load sheet, crew route and
+    check-offs work the same. Migration `20261001120000_add_solo_and_personal_vehicle_runs.sql`.
 - **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
 - **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
   Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,

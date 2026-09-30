@@ -129,9 +129,10 @@ const STATUS_RANK = { green: 0, yellow: 1, red: 2 };
 // Check a load against every active truck in priority order (Yellow -> Black
 // -> White) and suggest the first one where it's green. If no truck is green,
 // fall back to the first yellow so the UI can still point somewhere, flagged.
+// The "Personal vehicle" row (kind 'personal') isn't a truck and is left out.
 export function checkAllTrucks(trucks = [], load) {
   const ordered = trucks
-    .filter(t => t.active !== false)
+    .filter(t => t.active !== false && t.kind !== 'personal')
     .slice()
     .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
 

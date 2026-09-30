@@ -119,9 +119,21 @@ export default function TruckSettings({ trucks, onChanged }) {
         )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {trucks.map(t => <TruckCard key={t.id} truck={t} onSaved={onChanged} />)}
+        {trucks.filter(t => t.kind !== 'personal').map(t => <TruckCard key={t.id} truck={t} onSaved={onChanged} />)}
         {adding && <TruckCard truck={BLANK} onSaved={() => { setAdding(false); onChanged(); }} />}
       </div>
+      {trucks.filter(t => t.kind === 'personal').map(t => (
+        <div key={t.id} className="space-y-2">
+          <h4 className="text-lg font-bold text-gray-900">Personal vehicle</h4>
+          <p className="text-sm text-gray-500">
+            What fits in a crew member's own car, for small events delivered by one person. Every personal-vehicle
+            delivery on the Dispatch board is checked against these numbers.
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <TruckCard truck={t} onSaved={onChanged} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

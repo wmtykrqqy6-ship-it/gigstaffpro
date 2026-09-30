@@ -4,7 +4,8 @@ import {
   requiredCounts, allocatedCounts, allocationStatus, formatCounts, checkLoad,
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
-  crewRoles, isDriver, isSetUp, eligibleForSpot
+  crewRoles, isDriver, isSetUp, eligibleForSpot,
+  isOneSpotRun, spotFor, runLabel
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -412,5 +413,76 @@ describe('truck team spots: 1 Driver + 1 Set Up', () => {
       ['not-a-driver', "Ana is in Black's Driver spot but isn't a Set Up Driver"],
       ['not-set-up', "Ben is on Black but isn't marked Set Up or Set Up Driver"]
     ]);
+  });
+});
+
+describe('solo trucks and personal vehicles', () => {
+  const POSITIONS = [{ key: 'set_up', label: 'Set Up' }, { key: 'driver', label: 'Set Up Driver' }];
+  const CAR = { id: 'tP', name: 'Personal vehicle', kind: 'personal', craps_capacity: 0, craps_stretch: 0, roulette_capacity: 0, poker_capacity: 1, blackjack_capacity: 3, can_carry_archway: false };
+
+  it('labels and spots', () => {
+    const trucksById = { tB: BLACK, tP: CAR };
+    expect(runLabel({ truck_id: 'tB' }, trucksById, WORKERS)).toBe('Black');
+    expect(runLabel({ truck_id: 'tP', is_personal: true, worker1_id: 'w3' }, trucksById, WORKERS)).toBe('Personal vehicle (Cy)');
+    expect(runLabel({ truck_id: 'tP', is_personal: true }, trucksById, WORKERS)).toBe('Personal vehicle');
+    expect(spotFor({ is_personal: true }, 'worker1_id')).toBe('setup');
+    expect(spotFor({}, 'worker1_id')).toBe('driver');
+    expect(isOneSpotRun({ solo: true })).toBe(true);
+    expect(isOneSpotRun({})).toBe(false);
+  });
+
+  it('a solo truck with one person has no short-team warning; without Solo it does', () => {
+    const day = cleanDay();
+    day.runs = [{ id: 'rB', truck_id: 'tB', worker1_id: 'w1', solo: true }, day.runs[1]];
+    expect(computeDayConflicts(day)).toEqual([]);
+    day.runs[0] = { ...day.runs[0], solo: false };
+    const c = computeDayConflicts(day);
+    expect(c.map(x => x.code)).toEqual(['short-team']);
+    expect(c[0].message).toMatch(/switch on Solo/);
+  });
+
+  it('a personal-vehicle delivery: one person, own capacity, labelled by who is driving', () => {
+    // Small Party (3 blackjack + 1 craps) moves from Yellow into Cy's car, which fits 3 blackjack and no craps.
+    const day = cleanDay();
+    day.trucks = [...TRUCKS, CAR];
+    day.runs = [day.runs[0], { id: 'rP', truck_id: 'tP', is_personal: true, worker1_id: 'w3' }];
+    day.loads = [day.loads[0], { id: 'lP1', run_id: 'rP', sequence: 1 }];
+    day.allocations = day.allocations.map(a => (a.load_id === 'lY1' ? { ...a, load_id: 'lP1' } : a));
+    day.stops = day.stops.map(s => (s.run_id === 'rY' ? { ...s, run_id: 'rP', load_id: s.load_id ? 'lP1' : null } : s));
+    const c = computeDayConflicts(day);
+    expect(c.map(x => [x.level, x.message])).toEqual([
+      ['error', 'Personal vehicle (Cy) trip 1: Craps zone needs 1 units but holds 0 max — 1 craps table']
+    ]);
+    // Without the craps table it's clean -- and no "only one team member" warning.
+    day.allocations = day.allocations.filter(a => !(a.load_id === 'lP1' && a.size_class === 'craps'));
+    day.equipmentByEvent = { ...EQUIPMENT, eS: [{ size_class: 'blackjack', quantity: 3 }] };
+    expect(computeDayConflicts(day)).toEqual([]);
+  });
+
+  it('several personal-vehicle deliveries on one day are fine; the same person twice is not', () => {
+    const day = cleanDay();
+    day.trucks = [...TRUCKS, CAR];
+    day.events = [];
+    day.allocations = [];
+    day.stops = [];
+    day.runs = [
+      { id: 'p1', truck_id: 'tP', is_personal: true, worker1_id: 'w1' },
+      { id: 'p2', truck_id: 'tP', is_personal: true, worker1_id: 'w2' }
+    ];
+    day.loads = [];
+    expect(computeDayConflicts(day)).toEqual([]);
+    day.runs[1].worker1_id = 'w1';
+    expect(computeDayConflicts(day).map(x => x.message)).toEqual(['Ana is on Personal vehicle (Ana) and Personal vehicle (Ana)']);
+  });
+
+  it('a personal-vehicle driver needs Set Up or Set Up Driver, not the truck-driver skill', () => {
+    const day = cleanDay();
+    day.trucks = [...TRUCKS, CAR];
+    day.events = []; day.allocations = []; day.stops = []; day.loads = [];
+    day.runs = [{ id: 'p1', truck_id: 'tP', is_personal: true, worker1_id: 'w1' }];
+    day.workersById = { w1: { ...WORKERS.w1, skills: ['set_up'] } };
+    expect(computeDayConflicts({ ...day, positions: POSITIONS })).toEqual([]);
+    day.workersById = { w1: { ...WORKERS.w1, skills: ['blackjack'] } };
+    expect(computeDayConflicts({ ...day, positions: POSITIONS }).map(x => x.code)).toEqual(['not-set-up']);
   });
 });

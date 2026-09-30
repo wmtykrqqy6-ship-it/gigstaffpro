@@ -139,7 +139,9 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
                   {editable ? 'Your route today' : `Your route — ${parseDateSafe(run.run_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`}
                 </h3>
                 <p className="text-sm text-gray-600 flex flex-wrap items-center gap-x-2">
-                  {truck && <span className="inline-flex items-center gap-1"><TruckSwatch color={truck.color} size={10} />{truck.name} truck</span>}
+                  {run.is_personal
+                    ? <span>in your own vehicle</span>
+                    : truck && <span className="inline-flex items-center gap-1"><TruckSwatch color={truck.color} size={10} />{truck.name} truck</span>}
                   {teammate && <span>· with {teammate}</span>}
                   <span>· {ordered.length} stop{ordered.length === 1 ? '' : 's'}{tripsCount > 1 ? `, ${tripsCount} trips` : ''}</span>
                   {editable && ordered.length > 0 && <span>· {done}/{ordered.length} done</span>}

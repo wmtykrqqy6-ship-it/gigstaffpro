@@ -170,6 +170,13 @@ describe('checkAllTrucks', () => {
     expect(checkAllTrucks(TRUCKS, { craps: 9 }).suggestion).toBeNull();
   });
 
+  it('never suggests the Personal vehicle row', () => {
+    const car = { name: 'Personal vehicle', kind: 'personal', craps_capacity: 9, craps_stretch: 9, roulette_capacity: 9, poker_capacity: 9, blackjack_capacity: 99, priority: 0 };
+    const { results, suggestion } = checkAllTrucks([...TRUCKS, car], SAMPLE);
+    expect(results.map(r => r.truck.name)).toEqual(['Yellow', 'Black', 'White']);
+    expect(suggestion.truck.name).toBe('Yellow');
+  });
+
   it('ignores inactive trucks', () => {
     const trucks = [{ ...YELLOW, active: false }, BLACK, WHITE];
     expect(checkAllTrucks(trucks, SAMPLE).suggestion.truck.name).toBe('Black');

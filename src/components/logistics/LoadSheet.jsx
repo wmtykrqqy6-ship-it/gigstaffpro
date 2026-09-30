@@ -51,7 +51,9 @@ export default function LoadSheet({ open, onClose, date, sheets = [], ctx, stops
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     <TruckSwatch color={truck.color} size={16} />
-                    {truck.name} truck — Trip {load.sequence}{load.sequence > 1 ? ' (reload)' : ''}
+                    {run.is_personal
+                      ? `Personal vehicle${team[0] ? ` (${team[0]})` : ''}`
+                      : `${truck.name} truck`} — Trip {load.sequence}{load.sequence > 1 ? ' (reload)' : ''}
                   </h2>
                   <p className="text-sm text-gray-600">{dateLabel}</p>
                   {team.length > 0 && <p className="text-sm text-gray-600">Team: {team.join(' & ')}</p>}

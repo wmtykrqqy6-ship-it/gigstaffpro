@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown, X,
-  AlertTriangle, XCircle, CheckCircle, Warehouse, Users, Minus, Printer
+  AlertTriangle, XCircle, CheckCircle, Warehouse, Users, Minus, Printer, Car
 } from 'lucide-react';
 import LoadSheet from './LoadSheet';
 import { useToast } from '../ui/Toast';
@@ -11,7 +11,8 @@ import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelper
 import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
-  sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot, SPOT_FOR_FIELD
+  sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot,
+  isPersonalTruck, spotFor, runLabel
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
@@ -69,9 +70,13 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   const workersById = useMemo(() => Object.fromEntries(workers.map(w => [w.id, w])), [workers]);
   const trucksById = useMemo(() => Object.fromEntries(trucks.map(t => [t.id, t])), [trucks]);
   const activeTrucks = useMemo(
-    () => trucks.filter(t => t.active !== false).sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99)),
+    () => trucks.filter(t => t.active !== false && !isPersonalTruck(t)).sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99)),
     [trucks]
   );
+  // The "Personal vehicle" row (from the solo/personal-vehicle migration);
+  // personal-vehicle deliveries are checked against its capacities.
+  const personalTruck = useMemo(() => trucks.find(t => isPersonalTruck(t) && t.active !== false) || null, [trucks]);
+  const label = (run) => runLabel(run, trucksById, workersById);
 
   // Fetch the day; if any run's stop sequence numbers drifted from the
   // board's order (trips, then evening), persist the normalized order.
@@ -151,7 +156,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 
   const handleRemoveEventFromLoad = async (run, load, eventId) => {
     const ev = eventsById[eventId];
-    if (!(await confirm(`Take ${ev?.name || 'this event'} off ${trucksById[run.truck_id]?.name || 'this truck'} trip ${load.sequence}?`))) return;
+    if (!(await confirm(`Take ${ev?.name || 'this event'} off ${label(run)} trip ${load.sequence}?`))) return;
     act(async () => {
       await deleteAllocationsFor(load.id, eventId);
       const runLoadIds = day.loads.filter(l => l.run_id === run.id && l.id !== load.id).map(l => l.id);
@@ -185,7 +190,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   });
 
   const handleDeleteRun = async (run) => {
-    if (!(await confirm(`Clear the whole ${trucksById[run.truck_id]?.name || ''} plan for this day? Its trips, loaded tables and stops will be removed.`))) return;
+    if (!(await confirm(`Clear the whole ${label(run)} plan for this day? Its trips, loaded tables and stops will be removed.`))) return;
     act(() => deleteRun(run.id));
   };
 
@@ -194,11 +199,20 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
     act(() => deleteLoad(load.id));
   };
 
-  // Trips in truck-priority then trip order, for "All load sheets".
-  const sheetOrder = activeTrucks.flatMap(t => {
-    const run = day.runs.find(r => r.truck_id === t.id);
-    return run ? day.loads.filter(l => l.run_id === run.id).sort((a, b) => a.sequence - b.sequence) : [];
-  });
+  // Personal-vehicle deliveries for the day, oldest first.
+  const personalRuns = day.runs
+    .filter(r => r.is_personal)
+    .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+
+  // Trips in truck-priority order, then personal vehicles, for "All load sheets".
+  const tripsOf = (run) => day.loads.filter(l => l.run_id === run.id).sort((a, b) => a.sequence - b.sequence);
+  const sheetOrder = [
+    ...activeTrucks.flatMap(t => {
+      const run = day.runs.find(r => r.truck_id === t.id && !r.is_personal);
+      return run ? tripsOf(run) : [];
+    }),
+    ...personalRuns.flatMap(tripsOf)
+  ];
   const sheets = (sheetLoadIds || []).map(id => {
     const load = day.loads.find(l => l.id === id);
     const run = load && day.runs.find(r => r.id === load.run_id);
@@ -321,11 +335,13 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">No active trucks — add them under the Trucks tab.</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {activeTrucks.map(truck => {
-            const run = day.runs.find(r => r.truck_id === truck.id);
+          {[
+            ...activeTrucks.map(truck => ({ key: truck.id, truck, run: day.runs.find(r => r.truck_id === truck.id && !r.is_personal) })),
+            ...(personalTruck ? personalRuns.map(run => ({ key: run.id, truck: personalTruck, run })) : [])
+          ].map(({ key, truck, run }) => {
             return (
               <TruckColumn
-                key={truck.id}
+                key={key}
                 truck={truck}
                 run={run}
                 date={date}
@@ -355,6 +371,18 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
               />
             );
           })}
+          {personalTruck && (
+            <div className="bg-white rounded-lg shadow border-2 border-dashed border-gray-200 p-6 text-center">
+              <Car size={24} className="mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-500 mb-3">Small event? One person can deliver it in their own car.</p>
+              <button
+                onClick={() => act(() => createRun(date, personalTruck.id, { is_personal: true }))}
+                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm inline-flex items-center gap-1.5"
+              >
+                <Plus size={15} /> Personal vehicle delivery
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -383,14 +411,15 @@ function TruckColumn({
   const [notes, setNotes] = useState(run?.notes || '');
   useEffect(() => setNotes(run?.notes || ''), [run?.notes]);
 
+  const personal = !!run?.is_personal;
   const header = (
     <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
       <div className="flex items-center gap-2 font-semibold text-gray-900">
-        <TruckSwatch color={truck.color} size={16} />
-        {truck.name}
+        {personal ? <Car size={16} className="text-gray-500" /> : <TruckSwatch color={truck.color} size={16} />}
+        {personal ? runLabel(run, { [truck.id]: truck }, workersById) : truck.name}
       </div>
       {run && (
-        <button onClick={onDeleteRun} className="text-gray-400 hover:text-red-700 p-1" title="Clear this truck's plan">
+        <button onClick={onDeleteRun} className="text-gray-400 hover:text-red-700 p-1" title={personal ? 'Remove this personal-vehicle delivery' : "Clear this truck's plan"}>
           <Trash2 size={15} />
         </button>
       )}
@@ -430,9 +459,11 @@ function TruckColumn({
   const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
   const qualifies = (w, spot) => (spot === 'driver' ? isDriver(w, roles) : isSetUp(w, roles));
   const driverCount = eligibleForSpot(workers, positions, 'driver').length;
+  const carCapacityMissing = personal &&
+    ['craps_stretch', 'roulette_capacity', 'poker_capacity', 'blackjack_capacity'].every(k => !Number(truck[k]));
 
   const workerSelect = (field, otherField) => {
-    const spot = SPOT_FOR_FIELD[field];
+    const spot = spotFor(run, field);
     const current = workersById[run[field]];
     const options = eligibleForSpot(workers, positions, spot).filter(w => w.id !== run[otherField]).sort(byName);
     if (current && !options.some(w => w.id === current.id)) options.unshift(current);
@@ -508,23 +539,49 @@ function TruckColumn({
 
       {/* Team */}
       <div className="px-4 py-3 border-b">
-        <div className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1"><Users size={13} /> Setup team</div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <div className="text-[11px] text-gray-500 mb-0.5">Driver</div>
+        {personal ? (
+          <>
+            <div className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1"><Users size={13} /> Crew member (own car)</div>
             {workerSelect('worker1_id', 'worker2_id')}
-          </div>
-          <div>
-            <div className="text-[11px] text-gray-500 mb-0.5">Set Up</div>
-            {workerSelect('worker2_id', 'worker1_id')}
-          </div>
-        </div>
+            {carCapacityMissing && (
+              <p className="text-[11px] text-amber-700 mt-1">Enter what fits in a car on the Trucks tab (Personal vehicle) — until then everything shows as not fitting.</p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="text-xs font-semibold text-gray-700 flex items-center gap-1"><Users size={13} /> Setup team</div>
+              {'solo' in run && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-600" title="One person runs this truck">
+                  <input
+                    type="checkbox"
+                    checked={!!run.solo}
+                    onChange={(e) => onUpdateRun(e.target.checked ? { solo: true, worker2_id: null } : { solo: false })}
+                  />
+                  Solo
+                </label>
+              )}
+            </div>
+            <div className={`grid gap-2 ${run.solo ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              <div>
+                <div className="text-[11px] text-gray-500 mb-0.5">Driver</div>
+                {workerSelect('worker1_id', 'worker2_id')}
+              </div>
+              {!run.solo && (
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">Set Up</div>
+                  {workerSelect('worker2_id', 'worker1_id')}
+                </div>
+              )}
+            </div>
+          </>
+        )}
         {!roles.active && (
           <p className="text-[11px] text-gray-500 mt-1">
             Showing everyone. Add a <strong>Set Up Driver</strong> position in Settings → Positions and tick it on your drivers to limit these lists.
           </p>
         )}
-        {roles.active && driverCount === 0 && (
+        {roles.active && !personal && driverCount === 0 && (
           <p className="text-[11px] text-amber-700 mt-1">No Set Up Drivers yet — tick “Set Up Driver” on workers in Staff → Edit.</p>
         )}
       </div>

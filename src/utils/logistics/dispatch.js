@@ -155,6 +155,27 @@ export function eligibleForSpot(workers = [], positions = [], spot = 'driver') {
 
 export const SPOT_FOR_FIELD = { worker1_id: 'driver', worker2_id: 'setup' };
 
+// ---- Solo trucks and personal vehicles ------------------------------------
+// Confirmed with Dylan 2026-09-30: small events are sometimes delivered by one
+// person -- on a truck (a "solo" run) or in their own car (a personal-vehicle
+// run: one person, checked against the "Personal vehicle" capacity row, any
+// number per day). Anyone with Set Up or Set Up Driver can take their car.
+export const isPersonalTruck = (truck) => truck?.kind === 'personal';
+export const isOneSpotRun = (run) => !!(run?.is_personal || run?.solo);
+
+// Spot for a team field on a given run: a personal-vehicle run's only person
+// needs Set Up or Set Up Driver (not the truck-driver skill).
+export const spotFor = (run, field) => (run?.is_personal ? 'setup' : SPOT_FOR_FIELD[field]);
+
+// "Black", or "Personal vehicle (Ana)".
+export function runLabel(run, trucksById = {}, workersById = {}) {
+  if (run?.is_personal) {
+    const who = workersById[run.worker1_id]?.name;
+    return who ? `Personal vehicle (${who})` : 'Personal vehicle';
+  }
+  return trucksById[run?.truck_id]?.name || 'Truck';
+}
+
 // Filled assignments of these workers on events that day -> dealing windows.
 export function dealingShifts(workerIds, assignments = [], eventsById = {}, date) {
   const ids = new Set(workerIds);
@@ -206,7 +227,7 @@ export function computeDayConflicts(input) {
   const loadsById = Object.fromEntries(loads.map(l => [l.id, l]));
   const eventsById = { ...allEventsById, ...Object.fromEntries(events.map(e => [e.id, e])) };
   const workerName = (id) => workersById[id]?.name || 'A team member';
-  const truckName = (run) => trucksById[run?.truck_id]?.name || 'Truck';
+  const truckName = (run) => runLabel(run, trucksById, workersById);
   const eventName = (id) => eventsById[id]?.name || 'an event';
 
   const allocationsByLoad = {};
@@ -223,7 +244,7 @@ export function computeDayConflicts(input) {
     const result = checkLoad(truck, allocationsByLoad[load.id] || []);
     if (result.status === 'green') continue;
     for (const reason of result.reasons) {
-      push(result.status === 'red' ? 'error' : 'warning', 'capacity', `${truck.name} trip ${load.sequence}: ${reason}`, { runId: run.id, loadId: load.id });
+      push(result.status === 'red' ? 'error' : 'warning', 'capacity', `${truckName(run)} trip ${load.sequence}: ${reason}`, { runId: run.id, loadId: load.id });
     }
   }
 
@@ -231,18 +252,27 @@ export function computeDayConflicts(input) {
   const runsByWorker = {};
   for (const run of runs) {
     const team = teamIds(run);
-    if (team.length === 0) push('warning', 'no-team', `${truckName(run)} has no team assigned`, { runId: run.id });
-    else if (team.length === 1) push('warning', 'short-team', `${truckName(run)} has only one team member`, { runId: run.id });
+    if (team.length === 0) {
+      push('warning', 'no-team', run.is_personal ? 'A personal-vehicle delivery has nobody assigned' : `${truckName(run)} has no team assigned`, { runId: run.id });
+    } else if (team.length === 1 && !isOneSpotRun(run)) {
+      push('warning', 'short-team', `${truckName(run)} has only one team member — switch on Solo if that's intended`, { runId: run.id });
+    }
     for (const id of team) (runsByWorker[id] ||= []).push(run);
     const roles = crewRoles(positions);
     if (roles.active) {
-      const driver = workersById[run.worker1_id];
-      const setUp = workersById[run.worker2_id];
-      if (driver && !isDriver(driver, roles)) {
-        push('warning', 'not-a-driver', `${workerName(driver.id)} is in ${truckName(run)}'s Driver spot but isn't a Set Up Driver`, { runId: run.id });
-      }
-      if (setUp && !isSetUp(setUp, roles)) {
-        push('warning', 'not-set-up', `${workerName(setUp.id)} is on ${truckName(run)} but isn't marked Set Up or Set Up Driver`, { runId: run.id });
+      const first = workersById[run.worker1_id];
+      const second = workersById[run.worker2_id];
+      if (run.is_personal) {
+        if (first && !isSetUp(first, roles)) {
+          push('warning', 'not-set-up', `${workerName(first.id)} is doing a personal-vehicle delivery but isn't marked Set Up or Set Up Driver`, { runId: run.id });
+        }
+      } else {
+        if (first && !isDriver(first, roles)) {
+          push('warning', 'not-a-driver', `${workerName(first.id)} is in ${truckName(run)}'s Driver spot but isn't a Set Up Driver`, { runId: run.id });
+        }
+        if (second && !isSetUp(second, roles)) {
+          push('warning', 'not-set-up', `${workerName(second.id)} is on ${truckName(run)} but isn't marked Set Up or Set Up Driver`, { runId: run.id });
+        }
       }
     }
   }
