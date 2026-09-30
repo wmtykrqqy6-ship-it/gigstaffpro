@@ -116,24 +116,44 @@ export function checkLoad(truck, loadAllocations) {
 
 export const teamIds = (run) => [run?.worker1_id, run?.worker2_id].filter(Boolean);
 
-// Only workers with this skill can be put on a truck team. It's an ordinary
-// position (Settings -> Positions, named "Setup Driver"); a worker's skills
-// are the positions ticked on their profile, and only admins can change them.
-export const DRIVER_POSITION_KEY = 'setup_driver';
+// Truck team spots (confirmed with Dylan 2026-09-29): 1 Driver + 1 Set Up.
+//   Driver spot (worker1_id): must have the Set Up Driver skill.
+//   Set Up spot (worker2_id): Set Up or Set Up Driver.
+// Both are ordinary positions from Settings -> Positions; a worker's skills
+// are the positions ticked on their profile, and only admins can change
+// them. Position keys are fixed from the name first typed (renaming only
+// changes the label), so roles are recognized by key *or* label. Live keys
+// as of 2026-09-29: 'driver' (label "Set Up Driver") and 'set_up' ("Set Up").
+const DRIVER_KEYS = ['driver', 'setup_driver', 'set_up_driver'];
+const SETUP_KEYS = ['set_up', 'setup'];
 
-// True once the "Setup Driver" position exists; until then nobody can have
-// the skill, so the board doesn't restrict who can drive.
-export const driverRuleActive = (positions = []) => positions.some(p => p?.key === DRIVER_POSITION_KEY);
-
-export const isDriver = (worker) =>
-  Array.isArray(worker?.skills) && worker.skills.includes(DRIVER_POSITION_KEY);
-
-// Workers who may be picked for a truck team (active, and Setup Drivers once
-// that position exists).
-export function eligibleDrivers(workers = [], positions = []) {
-  const active = workers.filter(w => w.is_active !== false);
-  return driverRuleActive(positions) ? active.filter(isDriver) : active;
+export function crewRoles(positions = []) {
+  const driverKeys = new Set();
+  const setupKeys = new Set();
+  for (const p of positions || []) {
+    if (!p?.key) continue;
+    const label = String(p.label || '').trim().toLowerCase();
+    if (DRIVER_KEYS.includes(p.key) || /driver/.test(label)) driverKeys.add(p.key);
+    else if (SETUP_KEYS.includes(p.key) || /^set[\s-]?up$/.test(label)) setupKeys.add(p.key);
+  }
+  // Until a driver position exists nobody can have the skill, so the board
+  // doesn't restrict the spots at all.
+  return { driverKeys, setupKeys, active: driverKeys.size > 0 };
 }
+
+const hasAny = (worker, keys) => Array.isArray(worker?.skills) && worker.skills.some(k => keys.has(k));
+export const isDriver = (worker, roles) => hasAny(worker, roles.driverKeys);
+export const isSetUp = (worker, roles) => hasAny(worker, roles.driverKeys) || hasAny(worker, roles.setupKeys);
+
+// Active workers who may fill a spot: 'driver' (worker1_id) or 'setup' (worker2_id).
+export function eligibleForSpot(workers = [], positions = [], spot = 'driver') {
+  const roles = crewRoles(positions);
+  const active = workers.filter(w => w.is_active !== false);
+  if (!roles.active) return active;
+  return active.filter(w => (spot === 'driver' ? isDriver(w, roles) : isSetUp(w, roles)));
+}
+
+export const SPOT_FOR_FIELD = { worker1_id: 'driver', worker2_id: 'setup' };
 
 // Filled assignments of these workers on events that day -> dealing windows.
 export function dealingShifts(workerIds, assignments = [], eventsById = {}, date) {
@@ -214,11 +234,15 @@ export function computeDayConflicts(input) {
     if (team.length === 0) push('warning', 'no-team', `${truckName(run)} has no team assigned`, { runId: run.id });
     else if (team.length === 1) push('warning', 'short-team', `${truckName(run)} has only one team member`, { runId: run.id });
     for (const id of team) (runsByWorker[id] ||= []).push(run);
-    if (driverRuleActive(positions)) {
-      for (const id of team) {
-        if (workersById[id] && !isDriver(workersById[id])) {
-          push('warning', 'not-a-driver', `${workerName(id)} is on ${truckName(run)} but isn't marked as a Setup Driver`, { runId: run.id });
-        }
+    const roles = crewRoles(positions);
+    if (roles.active) {
+      const driver = workersById[run.worker1_id];
+      const setUp = workersById[run.worker2_id];
+      if (driver && !isDriver(driver, roles)) {
+        push('warning', 'not-a-driver', `${workerName(driver.id)} is in ${truckName(run)}'s Driver spot but isn't a Set Up Driver`, { runId: run.id });
+      }
+      if (setUp && !isSetUp(setUp, roles)) {
+        push('warning', 'not-set-up', `${workerName(setUp.id)} is on ${truckName(run)} but isn't marked Set Up or Set Up Driver`, { runId: run.id });
       }
     }
   }

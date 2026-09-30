@@ -11,7 +11,7 @@ import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelper
 import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
-  sequenceChanges, moveStop, planAddEventToLoad, eligibleDrivers, driverRuleActive, isDriver
+  sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot, SPOT_FOR_FIELD
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
@@ -422,15 +422,19 @@ function TruckColumn({
     (dealingToday[s.workerId] ||= []).push(eventsById[s.eventId]?.name);
   }
   const otherRunWorkers = new Set(day.runs.filter(r => r.id !== run.id).flatMap(r => [r.worker1_id, r.worker2_id]).filter(Boolean));
-  // Only Setup Drivers can be picked once that position exists (Settings ->
-  // Positions). Someone already on the team who isn't one stays listed so
-  // they aren't silently dropped -- the board warns about them instead.
-  const ruleActive = driverRuleActive(positions);
-  const drivers = eligibleDrivers(workers, positions).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Driver spot: Set Up Drivers only. Set Up spot: Set Up or Set Up Driver.
+  // (Only once a driver position exists in Settings -> Positions.) Someone
+  // already in a spot who doesn't qualify stays listed so they aren't
+  // silently dropped -- the board warns about them instead.
+  const roles = crewRoles(positions);
+  const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
+  const qualifies = (w, spot) => (spot === 'driver' ? isDriver(w, roles) : isSetUp(w, roles));
+  const driverCount = eligibleForSpot(workers, positions, 'driver').length;
 
   const workerSelect = (field, otherField) => {
+    const spot = SPOT_FOR_FIELD[field];
     const current = workersById[run[field]];
-    const options = drivers.filter(w => w.id !== run[otherField]);
+    const options = eligibleForSpot(workers, positions, spot).filter(w => w.id !== run[otherField]).sort(byName);
     if (current && !options.some(w => w.id === current.id)) options.unshift(current);
     return (
       <select
@@ -442,7 +446,7 @@ function TruckColumn({
         {options.map(w => (
           <option key={w.id} value={w.id}>
             {w.name}
-            {ruleActive && !isDriver(w) ? ' (not a Setup Driver)' : ''}
+            {roles.active && !qualifies(w, spot) ? (spot === 'driver' ? ' (not a Set Up Driver)' : ' (not Set Up)') : ''}
             {otherRunWorkers.has(w.id) ? ' (on another truck)' : ''}
             {dealingToday[w.id] ? ` (dealing ${dealingToday[w.id].join(', ')})` : ''}
           </option>
@@ -506,16 +510,22 @@ function TruckColumn({
       <div className="px-4 py-3 border-b">
         <div className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1"><Users size={13} /> Setup team</div>
         <div className="grid grid-cols-2 gap-2">
-          {workerSelect('worker1_id', 'worker2_id')}
-          {workerSelect('worker2_id', 'worker1_id')}
+          <div>
+            <div className="text-[11px] text-gray-500 mb-0.5">Driver</div>
+            {workerSelect('worker1_id', 'worker2_id')}
+          </div>
+          <div>
+            <div className="text-[11px] text-gray-500 mb-0.5">Set Up</div>
+            {workerSelect('worker2_id', 'worker1_id')}
+          </div>
         </div>
-        {!ruleActive && (
+        {!roles.active && (
           <p className="text-[11px] text-gray-500 mt-1">
-            Showing everyone. Add a position named <strong>Setup Driver</strong> in Settings → Positions and tick it on your drivers to limit this list.
+            Showing everyone. Add a <strong>Set Up Driver</strong> position in Settings → Positions and tick it on your drivers to limit these lists.
           </p>
         )}
-        {ruleActive && drivers.length === 0 && (
-          <p className="text-[11px] text-amber-700 mt-1">No Setup Drivers yet — tick “Setup Driver” on workers in Staff → Edit.</p>
+        {roles.active && driverCount === 0 && (
+          <p className="text-[11px] text-amber-700 mt-1">No Set Up Drivers yet — tick “Set Up Driver” on workers in Staff → Edit.</p>
         )}
       </div>
 

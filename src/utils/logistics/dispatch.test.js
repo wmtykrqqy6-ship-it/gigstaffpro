@@ -4,7 +4,7 @@ import {
   requiredCounts, allocatedCounts, allocationStatus, formatCounts, checkLoad,
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
-  DRIVER_POSITION_KEY, driverRuleActive, isDriver, eligibleDrivers
+  crewRoles, isDriver, isSetUp, eligibleForSpot
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -358,32 +358,59 @@ describe('planAddEventToLoad', () => {
   });
 });
 
-describe('Setup Driver rule', () => {
-  const POSITIONS = [{ key: 'blackjack', label: 'Blackjack' }, { key: 'setup_driver', label: 'Setup Driver' }];
-  const ana = { id: 'w1', name: 'Ana', skills: ['blackjack', 'setup_driver'] };
-  const ben = { id: 'w2', name: 'Ben', skills: ['blackjack'] };
-  const cy = { id: 'w3', name: 'Cy', skills: ['setup_driver'], is_active: false };
+describe('truck team spots: 1 Driver + 1 Set Up', () => {
+  // Live positions as of 2026-09-29: "Set Up Driver" has key 'driver' (added as
+  // "Driver" and renamed), "Set Up" has key 'set_up'.
+  const POSITIONS = [
+    { key: 'blackjack', label: 'Blackjack' },
+    { key: 'set_up', label: 'Set Up' },
+    { key: 'driver', label: 'Set Up Driver' }
+  ];
+  const ana = { id: 'w1', name: 'Ana', skills: ['blackjack', 'driver'] };
+  const ben = { id: 'w2', name: 'Ben', skills: ['set_up'] };
+  const cy = { id: 'w3', name: 'Cy', skills: ['blackjack'] };
+  const di = { id: 'w4', name: 'Di', skills: ['driver'], is_active: false };
 
-  it('the key matches what Settings -> Positions makes from "Setup Driver"', () => {
-    expect('Setup Driver'.trim().toLowerCase().replace(/\s+/g, '_')).toBe(DRIVER_POSITION_KEY);
+  it('recognizes the live positions by key or label', () => {
+    const roles = crewRoles(POSITIONS);
+    expect([...roles.driverKeys]).toEqual(['driver']);
+    expect([...roles.setupKeys]).toEqual(['set_up']);
+    expect(roles.active).toBe(true);
+    // A differently-keyed driver position is still found by its label.
+    expect([...crewRoles([{ key: 'truck_guy', label: 'Box Truck Driver' }]).driverKeys]).toEqual(['truck_guy']);
+    expect([...crewRoles([{ key: 'setup_crew', label: 'Setup' }]).setupKeys]).toEqual(['setup_crew']);
   });
 
-  it('only active Setup Drivers are eligible once the position exists', () => {
-    expect(eligibleDrivers([ana, ben, cy], POSITIONS).map(w => w.name)).toEqual(['Ana']);
-    expect(isDriver(ben)).toBe(false);
+  it('Driver spot lists only active Set Up Drivers', () => {
+    expect(eligibleForSpot([ana, ben, cy, di], POSITIONS, 'driver').map(w => w.name)).toEqual(['Ana']);
   });
 
-  it('before the position exists, everyone active is eligible', () => {
-    expect(driverRuleActive([{ key: 'blackjack' }])).toBe(false);
-    expect(eligibleDrivers([ana, ben, cy], [{ key: 'blackjack' }]).map(w => w.name)).toEqual(['Ana', 'Ben']);
+  it('Set Up spot lists Set Up and Set Up Drivers', () => {
+    expect(eligibleForSpot([ana, ben, cy, di], POSITIONS, 'setup').map(w => w.name)).toEqual(['Ana', 'Ben']);
+    const roles = crewRoles(POSITIONS);
+    expect(isSetUp(ana, roles)).toBe(true);
+    expect(isDriver(ben, roles)).toBe(false);
   });
 
-  it('warns about a non-driver on a truck, only when the rule is active', () => {
-    const day = cleanDay();
-    day.workersById = { ...WORKERS, w1: { ...WORKERS.w1, skills: ['setup_driver'] }, w2: { ...WORKERS.w2, skills: ['blackjack'] },
-      w3: { ...WORKERS.w3, skills: ['setup_driver'] }, w4: { ...WORKERS.w4, skills: ['setup_driver'] } };
-    expect(computeDayConflicts(day)).toEqual([]); // no positions passed -> rule off
+  it('without a driver position, both spots list everyone active', () => {
+    const noRoles = [{ key: 'blackjack', label: 'Blackjack' }];
+    expect(crewRoles(noRoles).active).toBe(false);
+    expect(eligibleForSpot([ana, ben, cy, di], noRoles, 'driver').map(w => w.name)).toEqual(['Ana', 'Ben', 'Cy']);
+  });
+
+  it('warns about the wrong person in a spot, only when the rule is active', () => {
+    const day = cleanDay(); // rB: w1 (driver spot) + w2; rY: w3 + w4
+    day.workersById = {
+      w1: { ...WORKERS.w1, skills: ['set_up'] },   // Set Up person in the Driver spot
+      w2: { ...WORKERS.w2, skills: ['blackjack'] }, // no crew skill at all
+      w3: { ...WORKERS.w3, skills: ['driver'] },
+      w4: { ...WORKERS.w4, skills: ['driver'] }     // a driver is fine in the Set Up spot
+    };
+    expect(computeDayConflicts(day)).toEqual([]);
     const c = computeDayConflicts({ ...day, positions: POSITIONS });
-    expect(c).toEqual([expect.objectContaining({ level: 'warning', code: 'not-a-driver', runId: 'rB', message: "Ben is on Black but isn't marked as a Setup Driver" })]);
+    expect(c.map(x => [x.code, x.message])).toEqual([
+      ['not-a-driver', "Ana is in Black's Driver spot but isn't a Set Up Driver"],
+      ['not-set-up', "Ben is on Black but isn't marked Set Up or Set Up Driver"]
+    ]);
   });
 });

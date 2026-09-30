@@ -105,11 +105,13 @@ allocations will need this to become an in-place update so allocations survive.
 Logistics → **Dispatch**. One day at a time, one column per active truck.
 
 - **Run** (`daily_runs`): a truck on a day with its 2-person setup team. One per truck per day.
-- **Setup Drivers:** only workers with the **Setup Driver** skill can be put on a truck team. It's an
-  ordinary position (Settings → Positions, named exactly "Setup Driver" → key `setup_driver`) ticked on
-  the worker's profile; only admins can change skills. Until that position exists the dropdowns list
-  everyone. Someone already on a team without the skill stays listed and gets a warning, so nobody is
-  dropped silently.
+- **Team spots (1 Driver + 1 Set Up, confirmed 2026-09-29):** the Driver spot lists only workers with
+  the **Set Up Driver** skill; the Set Up spot lists anyone with **Set Up** or **Set Up Driver**. Both
+  are ordinary positions (Settings → Positions) ticked on the worker's profile; only admins can change
+  skills. Position keys are fixed from the name first typed (renaming changes only the label), so roles
+  are matched by key or label — live keys are `driver` ("Set Up Driver") and `set_up` ("Set Up"). Until a
+  driver position exists the dropdowns list everyone. Someone already in a spot without the skill stays
+  listed and gets a warning, so nobody is dropped silently.
 - **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
 - **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
   Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,
