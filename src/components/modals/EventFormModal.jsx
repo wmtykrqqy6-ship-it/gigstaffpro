@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
+import EventDeliveryTimes from '../logistics/EventDeliveryTimes';
 import { useToast } from '../ui/Toast';
 
 // Shared by AddEventModal.jsx and EditEventModal.jsx (both now thin wrappers
@@ -584,6 +585,11 @@ export default function EventFormModal({
                   </div>
                 </div>
               </div>
+
+              {/* Delivery & pickup (edit mode): the Logistics plan's times */}
+              {isEdit && event?.id && (
+                <EventDeliveryTimes event={event} eventDate={formData.date} workers={workers} />
+              )}
 
               {/* Client Information */}
               <div>

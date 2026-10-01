@@ -108,6 +108,9 @@ allocations will need this to become an in-place update so allocations survive.
 
 Logistics → **Dispatch**. One day at a time, one column per active truck.
 
+- **Edit Event → Delivery & pickup:** the same delivery / dealing / pickup times per vehicle, editable
+  there too (`EventDeliveryTimes.jsx`, saves straight to `run_stops`). Warns if the event's date was
+  changed after it was planned, since the truck plan stays on the old date.
 - **Mini calendar** (left of the board): click a day to plan it. Days are marked ✓ scheduled (every
   event on a vehicle), — not on a truck yet, or a red dashed ring for a conflict (any error from the
   board's own checks), with "Needs a truck" / "Conflicts" lists for the month. Statuses come from
