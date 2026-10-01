@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown, X,
-  AlertTriangle, XCircle, CheckCircle, Warehouse, Users, Minus, Printer, Car
+  AlertTriangle, XCircle, CheckCircle, Minus, Printer, Car
 } from 'lucide-react';
 import LoadSheet from './LoadSheet';
 import { useToast } from '../ui/Toast';
@@ -12,7 +12,7 @@ import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
   sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isPersonalTruck, spotFor, runLabel
+  isPersonalTruck, spotFor, runLabel, teamIds
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
@@ -24,13 +24,6 @@ import {
 const dateOnly = (d) => (d ? String(d).split('T')[0] : '');
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const shiftDate = (date, days) => { const d = parseDateSafe(date); d.setDate(d.getDate() + days); return ymd(d); };
-
-const STOP_STYLES = {
-  deliver: { label: 'Deliver', badge: 'bg-blue-100 text-blue-800' },
-  work: { label: 'Work', badge: 'bg-purple-100 text-purple-800' },
-  pickup: { label: 'Pickup', badge: 'bg-orange-100 text-orange-800' },
-  warehouse: { label: 'Warehouse', badge: 'bg-gray-100 text-gray-700' }
-};
 
 const EMPTY_DAY = { runs: [], loads: [], allocations: [], stops: [] };
 
@@ -231,6 +224,14 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 
   const errors = conflicts.filter(c => c.level === 'error');
   const warnings = conflicts.filter(c => c.level === 'warning');
+  const plannedTruckRuns = activeTrucks
+    .map(truck => ({ truck, run: day.runs.find(r => r.truck_id === truck.id && !r.is_personal) }))
+    .filter(x => x.run);
+  const unplannedTrucks = activeTrucks.filter(t => !day.runs.some(r => r.truck_id === t.id && !r.is_personal));
+  const runCards = [
+    ...plannedTruckRuns,
+    ...(personalTruck ? personalRuns.map(run => ({ truck: personalTruck, run })) : [])
+  ];
 
   return (
     <div className={`space-y-4 ${busy ? 'opacity-70 pointer-events-none' : ''}`}>
@@ -239,19 +240,19 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
         <button onClick={() => setDate(d => shiftDate(d, -1))} className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50" title="Previous day">
           <ChevronLeft size={16} />
         </button>
+        <span className="text-lg font-semibold text-gray-900 min-w-[11rem] text-center">
+          {parseDateSafe(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
+        <button onClick={() => setDate(d => shiftDate(d, 1))} className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50" title="Next day">
+          <ChevronRight size={16} />
+        </button>
         <input
           type="date"
           value={date}
           onChange={(e) => e.target.value && setDate(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+          className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-2 focus:ring-red-500"
+          title="Jump to a date"
         />
-        <button onClick={() => setDate(d => shiftDate(d, 1))} className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50" title="Next day">
-          <ChevronRight size={16} />
-        </button>
-        <span className="text-sm font-semibold text-gray-900 ml-1">
-          {parseDateSafe(date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-        </span>
-        <span className="text-xs text-gray-500">· {dayEvents.length} event{dayEvents.length === 1 ? '' : 's'}</span>
         {day.loads.length > 0 && (
           <button
             onClick={() => setSheetLoadIds(sheetOrder.map(l => l.id))}
@@ -264,125 +265,138 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 
       {loadError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">Error loading the day: {loadError}</div>}
 
-      {/* Day's events and whether they're on a truck */}
-      {dayEvents.length > 0 && (
-        <div className="bg-white rounded-lg shadow divide-y">
-          {dayEvents.map(ev => {
-            const rows = equipmentByEvent[ev.id] || [];
-            const required = requiredCounts(rows);
-            const status = allocationStatus(required, allocatedCounts(day.allocations, ev.id));
-            const needs = ALLOCATABLE_CLASSES.some(c => required[c] > 0);
-            const trucksOn = [...new Set(day.allocations
-              .filter(a => a.event_id === ev.id && a.quantity > 0)
-              .map(a => day.loads.find(l => l.id === a.load_id)?.run_id)
-              .map(runId => trucksById[day.runs.find(r => r.id === runId)?.truck_id])
-              .filter(Boolean))];
-            let chip;
-            if (!rows.length) chip = <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">No pull sheet</span>;
-            else if (status.complete) chip = <span className="text-xs bg-green-100 text-green-800 rounded-full px-2 py-0.5 inline-flex items-center gap-1"><CheckCircle size={12} /> On trucks</span>;
-            else if (!status.anyAllocated) chip = <span className="text-xs bg-red-100 text-red-800 rounded-full px-2 py-0.5">No truck</span>;
-            else chip = (
-              <span className="text-xs bg-yellow-100 text-yellow-800 rounded-full px-2 py-0.5">
-                {Object.keys(status.remaining).length ? `${formatCounts(status.remaining)} not loaded` : `${formatCounts(status.over)} extra`}
-              </span>
-            );
-            return (
-              <div key={ev.id} className="px-4 py-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
+      {/* Day summary: status line, the day's events, and any problems */}
+      <div className="bg-white rounded-lg shadow">
+        <div className={`px-4 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg ${
+          !dayEvents.length ? 'text-gray-500'
+            : errors.length ? 'bg-red-50 text-red-800'
+            : warnings.length ? 'bg-amber-50 text-amber-900'
+            : day.runs.length ? 'bg-green-50 text-green-800' : 'text-gray-600'
+        }`}>
+          {!dayEvents.length ? <>No events on this day.</>
+            : errors.length ? <><XCircle size={16} /> {errors.length} problem{errors.length === 1 ? '' : 's'}{warnings.length ? ` · ${warnings.length} to check` : ''}</>
+            : warnings.length ? <><AlertTriangle size={16} /> {warnings.length} thing{warnings.length === 1 ? '' : 's'} to check</>
+            : day.runs.length ? <><CheckCircle size={16} /> {dayEvents.length} event{dayEvents.length === 1 ? '' : 's'} · all on trucks · no conflicts</>
+            : <>{dayEvents.length} event{dayEvents.length === 1 ? '' : 's'}</>}
+        </div>
+        {dayEvents.length > 0 && (
+          <div className="divide-y border-t">
+            {dayEvents.map(ev => {
+              const rows = equipmentByEvent[ev.id] || [];
+              const required = requiredCounts(rows);
+              const status = allocationStatus(required, allocatedCounts(day.allocations, ev.id));
+              const tables = ALLOCATABLE_CLASSES.filter(c => c !== 'chairs' && c !== 'decor').reduce((n, c) => n + required[c], 0);
+              const onRuns = day.runs.filter(r => day.allocations.some(a =>
+                a.event_id === ev.id && a.quantity > 0 && day.loads.find(l => l.id === a.load_id)?.run_id === r.id));
+              let chip;
+              if (!rows.length) chip = <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">No pull sheet</span>;
+              else if (status.complete) chip = <span className="text-xs bg-green-100 text-green-800 rounded-full px-2 py-0.5 inline-flex items-center gap-1"><CheckCircle size={12} /> On trucks</span>;
+              else if (!status.anyAllocated) chip = <span className="text-xs bg-red-100 text-red-800 rounded-full px-2 py-0.5">No truck yet</span>;
+              else chip = (
+                <span className="text-xs bg-yellow-100 text-yellow-800 rounded-full px-2 py-0.5">
+                  {Object.keys(status.remaining).length ? `${formatCounts(status.remaining)} not loaded` : `${formatCounts(status.over)} extra`}
+                </span>
+              );
+              return (
+                <div key={ev.id} className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                   <span className="font-medium text-gray-900">{ev.name}</span>
-                  <span className="text-xs text-gray-500 ml-2">
+                  <span className="text-sm text-gray-500">
                     {formatTime(ev.time, timeFormat)}{ev.end_time ? `–${formatTime(ev.end_time, timeFormat)}` : ''}
-                    {needs ? ` · ${formatCounts(required)}` : ''}
+                  </span>
+                  {tables > 0 && <span className="text-sm text-gray-500" title={formatCounts(required)}>{tables} table{tables === 1 ? '' : 's'}</span>}
+                  <span className="ml-auto flex items-center gap-2">
+                    {onRuns.map(r => (
+                      <span key={r.id} className="text-xs text-gray-600 inline-flex items-center gap-1">
+                        {r.is_personal ? <Car size={12} /> : <TruckSwatch color={trucksById[r.truck_id]?.color} size={10} />}
+                        {label(r)}
+                      </span>
+                    ))}
+                    {chip}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {trucksOn.map(t => (
-                    <span key={t.id} className="text-xs text-gray-600 inline-flex items-center gap-1"><TruckSwatch color={t.color} size={10} />{t.name}</span>
-                  ))}
-                  {chip}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+        {conflicts.length > 0 && (
+          <ul className="border-t px-4 py-2 space-y-1">
+            {[...errors, ...warnings].map((c, i) => (
+              <li key={i} className={`flex items-start gap-2 text-sm ${c.level === 'error' ? 'text-red-800' : 'text-amber-900'}`}>
+                {c.level === 'error' ? <XCircle size={14} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />}
+                {c.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Add a vehicle */}
+      {!loading && (unplannedTrucks.length > 0 || personalTruck) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-600 mr-1">Add a vehicle:</span>
+          {unplannedTrucks.map(truck => (
+            <button
+              key={truck.id}
+              onClick={() => act(() => createRun(date, truck.id))}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm inline-flex items-center gap-1.5"
+            >
+              <Plus size={14} /><TruckSwatch color={truck.color} size={10} /> {truck.name}
+            </button>
+          ))}
+          {personalTruck && (
+            <button
+              onClick={() => act(() => createRun(date, personalTruck.id, { is_personal: true }))}
+              className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 bg-white hover:bg-gray-50 text-sm inline-flex items-center gap-1.5"
+              title="Small event? One person delivers it in their own car."
+            >
+              <Plus size={14} /><Car size={14} /> Personal vehicle
+            </button>
+          )}
         </div>
       )}
 
-      {/* Conflicts */}
-      {conflicts.length > 0 && (
-        <div className="space-y-1">
-          {errors.map((c, i) => (
-            <div key={'e' + i} className="flex items-start gap-2 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2">
-              <XCircle size={15} className="mt-0.5 flex-shrink-0" /> {c.message}
-            </div>
-          ))}
-          {warnings.map((c, i) => (
-            <div key={'w' + i} className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">
-              <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" /> {c.message}
-            </div>
-          ))}
-        </div>
-      )}
-      {!loading && dayEvents.length > 0 && conflicts.length === 0 && day.runs.length > 0 && (
-        <div className="flex items-center gap-2 text-sm bg-green-50 border border-green-200 text-green-800 rounded-lg px-3 py-2">
-          <CheckCircle size={15} /> Everything is on a truck with no conflicts.
-        </div>
-      )}
-
-      {/* Truck columns */}
+      {/* Planned vehicles */}
       {loading ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">Loading…</div>
-      ) : activeTrucks.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">No active trucks — add them under the Trucks tab.</div>
+      ) : activeTrucks.length === 0 && !personalTruck ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">No active trucks — add them under Trucks &amp; Catalog.</div>
+      ) : runCards.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+          {dayEvents.length ? 'Nothing planned yet — add a vehicle above, then load events onto it.' : 'Nothing planned for this day.'}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {[
-            ...activeTrucks.map(truck => ({ key: truck.id, truck, run: day.runs.find(r => r.truck_id === truck.id && !r.is_personal) })),
-            ...(personalTruck ? personalRuns.map(run => ({ key: run.id, truck: personalTruck, run })) : [])
-          ].map(({ key, truck, run }) => {
-            return (
-              <TruckColumn
-                key={key}
-                truck={truck}
-                run={run}
-                date={date}
-                day={day}
-                dayEvents={dayEvents}
-                eventsById={eventsById}
-                equipmentByEvent={equipmentByEvent}
-                workers={workers}
-                positions={positions}
-                workersById={workersById}
-                assignments={assignments}
-                conflicts={conflicts}
-                timeFormat={timeFormat}
-                onCreateRun={() => act(() => createRun(date, truck.id))}
-                onDeleteRun={() => handleDeleteRun(run)}
-                onUpdateRun={(patch) => act(() => updateRun(run.id, patch))}
-                onAddTrip={() => act(() => addLoad(run.id, Math.max(0, ...day.loads.filter(l => l.run_id === run.id).map(l => l.sequence)) + 1))}
-                onDeleteTrip={handleDeleteTrip}
-                onAddEvent={(load, eventId) => handleAddEventToLoad(run, load, eventId)}
-                onRemoveEvent={(load, eventId) => handleRemoveEventFromLoad(run, load, eventId)}
-                onSetAllocation={(load, eventId, cls, qty) => act(() => setAllocation(load.id, eventId, cls, qty))}
-                onUpdateStop={(stop, patch) => act(() => updateStop(stop.id, patch))}
-                onDeleteStop={(stop) => act(() => deleteStops([stop.id]))}
-                onMoveStop={(stopId, dir) => handleMoveStop(run, stopId, dir)}
-                onAddEveningStop={(type, eventId) => handleAddEveningStop(run, type, eventId)}
-                onOpenLoadSheet={(load) => setSheetLoadIds([load.id])}
-              />
-            );
-          })}
-          {personalTruck && (
-            <div className="bg-white rounded-lg shadow border-2 border-dashed border-gray-200 p-6 text-center">
-              <Car size={24} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500 mb-3">Small event? One person can deliver it in their own car.</p>
-              <button
-                onClick={() => act(() => createRun(date, personalTruck.id, { is_personal: true }))}
-                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm inline-flex items-center gap-1.5"
-              >
-                <Plus size={15} /> Personal vehicle delivery
-              </button>
-            </div>
-          )}
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start">
+          {runCards.map(({ truck, run }) => (
+            <RunCard
+              key={run.id}
+              truck={truck}
+              run={run}
+              date={date}
+              day={day}
+              dayEvents={dayEvents}
+              eventsById={eventsById}
+              equipmentByEvent={equipmentByEvent}
+              workers={workers}
+              positions={positions}
+              workersById={workersById}
+              assignments={assignments}
+              conflicts={conflicts}
+              timeFormat={timeFormat}
+              label={label(run)}
+              onDeleteRun={() => handleDeleteRun(run)}
+              onUpdateRun={(patch) => act(() => updateRun(run.id, patch))}
+              onAddTrip={() => act(() => addLoad(run.id, Math.max(0, ...day.loads.filter(l => l.run_id === run.id).map(l => l.sequence)) + 1))}
+              onDeleteTrip={handleDeleteTrip}
+              onAddEvent={(load, eventId) => handleAddEventToLoad(run, load, eventId)}
+              onRemoveEvent={(load, eventId) => handleRemoveEventFromLoad(run, load, eventId)}
+              onSetAllocation={(load, eventId, cls, qty) => act(() => setAllocation(load.id, eventId, cls, qty))}
+              onUpdateStop={(stop, patch) => act(() => updateStop(stop.id, patch))}
+              onDeleteStop={(stop) => act(() => deleteStops([stop.id]))}
+              onMoveStop={(stopId, dir) => handleMoveStop(run, stopId, dir)}
+              onAddEveningStop={(type, eventId) => handleAddEveningStop(run, type, eventId)}
+              onOpenLoadSheet={(load) => setSheetLoadIds([load.id])}
+            />
+          ))}
         </div>
       )}
 
@@ -402,59 +416,34 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 }
 
 // ---------------------------------------------------------------------------
+// One planned vehicle (truck or personal vehicle) for the day.
 
-function TruckColumn({
+const STOP_LABELS = { deliver: 'Deliver', work: 'Dealing', pickup: 'Pick up', warehouse: 'Warehouse' };
+
+function RunCard({
   truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, positions, workersById, assignments,
-  conflicts, timeFormat, onCreateRun, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
+  conflicts, timeFormat, label, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
   onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet
 }) {
-  const [notes, setNotes] = useState(run?.notes || '');
-  useEffect(() => setNotes(run?.notes || ''), [run?.notes]);
+  const [notes, setNotes] = useState(run.notes || '');
+  useEffect(() => setNotes(run.notes || ''), [run.notes]);
 
-  const personal = !!run?.is_personal;
-  const header = (
-    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
-      <div className="flex items-center gap-2 font-semibold text-gray-900">
-        {personal ? <Car size={16} className="text-gray-500" /> : <TruckSwatch color={truck.color} size={16} />}
-        {personal ? runLabel(run, { [truck.id]: truck }, workersById) : truck.name}
-      </div>
-      {run && (
-        <button onClick={onDeleteRun} className="text-gray-400 hover:text-red-700 p-1" title={personal ? 'Remove this personal-vehicle delivery' : "Clear this truck's plan"}>
-          <Trash2 size={15} />
-        </button>
-      )}
-    </div>
-  );
-
-  if (!run) {
-    return (
-      <div className="bg-white rounded-lg shadow">
-        {header}
-        <div className="p-6 text-center">
-          <p className="text-sm text-gray-500 mb-3">Not planned for this day.</p>
-          <button onClick={onCreateRun} className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 text-sm inline-flex items-center gap-1.5">
-            <Plus size={15} /> Plan {truck.name}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  const personal = !!run.is_personal;
   const runLoads = day.loads.filter(l => l.run_id === run.id);
   const runStops = day.stops.filter(s => s.run_id === run.id);
-  const { trips, evening } = orderRunStops(runLoads, runStops);
-  const conflictFor = (pred) => conflicts.filter(pred);
+  const { trips, evening, ordered } = orderRunStops(runLoads, runStops);
+  const fmt = (t) => (t ? formatTime(String(t).slice(0, 5), timeFormat) : '');
 
-  // Workers dealing today, for the team pickers.
+  // Team pickers -------------------------------------------------------------
   const dealingToday = {};
   for (const s of dealingShifts(workers.map(w => w.id), assignments, eventsById, date)) {
     (dealingToday[s.workerId] ||= []).push(eventsById[s.eventId]?.name);
   }
   const otherRunWorkers = new Set(day.runs.filter(r => r.id !== run.id).flatMap(r => [r.worker1_id, r.worker2_id]).filter(Boolean));
-  // Driver spot: Set Up Drivers only. Set Up spot: Set Up or Set Up Driver.
-  // (Only once a driver position exists in Settings -> Positions.) Someone
-  // already in a spot who doesn't qualify stays listed so they aren't
-  // silently dropped -- the board warns about them instead.
+  // Driver spot: Set Up Drivers only. Set Up spot (and a personal vehicle's
+  // one person): Set Up or Set Up Driver -- once a driver position exists in
+  // Settings -> Positions. Someone already in a spot who doesn't qualify
+  // stays listed so they aren't silently dropped; the board warns instead.
   const roles = crewRoles(positions);
   const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
   const qualifies = (w, spot) => (spot === 'driver' ? isDriver(w, roles) : isSetUp(w, roles));
@@ -462,261 +451,304 @@ function TruckColumn({
   const carCapacityMissing = personal &&
     ['craps_stretch', 'roulette_capacity', 'poker_capacity', 'blackjack_capacity'].every(k => !Number(truck[k]));
 
-  const workerSelect = (field, otherField) => {
+  const workerSelect = (field, otherField, title) => {
     const spot = spotFor(run, field);
     const current = workersById[run[field]];
     const options = eligibleForSpot(workers, positions, spot).filter(w => w.id !== run[otherField]).sort(byName);
     if (current && !options.some(w => w.id === current.id)) options.unshift(current);
     return (
-      <select
-        value={run[field] || ''}
-        onChange={(e) => onUpdateRun({ [field]: e.target.value || null })}
-        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
-      >
-        <option value="">— Select —</option>
-        {options.map(w => (
-          <option key={w.id} value={w.id}>
-            {w.name}
-            {roles.active && !qualifies(w, spot) ? (spot === 'driver' ? ' (not a Set Up Driver)' : ' (not Set Up)') : ''}
-            {otherRunWorkers.has(w.id) ? ' (on another truck)' : ''}
-            {dealingToday[w.id] ? ` (dealing ${dealingToday[w.id].join(', ')})` : ''}
-          </option>
-        ))}
-      </select>
+      <label className="flex items-center gap-1.5 text-xs text-gray-500">
+        {title}
+        <select
+          value={run[field] || ''}
+          onChange={(e) => onUpdateRun({ [field]: e.target.value || null })}
+          className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-red-500 max-w-[12rem]"
+        >
+          <option value="">— Select —</option>
+          {options.map(w => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+              {roles.active && !qualifies(w, spot) ? (spot === 'driver' ? ' (not a Set Up Driver)' : ' (not Set Up)') : ''}
+              {otherRunWorkers.has(w.id) ? ' (on another vehicle)' : ''}
+              {dealingToday[w.id] ? ` (dealing ${dealingToday[w.id].join(', ')})` : ''}
+            </option>
+          ))}
+        </select>
+      </label>
     );
   };
 
-  const stopRow = (stop, sectionStops) => {
-    const ev = eventsById[stop.event_id];
-    const idx = sectionStops.findIndex(s => s.id === stop.id);
-    const stopConflicts = conflictFor(c => c.stopId === stop.id);
-    const teamOnEvent = stop.stop_type === 'work'
-      ? assignments.filter(a => a.event_id === stop.event_id && isAssignmentFilled(a.status) && [run.worker1_id, run.worker2_id].includes(a.worker_id))
-      : [];
-    return (
-      <div key={stop.id} className={`px-3 py-2 ${stopConflicts.some(c => c.level === 'error') ? 'bg-red-50' : stopConflicts.length ? 'bg-amber-50' : ''}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <span className={`text-[11px] font-semibold uppercase rounded px-1.5 py-0.5 mr-1.5 ${STOP_STYLES[stop.stop_type].badge}`}>
-              {STOP_STYLES[stop.stop_type].label}
-            </span>
-            <span className="text-sm font-medium text-gray-900">{ev?.name || 'Warehouse'}</span>
-            {ev?.address && <div className="text-xs text-gray-500 truncate">{ev.address}</div>}
-            {teamOnEvent.map(a => (
-              <div key={a.id} className="text-xs text-purple-800 flex items-center gap-1">
-                <Users size={11} /> {workersById[a.worker_id]?.name} — {getPositionLabel(a.position)}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center flex-shrink-0">
-            <button disabled={idx <= 0} onClick={() => onMoveStop(stop.id, -1)} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move up"><ArrowUp size={14} /></button>
-            <button disabled={idx >= sectionStops.length - 1} onClick={() => onMoveStop(stop.id, 1)} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30" title="Move down"><ArrowDown size={14} /></button>
-            {stop.stop_type !== 'deliver' && (
-              <button onClick={() => onDeleteStop(stop)} className="p-1 text-gray-400 hover:text-red-700" title="Remove stop"><X size={14} /></button>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <TimeInput value={stop.scheduled_start} onSave={(v) => onUpdateStop(stop, { scheduled_start: v })} />
-          <span className="text-xs text-gray-400">to</span>
-          <TimeInput value={stop.scheduled_end} onSave={(v) => onUpdateStop(stop, { scheduled_end: v })} />
-          {ev?.time && (
-            <span className="text-[11px] text-gray-400 ml-1 whitespace-nowrap">
-              party {formatTime(ev.time, timeFormat)}{ev.end_time ? `–${formatTime(ev.end_time, timeFormat)}` : ''}
-            </span>
-          )}
-        </div>
-        {stopConflicts.map((c, i) => (
-          <div key={i} className={`text-xs mt-1 ${c.level === 'error' ? 'text-red-700' : 'text-amber-800'}`}>• {c.message}</div>
-        ))}
-      </div>
-    );
-  };
+  // Helpers per event ---------------------------------------------------------
+  const team = teamIds(run);
+  const teamDealing = (eventId) => dealingShifts(team, assignments, eventsById, date).some(s => s.eventId === eventId);
+  const teamOnEvent = (eventId) => assignments.filter(a =>
+    a.event_id === eventId && isAssignmentFilled(a.status) && team.includes(a.worker_id));
+  const stopConflicts = (stopIds) => conflicts.filter(c => c.stopId && stopIds.includes(c.stopId));
+  // An event's pickup / work stops belong to the run, so show them under the
+  // first trip that carries the event.
+  const firstTripFor = {};
+  for (const { load, stops } of trips) {
+    const ids = new Set([...day.allocations.filter(a => a.load_id === load.id).map(a => a.event_id), ...stops.map(s => s.event_id)]);
+    for (const id of ids) if (!(id in firstTripFor)) firstTripFor[id] = load.id;
+  }
+  const eventsOnRun = Object.keys(firstTripFor);
+  // Work/pickup stops for events no trip carries (rare: added by hand).
+  const orphanEvening = evening.filter(s => !(s.event_id in firstTripFor));
+
+  const timeRow = (stop, label, onRemove) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-semibold text-gray-600 w-16">{label}</span>
+      <TimeInput value={stop.scheduled_start} onSave={(v) => onUpdateStop(stop, { scheduled_start: v })} />
+      <span className="text-xs text-gray-400">to</span>
+      <TimeInput value={stop.scheduled_end} onSave={(v) => onUpdateStop(stop, { scheduled_end: v })} />
+      {onRemove && (
+        <button onClick={onRemove} className="p-1 text-gray-400 hover:text-red-700" title={`Remove ${label.toLowerCase()} stop`}><X size={13} /></button>
+      )}
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-lg shadow">
-      {header}
-
-      {/* Team */}
-      <div className="px-4 py-3 border-b">
+      {/* Header: vehicle + team */}
+      <div className="px-4 py-3 border-b flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2 font-semibold text-gray-900 mr-auto">
+          {personal ? <Car size={18} className="text-gray-500" /> : <TruckSwatch color={truck.color} size={16} />}
+          {label}
+        </div>
         {personal ? (
-          <>
-            <div className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1"><Users size={13} /> Crew member (own car)</div>
-            {workerSelect('worker1_id', 'worker2_id')}
-            {carCapacityMissing && (
-              <p className="text-[11px] text-amber-700 mt-1">Enter what fits in a car on the Trucks tab (Personal vehicle) — until then everything shows as not fitting.</p>
-            )}
-          </>
+          workerSelect('worker1_id', 'worker2_id', 'Crew member')
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="text-xs font-semibold text-gray-700 flex items-center gap-1"><Users size={13} /> Setup team</div>
-              {'solo' in run && (
-                <label className="flex items-center gap-1.5 text-xs text-gray-600" title="One person runs this truck">
-                  <input
-                    type="checkbox"
-                    checked={!!run.solo}
-                    onChange={(e) => onUpdateRun(e.target.checked ? { solo: true, worker2_id: null } : { solo: false })}
-                  />
-                  Solo
-                </label>
-              )}
-            </div>
-            <div className={`grid gap-2 ${run.solo ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              <div>
-                <div className="text-[11px] text-gray-500 mb-0.5">Driver</div>
-                {workerSelect('worker1_id', 'worker2_id')}
-              </div>
-              {!run.solo && (
-                <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Set Up</div>
-                  {workerSelect('worker2_id', 'worker1_id')}
-                </div>
-              )}
-            </div>
+            {workerSelect('worker1_id', 'worker2_id', 'Driver')}
+            {!run.solo && workerSelect('worker2_id', 'worker1_id', 'Set Up')}
+            {'solo' in run && (
+              <label className="flex items-center gap-1.5 text-xs text-gray-600" title="One person runs this truck">
+                <input
+                  type="checkbox"
+                  checked={!!run.solo}
+                  onChange={(e) => onUpdateRun(e.target.checked ? { solo: true, worker2_id: null } : { solo: false })}
+                />
+                Solo
+              </label>
+            )}
           </>
         )}
-        {!roles.active && (
-          <p className="text-[11px] text-gray-500 mt-1">
-            Showing everyone. Add a <strong>Set Up Driver</strong> position in Settings → Positions and tick it on your drivers to limit these lists.
+        <button onClick={onDeleteRun} className="p-1 text-gray-400 hover:text-red-700" title={personal ? 'Remove this personal-vehicle delivery' : "Clear this truck's plan"}>
+          <Trash2 size={15} />
+        </button>
+        {(!roles.active || (roles.active && !personal && driverCount === 0) || carCapacityMissing) && (
+          <p className="w-full text-[11px] text-amber-700">
+            {carCapacityMissing
+              ? 'Enter what fits in a car under Trucks & Catalog (Personal vehicle) — until then everything shows as not fitting.'
+              : !roles.active
+                ? 'Showing everyone. Add a Set Up Driver position in Settings → Positions and tick it on your drivers to limit these lists.'
+                : 'No Set Up Drivers yet — tick “Set Up Driver” on workers in Staff → Edit.'}
           </p>
-        )}
-        {roles.active && !personal && driverCount === 0 && (
-          <p className="text-[11px] text-amber-700 mt-1">No Set Up Drivers yet — tick “Set Up Driver” on workers in Staff → Edit.</p>
         )}
       </div>
 
       {/* Trips */}
       {trips.map(({ load, stops }) => {
         const loadAllocs = day.allocations.filter(a => a.load_id === load.id);
-        const result = checkLoad(truck, loadAllocs);
-        const style = STATUS_STYLES[result.status];
-        const eventIdsOnLoad = [...new Set([...loadAllocs.map(a => a.event_id), ...stops.map(s => s.event_id)])];
-        const addable = dayEvents.filter(e => !eventIdsOnLoad.includes(e.id));
+        const cap = checkLoad(truck, loadAllocs);
+        const style = STATUS_STYLES[cap.status];
+        const eventIds = [...new Set([...loadAllocs.map(a => a.event_id), ...stops.map(s => s.event_id)])];
+        const addable = dayEvents.filter(e => !eventIds.includes(e.id));
+        const zones = [
+          ['Craps', cap.zones.craps], ['Blackjack', cap.zones.blackjack],
+          ['Roulette', cap.zones.roulette], ['Poker', cap.zones.poker]
+        ].filter(([, z]) => z.capacity > 0 || z.used > 0);
         return (
           <div key={load.id} className="border-b">
-            <div className="px-4 pt-3 flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                <Warehouse size={14} className="text-gray-500" />
-                Trip {load.sequence}{load.sequence > 1 ? ' (reload)' : ''}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => onOpenLoadSheet(load)} className="p-1 text-gray-400 hover:text-gray-700" title="Load sheet"><Printer size={14} /></button>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${style.badge}`}>{style.label}</span>
+            <div className="px-4 pt-3 pb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-sm font-semibold text-gray-900">
+                Trip {load.sequence}{load.sequence > 1 ? ' — reload at the warehouse' : ''}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${style.badge}`}>{style.label}</span>
+              <span className="text-xs text-gray-500">
+                {zones.map(([name, z]) => `${name} ${z.used}/${z.capacity}`).join(' · ')}
+              </span>
+              <span className="ml-auto flex items-center gap-1">
+                <button onClick={() => onOpenLoadSheet(load)} className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 inline-flex items-center gap-1" title="Load sheet">
+                  <Printer size={13} /> Load sheet
+                </button>
                 {load.sequence > 1 && (
                   <button onClick={() => onDeleteTrip(load)} className="p-1 text-gray-400 hover:text-red-700" title="Remove trip"><Trash2 size={13} /></button>
                 )}
+              </span>
+            </div>
+
+            {cap.status !== 'green' && (
+              <div className="px-4 pb-2">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-1.5">
+                  <ZoneBar label="Craps zone" used={cap.zones.craps.used} capacity={cap.zones.craps.capacity} stretch={cap.zones.craps.stretch} />
+                  <ZoneBar label="Blackjack" used={cap.zones.blackjack.used} capacity={cap.zones.blackjack.capacity} />
+                  <ZoneBar label="Roulette" used={cap.zones.roulette.used} capacity={cap.zones.roulette.capacity} />
+                  <ZoneBar label="Poker" used={cap.zones.poker.used} capacity={cap.zones.poker.capacity} />
+                </div>
+                {cap.reasons.map(r => (
+                  <div key={r} className={`text-xs mt-1 ${cap.status === 'red' ? 'text-red-700' : 'text-yellow-800'}`}>• {r}</div>
+                ))}
               </div>
-            </div>
+            )}
 
-            <div className="px-4 py-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-              <ZoneBar label="Craps zone" used={result.zones.craps.used} capacity={result.zones.craps.capacity} stretch={result.zones.craps.stretch} />
-              <ZoneBar label="Blackjack" used={result.zones.blackjack.used} capacity={result.zones.blackjack.capacity} />
-              <ZoneBar label="Roulette" used={result.zones.roulette.used} capacity={result.zones.roulette.capacity} />
-              <ZoneBar label="Poker" used={result.zones.poker.used} capacity={result.zones.poker.capacity} />
-            </div>
-            {result.reasons.map(r => (
-              <div key={r} className={`px-4 text-xs ${result.status === 'red' ? 'text-red-700' : 'text-yellow-800'}`}>• {r}</div>
-            ))}
+            <div className="px-4 pb-3 space-y-2">
+              {eventIds.map(eventId => {
+                const ev = eventsById[eventId];
+                const deliver = stops.find(s => s.event_id === eventId && s.stop_type === 'deliver');
+                const showEvening = firstTripFor[eventId] === load.id;
+                const pickup = showEvening ? evening.find(s => s.event_id === eventId && s.stop_type === 'pickup') : null;
+                const work = showEvening ? evening.find(s => s.event_id === eventId && s.stop_type === 'work') : null;
+                const issues = stopConflicts([deliver, pickup, work].filter(Boolean).map(s => s.id));
+                return (
+                  <div key={eventId} className={`border rounded-lg p-3 ${issues.some(c => c.level === 'error') ? 'border-red-300 bg-red-50/40' : issues.length ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'}`}>
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-gray-900">{ev?.name || 'Event'}</div>
+                        <div className="text-xs text-gray-500">
+                          {ev?.address || ev?.venue}
+                          {ev?.time ? ` · party ${fmt(ev.time)}${ev.end_time ? `–${fmt(ev.end_time)}` : ''}` : ''}
+                        </div>
+                      </div>
+                      <button onClick={() => onRemoveEvent(load, eventId)} className="p-1 text-gray-400 hover:text-red-700" title="Take off this trip"><X size={15} /></button>
+                    </div>
 
-            {/* What's loaded, per event */}
-            <div className="px-4 py-2 space-y-2">
-              {eventIdsOnLoad.map(eventId => (
-                <LoadedEvent
-                  key={eventId}
-                  event={eventsById[eventId]}
-                  allocations={loadAllocs.filter(a => a.event_id === eventId)}
-                  required={requiredCounts(equipmentByEvent[eventId] || [])}
-                  allocatedEverywhere={allocatedCounts(day.allocations, eventId)}
-                  onSet={(cls, qty) => onSetAllocation(load, eventId, cls, qty)}
-                  onRemove={() => onRemoveEvent(load, eventId)}
-                />
-              ))}
+                    <div className="mt-2 space-y-1.5">
+                      {deliver
+                        ? timeRow(deliver, 'Deliver')
+                        : <p className="text-xs text-amber-800">No delivery stop for this trip.</p>}
+                      {showEvening && (pickup
+                        ? timeRow(pickup, 'Pick up', () => onDeleteStop(pickup))
+                        : <button onClick={() => onAddEveningStop('pickup', eventId)} className="text-xs text-red-900 hover:underline">+ Add pickup</button>)}
+                      {showEvening && work && (
+                        <>
+                          {timeRow(work, 'Dealing', () => onDeleteStop(work))}
+                          <p className="text-[11px] text-purple-800 pl-[4.4rem]">
+                            Truck stays parked here.{' '}
+                            {teamOnEvent(eventId).map(a => `${workersById[a.worker_id]?.name} — ${getPositionLabel(a.position)}`).join(', ')}
+                          </p>
+                        </>
+                      )}
+                      {showEvening && !work && teamDealing(eventId) && (
+                        <button onClick={() => onAddEveningStop('work', eventId)} className="text-xs text-purple-800 hover:underline">
+                          + Team is dealing this party — add the dealing time
+                        </button>
+                      )}
+                    </div>
+
+                    <LoadSummary
+                      allocations={loadAllocs.filter(a => a.event_id === eventId)}
+                      required={requiredCounts(equipmentByEvent[eventId] || [])}
+                      allocatedEverywhere={allocatedCounts(day.allocations, eventId)}
+                      onSet={(cls, qty) => onSetAllocation(load, eventId, cls, qty)}
+                    />
+
+                    {issues.map((c, i) => (
+                      <div key={i} className={`text-xs mt-1.5 ${c.level === 'error' ? 'text-red-700' : 'text-amber-800'}`}>• {c.message}</div>
+                    ))}
+                  </div>
+                );
+              })}
+
               {addable.length > 0 && (
                 <select
                   value=""
                   onChange={(e) => e.target.value && onAddEvent(load, e.target.value)}
-                  className="w-full px-2 py-1.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-2 focus:ring-red-500"
                 >
-                  <option value="">+ Load an event onto this trip…</option>
+                  <option value="">{eventIds.length ? '+ Load another event onto this trip…' : '+ Load an event onto this trip…'}</option>
                   {addable.map(e => {
                     const st = allocationStatus(requiredCounts(equipmentByEvent[e.id] || []), allocatedCounts(day.allocations, e.id));
                     return (
                       <option key={e.id} value={e.id}>
-                        {e.name}{st.complete ? ' (already on trucks — split)' : Object.keys(st.remaining).length && st.anyAllocated ? ` (${formatCounts(st.remaining)} left)` : ''}
+                        {e.name}{st.complete ? ' (already on a truck — split it)' : Object.keys(st.remaining).length && st.anyAllocated ? ` (${formatCounts(st.remaining)} left)` : ''}
                       </option>
                     );
                   })}
                 </select>
               )}
             </div>
-
-            {stops.length > 0 && (
-              <div className="divide-y border-t">
-                {stops.map(s => stopRow(s, stops))}
-              </div>
-            )}
           </div>
         );
       })}
 
-      <div className="px-4 py-2 border-b">
-        <button onClick={onAddTrip} className="text-sm text-red-900 hover:text-red-800 inline-flex items-center gap-1">
+      {/* Stops not tied to a trip (rare) */}
+      {orphanEvening.length > 0 && (
+        <div className="px-4 py-2 border-b space-y-1.5">
+          {orphanEvening.map(s => (
+            <div key={s.id}>
+              <div className="text-xs text-gray-700 font-medium">{eventsById[s.event_id]?.name}</div>
+              {timeRow(s, STOP_LABELS[s.stop_type], () => onDeleteStop(s))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Route order (only matters with more than one event) */}
+      {eventsOnRun.length > 1 && (
+        <RouteOrder
+          trips={trips}
+          evening={evening}
+          ordered={ordered}
+          eventsById={eventsById}
+          fmt={fmt}
+          onMoveStop={onMoveStop}
+        />
+      )}
+
+      <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
+        <button onClick={onAddTrip} className="text-sm text-red-900 hover:text-red-800 inline-flex items-center gap-1 flex-shrink-0 sm:mt-1.5">
           <Plus size={14} /> Add reload trip
         </button>
-      </div>
-
-      {/* Evening: work + pickups */}
-      <div className="border-b">
-        <div className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-900">After deliveries — work &amp; pickups</div>
-        {evening.length === 0 ? (
-          <p className="px-4 pb-2 text-xs text-gray-500">Pickups are added automatically when you load an event.</p>
-        ) : (
-          <div className="divide-y">{evening.map(s => stopRow(s, evening))}</div>
-        )}
-        <AddEveningStop dayEvents={dayEvents} onAdd={onAddEveningStop} />
-      </div>
-
-      {/* Notes */}
-      <div className="px-4 py-3">
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={() => notes !== (run.notes || '') && onUpdateRun({ notes: notes || null })}
-          rows={2}
-          placeholder="Notes for this truck (e.g. parking, dock, keys)…"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          rows={1}
+          placeholder="Notes for the crew (parking, dock, keys)…"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
         />
       </div>
     </div>
   );
 }
 
-function LoadedEvent({ event, allocations, required, allocatedEverywhere, onSet, onRemove }) {
+// "Loaded: 2 Craps · 8 Blackjack" with the +/- split controls tucked away.
+function LoadSummary({ allocations, required, allocatedEverywhere, onSet }) {
+  const [editing, setEditing] = useState(false);
   const qty = (cls) => allocations.find(a => a.size_class === cls)?.quantity || 0;
   const classes = ALLOCATABLE_CLASSES.filter(c => required[c] > 0 || qty(c) > 0);
+  if (!classes.length) return <p className="mt-2 text-xs text-gray-500">No equipment imported for this event.</p>;
+
+  const here = classes.filter(c => qty(c) > 0).map(c => `${qty(c)} ${CLASS_LABELS[c]}`).join(' · ') || 'nothing yet';
+  const off = classes.some(c => (allocatedEverywhere[c] || 0) !== (required[c] || 0));
+  const elsewhere = classes.some(c => (allocatedEverywhere[c] || 0) - qty(c) > 0);
+
   return (
-    <div className="border border-gray-200 rounded-lg p-2">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-sm font-medium text-gray-900 truncate">{event?.name || 'Event'}</span>
-        <button onClick={onRemove} className="p-0.5 text-gray-400 hover:text-red-700" title="Take off this trip"><X size={14} /></button>
+    <div className="mt-2 pt-2 border-t border-gray-100">
+      <div className="flex flex-wrap items-center gap-x-2 text-xs">
+        <span className="text-gray-500">Loaded:</span>
+        <span className="text-gray-800">{here}</span>
+        {elsewhere && <span className="text-gray-500">(rest on other trips)</span>}
+        {off && <span className="text-amber-700">· doesn't match the pull sheet</span>}
+        <button onClick={() => setEditing(e => !e)} className="ml-auto text-red-900 hover:underline">
+          {editing ? 'Done' : 'Edit / split'}
+        </button>
       </div>
-      {classes.length === 0 ? (
-        <p className="text-xs text-gray-500">No equipment imported for this event.</p>
-      ) : (
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
+      {editing && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
           {classes.map(cls => {
             const q = qty(cls);
             const total = required[cls] || 0;
-            const elsewhere = (allocatedEverywhere[cls] || 0) - q;
-            const off = elsewhere + q !== total;
+            const other = (allocatedEverywhere[cls] || 0) - q;
+            const mismatch = other + q !== total;
             return (
               <div key={cls} className="flex items-center gap-1 text-xs">
                 <span className="text-gray-600 w-16">{CLASS_LABELS[cls]}</span>
-                <button onClick={() => onSet(cls, q - 1)} disabled={q <= 0} className="w-5 h-5 rounded border border-gray-300 flex items-center justify-center disabled:opacity-30"><Minus size={10} /></button>
-                <span className={`w-6 text-center font-semibold ${off ? 'text-amber-700' : 'text-gray-900'}`}>{q}</span>
-                <button onClick={() => onSet(cls, q + 1)} className="w-5 h-5 rounded border border-gray-300 flex items-center justify-center"><Plus size={10} /></button>
-                <span className="text-gray-400">/{total}{elsewhere > 0 ? ` (${elsewhere} on other trips)` : ''}</span>
+                <button onClick={() => onSet(cls, q - 1)} disabled={q <= 0} className="w-6 h-6 rounded border border-gray-300 flex items-center justify-center disabled:opacity-30"><Minus size={11} /></button>
+                <span className={`w-6 text-center font-semibold ${mismatch ? 'text-amber-700' : 'text-gray-900'}`}>{q}</span>
+                <button onClick={() => onSet(cls, q + 1)} className="w-6 h-6 rounded border border-gray-300 flex items-center justify-center"><Plus size={11} /></button>
+                <span className="text-gray-400">of {total}{other > 0 ? ` (${other} on other trips)` : ''}</span>
               </div>
             );
           })}
@@ -726,22 +758,38 @@ function LoadedEvent({ event, allocations, required, allocatedEverywhere, onSet,
   );
 }
 
-function AddEveningStop({ dayEvents, onAdd }) {
-  const [type, setType] = useState('pickup');
+// Numbered stop order for the crew's route, with move up/down within each
+// section (a trip's deliveries, then the after-deliveries dealing/pickups).
+function RouteOrder({ trips, evening, ordered, eventsById, fmt, onMoveStop }) {
+  const sections = [
+    ...trips.map(t => ({ title: `Trip ${t.load.sequence}`, stops: t.stops })),
+    { title: 'After deliveries', stops: evening }
+  ].filter(s => s.stops.length);
+  const number = (stop) => ordered.findIndex(s => s.id === stop.id) + 1;
   return (
-    <div className="px-4 py-2 flex items-center gap-2">
-      <select value={type} onChange={(e) => setType(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
-        <option value="pickup">+ Pickup</option>
-        <option value="work">+ Work (deal)</option>
-      </select>
-      <select
-        value=""
-        onChange={(e) => e.target.value && onAdd(type, e.target.value)}
-        className="flex-1 min-w-0 px-2 py-1.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600"
-      >
-        <option value="">at event…</option>
-        {dayEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
+    <div className="px-4 py-3 border-b">
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Route order</div>
+      {sections.map(section => (
+        <div key={section.title} className="mb-1.5">
+          <div className="text-[11px] text-gray-400">{section.title}</div>
+          {section.stops.map((stop, i) => (
+            <div key={stop.id} className="flex items-center gap-2 text-sm py-0.5">
+              <span className="w-5 h-5 rounded-full bg-gray-900 text-white text-[11px] flex items-center justify-center flex-shrink-0">{number(stop)}</span>
+              <span className="text-gray-500 w-16 text-xs">{STOP_LABELS[stop.stop_type]}</span>
+              <span className="text-gray-900 truncate">{eventsById[stop.event_id]?.name}</span>
+              <span className="text-xs text-gray-500">{fmt(stop.scheduled_start)}</span>
+              <span className="ml-auto flex items-center">
+                <button disabled={i === 0} onClick={() => onMoveStop(stop.id, -1)} className="px-1.5 py-0.5 text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30 inline-flex items-center gap-0.5" title="Move earlier">
+                  <ArrowUp size={13} /> Earlier
+                </button>
+                <button disabled={i === section.stops.length - 1} onClick={() => onMoveStop(stop.id, 1)} className="px-1.5 py-0.5 text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30 inline-flex items-center gap-0.5" title="Move later">
+                  <ArrowDown size={13} /> Later
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
