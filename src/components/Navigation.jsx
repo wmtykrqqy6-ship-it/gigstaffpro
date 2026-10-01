@@ -35,14 +35,17 @@ export default function Navigation({
     : (locations.find(l => l.id === activeLocation)?.name || 'All Markets');
 
   const navItems = [
+    // Ordered by how often / how urgently they're used (Dylan, 2026-09-30):
+    // daily work, then action items, then pre-event, roster, after-event,
+    // and setup.
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'staff', label: 'Staff', icon: Users },
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'schedule', label: 'Schedule', icon: Clock },
-    { id: 'logistics', label: 'Logistics', icon: Truck },
     { id: 'applications', label: 'Applications', icon: FileText, badge: pendingApplicationsCount },
-    { id: 'reports', label: 'Reports', icon: ClipboardList, badge: pendingReportsCount },
+    { id: 'logistics', label: 'Logistics', icon: Truck },
+    { id: 'staff', label: 'Staff', icon: Users },
     ...(paymentTrackingEnabled ? [{ id: 'payments', label: 'Payments', icon: DollarSign }] : []),
+    { id: 'reports', label: 'Reports', icon: ClipboardList, badge: pendingReportsCount },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
