@@ -12,7 +12,7 @@ import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
   sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isPersonalTruck, spotFor, runLabel, teamIds
+  isPersonalTruck, spotFor, runLabel, teamIds, planMoveEvent
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
@@ -187,6 +187,30 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
     act(() => deleteRun(run.id));
   };
 
+  // Swap the whole vehicle (same crew, trips and stops) to another truck.
+  const handleChangeTruck = (run, truckId) => act(() => updateRun(run.id, { truck_id: truckId }));
+
+  // Move one event off a trip. `target` is 'load:<id>' (an existing trip),
+  // 'truck:<id>' (a truck not planned yet -- planned for the day first), or
+  // 'personal' (a new personal-vehicle delivery).
+  const handleMoveEvent = (fromLoad, eventId, target) => act(async () => {
+    let toLoad;
+    if (target.startsWith('load:')) {
+      toLoad = day.loads.find(l => l.id === target.slice(5));
+    } else {
+      const created = target === 'personal'
+        ? await createRun(date, personalTruck.id, { is_personal: true })
+        : await createRun(date, target.slice(6));
+      toLoad = created.firstLoad;
+    }
+    if (!toLoad || toLoad.id === fromLoad.id) return;
+    const plan = planMoveEvent({ eventId, fromLoad, toLoad, day });
+    await insertAllocations(plan.allocationUpserts);
+    await deleteAllocationsFor(plan.removeFrom.loadId, plan.removeFrom.eventId);
+    for (const u of plan.stopUpdates) await updateStop(u.id, u.patch);
+    await deleteStops(plan.stopDeletes);
+  });
+
   const handleDeleteTrip = async (load) => {
     if (!(await confirm(`Remove trip ${load.sequence} and everything loaded on it?`))) return;
     act(() => deleteLoad(load.id));
@@ -231,6 +255,19 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   const runCards = [
     ...plannedTruckRuns,
     ...(personalTruck ? personalRuns.map(run => ({ truck: personalTruck, run })) : [])
+  ];
+  // "Move to…" choices for an event: every trip on the board, then trucks
+  // not planned yet, then a new personal-vehicle delivery.
+  const moveTargets = [
+    ...runCards.flatMap(({ run }) => {
+      const trips = tripsOf(run);
+      return trips.map(l => ({
+        value: `load:${l.id}`, loadId: l.id, runId: run.id,
+        label: trips.length > 1 ? `${label(run)} — Trip ${l.sequence}` : label(run)
+      }));
+    }),
+    ...unplannedTrucks.map(t => ({ value: `truck:${t.id}`, label: `${t.name} (add for this day)` })),
+    ...(personalTruck ? [{ value: 'personal', label: 'Personal vehicle (new)' }] : [])
   ];
 
   return (
@@ -395,6 +432,10 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
               onMoveStop={(stopId, dir) => handleMoveStop(run, stopId, dir)}
               onAddEveningStop={(type, eventId) => handleAddEveningStop(run, type, eventId)}
               onOpenLoadSheet={(load) => setSheetLoadIds([load.id])}
+              moveTargets={moveTargets}
+              onMoveEvent={handleMoveEvent}
+              truckOptions={run.is_personal ? [] : unplannedTrucks}
+              onChangeTruck={(truckId) => handleChangeTruck(run, truckId)}
             />
           ))}
         </div>
@@ -423,7 +464,8 @@ const STOP_LABELS = { deliver: 'Deliver', work: 'Dealing', pickup: 'Pick up', wa
 function RunCard({
   truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, positions, workersById, assignments,
   conflicts, timeFormat, label, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
-  onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet
+  onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet,
+  moveTargets = [], onMoveEvent, truckOptions = [], onChangeTruck
 }) {
   const [notes, setNotes] = useState(run.notes || '');
   useEffect(() => setNotes(run.notes || ''), [run.notes]);
@@ -513,7 +555,17 @@ function RunCard({
       <div className="px-4 py-3 border-b flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2 font-semibold text-gray-900 mr-auto">
           {personal ? <Car size={18} className="text-gray-500" /> : <TruckSwatch color={truck.color} size={16} />}
-          {label}
+          {!personal && truckOptions.length > 0 ? (
+            <select
+              value={truck.id}
+              onChange={(e) => e.target.value !== truck.id && onChangeTruck(e.target.value)}
+              className="font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-300 rounded-lg px-1 py-0.5 focus:ring-2 focus:ring-red-500"
+              title="Change truck — the crew, trips and stops move with it"
+            >
+              <option value={truck.id}>{truck.name}</option>
+              {truckOptions.map(t => <option key={t.id} value={t.id}>Change to {t.name}</option>)}
+            </select>
+          ) : label}
         </div>
         {personal ? (
           workerSelect('worker1_id', 'worker2_id', 'Crew member')
@@ -610,6 +662,19 @@ function RunCard({
                           {ev?.time ? ` · party ${fmt(ev.time)}${ev.end_time ? `–${fmt(ev.end_time)}` : ''}` : ''}
                         </div>
                       </div>
+                      {moveTargets.some(t => t.loadId !== load.id) && (
+                        <select
+                          value=""
+                          onChange={(e) => e.target.value && onMoveEvent(load, eventId, e.target.value)}
+                          className="text-xs text-gray-600 border border-gray-300 rounded-lg px-2 py-1 bg-white max-w-[11rem] focus:ring-2 focus:ring-red-500"
+                          title="Move this event (its tables, delivery, pickup and dealing time) to another vehicle"
+                        >
+                          <option value="">Move to…</option>
+                          {moveTargets.filter(t => t.loadId !== load.id).map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                      )}
                       <button onClick={() => onRemoveEvent(load, eventId)} className="p-1 text-gray-400 hover:text-red-700" title="Take off this trip"><X size={15} /></button>
                     </div>
 

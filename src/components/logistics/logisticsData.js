@@ -127,8 +127,8 @@ async function loadRunDetails(runs) {
 // e.g. { is_personal: true } for a personal-vehicle delivery.
 export async function createRun(date, truckId, extra = {}) {
   const run = must(await supabase.from('daily_runs').insert([{ run_date: date, truck_id: truckId, ...extra }]).select().single());
-  must(await supabase.from('run_loads').insert([{ run_id: run.id, sequence: 1 }]));
-  return run;
+  const firstLoad = must(await supabase.from('run_loads').insert([{ run_id: run.id, sequence: 1 }]).select().single());
+  return { ...run, firstLoad };
 }
 
 export async function updateRun(runId, patch) {

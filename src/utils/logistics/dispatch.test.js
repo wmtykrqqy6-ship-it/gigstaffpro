@@ -5,7 +5,7 @@ import {
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
   crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isOneSpotRun, spotFor, runLabel
+  isOneSpotRun, spotFor, runLabel, planMoveEvent
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -484,5 +484,70 @@ describe('solo trucks and personal vehicles', () => {
     expect(computeDayConflicts({ ...day, positions: POSITIONS })).toEqual([]);
     day.workersById = { w1: { ...WORKERS.w1, skills: ['blackjack'] } };
     expect(computeDayConflicts({ ...day, positions: POSITIONS }).map(x => x.code)).toEqual(['not-set-up']);
+  });
+});
+
+describe('planMoveEvent', () => {
+  // Black (rB/lB1) carries Geneva + Small Party; Yellow (rY/lY1) has one other event.
+  const base = () => ({
+    loads: [{ id: 'lB1', run_id: 'rB', sequence: 1 }, { id: 'lY1', run_id: 'rY', sequence: 1 }],
+    allocations: [
+      { load_id: 'lB1', event_id: 'eG', size_class: 'blackjack', quantity: 8 },
+      { load_id: 'lB1', event_id: 'eG', size_class: 'craps', quantity: 2 },
+      { load_id: 'lB1', event_id: 'eS', size_class: 'blackjack', quantity: 3 }
+    ],
+    stops: [
+      { id: 'dS', run_id: 'rB', load_id: 'lB1', event_id: 'eS', stop_type: 'deliver', sequence: 1 },
+      { id: 'dG', run_id: 'rB', load_id: 'lB1', event_id: 'eG', stop_type: 'deliver', sequence: 2 },
+      { id: 'wS', run_id: 'rB', load_id: null, event_id: 'eS', stop_type: 'work', sequence: 3 },
+      { id: 'pG', run_id: 'rB', load_id: null, event_id: 'eG', stop_type: 'pickup', sequence: 4 },
+      { id: 'pS', run_id: 'rB', load_id: null, event_id: 'eS', stop_type: 'pickup', sequence: 5 },
+      { id: 'yX', run_id: 'rY', load_id: 'lY1', event_id: 'eX', stop_type: 'deliver', sequence: 1 }
+    ]
+  });
+  const B = { id: 'lB1', run_id: 'rB' };
+  const Y = { id: 'lY1', run_id: 'rY' };
+
+  it('moves an event with its tables, delivery, dealing time and pickup to the other vehicle', () => {
+    const plan = planMoveEvent({ eventId: 'eS', fromLoad: B, toLoad: Y, day: base() });
+    expect(plan.allocationUpserts).toEqual([{ load_id: 'lY1', event_id: 'eS', size_class: 'blackjack', quantity: 3 }]);
+    expect(plan.removeFrom).toEqual({ loadId: 'lB1', eventId: 'eS' });
+    expect(plan.stopUpdates).toEqual([
+      { id: 'dS', patch: { run_id: 'rY', load_id: 'lY1', sequence: 2 } },
+      { id: 'wS', patch: { run_id: 'rY', load_id: null, sequence: 3 } },
+      { id: 'pS', patch: { run_id: 'rY', load_id: null, sequence: 4 } }
+    ]);
+    expect(plan.stopDeletes).toEqual([]);
+  });
+
+  it('adds to tables the event already has on the target and drops duplicate stops', () => {
+    const day = base();
+    day.allocations.push({ load_id: 'lY1', event_id: 'eG', size_class: 'blackjack', quantity: 2 });
+    day.stops.push({ id: 'dGy', run_id: 'rY', load_id: 'lY1', event_id: 'eG', stop_type: 'deliver', sequence: 2 });
+    day.stops.push({ id: 'pGy', run_id: 'rY', load_id: null, event_id: 'eG', stop_type: 'pickup', sequence: 3 });
+    const plan = planMoveEvent({ eventId: 'eG', fromLoad: B, toLoad: Y, day });
+    expect(plan.allocationUpserts).toEqual([
+      { load_id: 'lY1', event_id: 'eG', size_class: 'blackjack', quantity: 10 },
+      { load_id: 'lY1', event_id: 'eG', size_class: 'craps', quantity: 2 }
+    ]);
+    expect(plan.stopUpdates).toEqual([]);
+    expect(plan.stopDeletes).toEqual(['dG', 'pG']);
+  });
+
+  it('leaves pickup/dealing behind when the event is still on another trip of the source vehicle', () => {
+    const day = base();
+    day.loads.push({ id: 'lB2', run_id: 'rB', sequence: 2 });
+    day.allocations.push({ load_id: 'lB2', event_id: 'eG', size_class: 'blackjack', quantity: 1 });
+    const plan = planMoveEvent({ eventId: 'eG', fromLoad: B, toLoad: Y, day });
+    expect(plan.stopUpdates.map(u => u.id)).toEqual(['dG']);
+    expect(plan.stopDeletes).toEqual([]);
+  });
+
+  it('moving to another trip of the same vehicle only moves the delivery', () => {
+    const day = base();
+    day.loads.push({ id: 'lB2', run_id: 'rB', sequence: 2 });
+    const plan = planMoveEvent({ eventId: 'eS', fromLoad: B, toLoad: { id: 'lB2', run_id: 'rB' }, day });
+    expect(plan.allocationUpserts).toEqual([{ load_id: 'lB2', event_id: 'eS', size_class: 'blackjack', quantity: 3 }]);
+    expect(plan.stopUpdates).toEqual([{ id: 'dS', patch: { run_id: 'rB', load_id: 'lB2', sequence: 6 } }]);
   });
 });

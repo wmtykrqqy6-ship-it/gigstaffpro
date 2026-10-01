@@ -446,3 +446,53 @@ export function planAddEventToLoad({ event, load, run, equipmentRows = [], dayAl
 
   return { allocations, stops };
 }
+
+// ---- Moving an event to another vehicle -----------------------------------
+// What to write to move one event off a trip onto another trip (usually
+// another vehicle's):
+//  - its tables on that trip are added to whatever it already has on the
+//    target trip, and removed from the source trip;
+//  - its delivery stop for that trip moves to the target trip;
+//  - its pickup / dealing stops move too, unless the event is still carried
+//    by another trip of the source vehicle (a split), in which case they stay.
+// Where the target already has the same stop for the event, the source copy
+// is dropped instead of duplicated. New positions go after the target's
+// existing stops; the board re-sequences everything afterwards.
+export function planMoveEvent({ eventId, fromLoad, toLoad, day }) {
+  const { allocations = [], stops = [], loads = [] } = day;
+  const fromRunId = fromLoad.run_id;
+  const toRunId = toLoad.run_id;
+
+  const allocationUpserts = allocations
+    .filter(a => a.load_id === fromLoad.id && a.event_id === eventId && Number(a.quantity) > 0)
+    .map(a => {
+      const existing = allocations.find(x => x.load_id === toLoad.id && x.event_id === eventId && x.size_class === a.size_class);
+      return {
+        load_id: toLoad.id, event_id: eventId, size_class: a.size_class,
+        quantity: (Number(existing?.quantity) || 0) + (Number(a.quantity) || 0)
+      };
+    });
+
+  const sameRun = fromRunId === toRunId;
+  const otherSourceLoads = loads.filter(l => l.run_id === fromRunId && l.id !== fromLoad.id).map(l => l.id);
+  const stillOnSource = sameRun ||
+    allocations.some(a => a.event_id === eventId && a.quantity > 0 && otherSourceLoads.includes(a.load_id)) ||
+    stops.some(s => s.run_id === fromRunId && s.event_id === eventId && s.stop_type === 'deliver' && s.load_id !== fromLoad.id);
+
+  const targetStops = stops.filter(s => s.run_id === toRunId);
+  let seq = targetStops.reduce((m, s) => Math.max(m, s.sequence || 0), 0);
+  const stopUpdates = [];
+  const stopDeletes = [];
+  for (const s of stops.filter(x => x.run_id === fromRunId && x.event_id === eventId)) {
+    if (s.stop_type === 'deliver') {
+      if (s.load_id !== fromLoad.id) continue;
+      if (targetStops.some(t => t.event_id === eventId && t.stop_type === 'deliver' && t.load_id === toLoad.id)) stopDeletes.push(s.id);
+      else stopUpdates.push({ id: s.id, patch: { run_id: toRunId, load_id: toLoad.id, sequence: ++seq } });
+    } else if (!stillOnSource) {
+      if (targetStops.some(t => t.event_id === eventId && t.stop_type === s.stop_type)) stopDeletes.push(s.id);
+      else stopUpdates.push({ id: s.id, patch: { run_id: toRunId, load_id: null, sequence: ++seq } });
+    }
+  }
+
+  return { allocationUpserts, removeFrom: { loadId: fromLoad.id, eventId }, stopUpdates, stopDeletes };
+}

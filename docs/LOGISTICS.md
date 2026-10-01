@@ -124,6 +124,11 @@ Logistics → **Dispatch**. One day at a time, one column per active truck.
     **Personal vehicle** row on the Trucks tab — its capacities start at 0 and are entered by the
     office (what fits in a car); it's never suggested as a truck. Stops, load sheet, crew route and
     check-offs work the same. Migration `20261001120000_add_solo_and_personal_vehicle_runs.sql`.
+- **Changing vehicles:** click the truck's name to **change the truck** — the crew, trips and stops move
+  with it and capacity is re-checked. **Move to…** on an event card moves just that event (its tables,
+  delivery, pickup and dealing time) to another trip or vehicle, including a truck not planned yet or a
+  new personal-vehicle delivery (`planMoveEvent` in `dispatch.js`, tested). Moving onto a vehicle that
+  already carries part of the event merges the tables and drops duplicate stops.
 - **Trips** (`run_loads`): trip 1 is the morning load; "Add reload trip" adds trip 2, 3… Capacity bars and green/yellow/red are per trip.
 - **Loaded tables** (`load_allocations`): per event, per size class, per trip, with +/− steppers.
   Allocation is by size class rather than by pull-sheet line, so a split event is just two numbers,
