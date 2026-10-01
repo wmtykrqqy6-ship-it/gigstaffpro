@@ -87,6 +87,10 @@ The receipt PDF (`fulfillment-confirmation-sheet-*.pdf`) is detected and rejecte
 
 ## Import flow
 
+Start it from **Logistics → Import Pull Sheet**, or from **New Event / Create Event** on the Dashboard
+and Events pages ("Upload pull sheet" at the top of the blank form, which hands off to the same
+import — `PullSheetImportLauncher` loads the trucks/catalog it needs).
+
 1. Upload pull sheet → parse → classify unknown item names (asked once, saved to `equipment_catalog`).
 2. Event with same `goodshuffle_invoice` → replace its equipment, showing a diff (`+2 Blackjack Table, −1 Roulette Table`). Date/time differences are shown, not auto-applied.
 3. Else same-date events with no invoice → "Attach to …?".

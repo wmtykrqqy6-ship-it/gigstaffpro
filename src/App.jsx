@@ -41,6 +41,7 @@ import PaymentsView from './components/views/PaymentsView';
 import ScheduleView from './components/views/ScheduleView';
 import LogisticsView from './components/views/LogisticsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
+import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -67,6 +68,7 @@ const GigStaffPro = () => {
   const [error, setError] = useState(null);
   const [showAddWorker, setShowAddWorker] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  const [showPullSheetImport, setShowPullSheetImport] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showEditWorker, setShowEditWorker] = useState(false);
   const [showEditEvent, setShowEditEvent] = useState(false);
@@ -1720,6 +1722,17 @@ setAppPositions(storedPositions);
         workers={workers}
         onClose={() => setShowAddEvent(false)}
         onSuccess={loadEvents}
+        onImportPullSheet={() => setShowPullSheetImport(true)}
+      />
+      <PullSheetImportLauncher
+        open={showPullSheetImport}
+        onClose={() => setShowPullSheetImport(false)}
+        onImported={loadEvents}
+        events={events}
+        positions={positions}
+        workers={workers}
+        assignments={assignments}
+        timeFormat={timeFormat}
       />
       <EditEventModal
         open={showEditEvent}

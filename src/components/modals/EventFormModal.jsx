@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
@@ -21,6 +21,9 @@ export default function EventFormModal({
   // import), and a callback given the new event's id right after insert.
   initialData = null,
   onCreated,
+  // Create mode only: offer "Upload Goodshuffle pull sheet", which closes
+  // this blank form and opens the pull sheet import instead.
+  onImportPullSheet,
   onClose,
   onSuccess
 }) {
@@ -492,6 +495,21 @@ export default function EventFormModal({
                     <span>✓ Venue saved to library!</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {!isEdit && !initialData && onImportPullSheet && (
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm text-gray-700">
+                  Have a Goodshuffle pull sheet? Upload it to fill in the event, address, staffing and equipment.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { closeAndReset(); onImportPullSheet(); }}
+                  className="flex-shrink-0 bg-white border border-gray-300 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-100 text-sm inline-flex items-center justify-center gap-1.5"
+                >
+                  <Upload size={15} /> Upload pull sheet
+                </button>
               </div>
             )}
 
