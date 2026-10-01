@@ -48,3 +48,14 @@ export const timeRangesOverlap = (startA, endA, startB, endB) => {
   if (!endA || !endB) return false;
   return startA < endB && endA > startB;
 };
+
+// "HH:MM" rounded to the nearest 15 minutes ("19:38" -> "19:45",
+// "23:55" -> "00:00"). Empty/invalid input is returned unchanged. Used by the
+// Logistics time fields; the event form has its own copy of the same rule.
+export const roundToQuarterHour = (timeStr) => {
+  if (!timeStr) return timeStr;
+  const [h, m] = String(timeStr).split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return timeStr;
+  const total = ((Math.round((h * 60 + m) / 15) * 15) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};

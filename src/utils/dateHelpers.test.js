@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDateSafe, parseTimeToMinutes, timeRangesOverlap, formatTime } from './dateHelpers';
+import { parseDateSafe, parseTimeToMinutes, timeRangesOverlap, formatTime, roundToQuarterHour } from './dateHelpers';
 
 // parseDateSafe exists because raw `new Date("YYYY-MM-DD")` parses as UTC
 // midnight, which can display as the previous day in US timezones. This
@@ -79,5 +79,25 @@ describe('formatTime', () => {
 
   it('returns empty string for missing input', () => {
     expect(formatTime(null)).toBe('');
+  });
+});
+
+describe('roundToQuarterHour', () => {
+  it('rounds to the nearest 15 minutes', () => {
+    expect(roundToQuarterHour('19:38')).toBe('19:45');
+    expect(roundToQuarterHour('19:37')).toBe('19:30');
+    expect(roundToQuarterHour('17:00')).toBe('17:00');
+    expect(roundToQuarterHour('22:52')).toBe('22:45');
+  });
+
+  it('wraps past midnight and accepts seconds', () => {
+    expect(roundToQuarterHour('23:55')).toBe('00:00');
+    expect(roundToQuarterHour('07:08:00')).toBe('07:15');
+  });
+
+  it('leaves empty or invalid input alone', () => {
+    expect(roundToQuarterHour('')).toBe('');
+    expect(roundToQuarterHour(null)).toBe(null);
+    expect(roundToQuarterHour('soon')).toBe('soon');
   });
 });
