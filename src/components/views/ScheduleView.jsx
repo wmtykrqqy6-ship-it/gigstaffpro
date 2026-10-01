@@ -290,6 +290,8 @@ export default function ScheduleView({
             viewDate={selectedDate}
             onViewDateChange={setSelectedDate}
             onDayClick={() => setViewMode('list')}
+            onSelectEvent={(event) => setSelectedEvent(event)}
+            timeFormat={timeFormat}
           />
         )}
         {viewMode === 'agenda' && (
