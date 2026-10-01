@@ -838,41 +838,44 @@ export default function EventFormModal({
                   )}
                 </div>
               </div>
-              {/* Signup Mode — only matters when workers can self-apply at all */}
-              {!formData.invite_only && (
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-sm font-medium text-gray-800 mb-2">Signup Mode</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, staffing_mode: 'approval'})}
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                        formData.staffing_mode !== 'first-come'
-                          ? 'bg-red-900 text-white border-red-900'
-                          : 'bg-white text-gray-700 border-gray-300'
-                      }`}
-                    >
-                      Approval Required
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, staffing_mode: 'first-come'})}
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                        formData.staffing_mode === 'first-come'
-                          ? 'bg-red-900 text-white border-red-900'
-                          : 'bg-white text-gray-700 border-gray-300'
-                      }`}
-                    >
-                      First Come, First Served
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {formData.staffing_mode === 'first-come'
+              {/* Signup Mode -- one choice covering both stored settings:
+                  Invite Only sets invite_only (event hidden from workers'
+                  available list; staffing_mode is left as it was, as the old
+                  separate toggle did). The other two clear invite_only and set
+                  staffing_mode. What gets saved is unchanged. */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-800 mb-2">Signup Mode</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'approval', label: 'Approval Required', apply: { invite_only: false, staffing_mode: 'approval' } },
+                    { id: 'first-come', label: 'First Come, First Served', apply: { invite_only: false, staffing_mode: 'first-come' } },
+                    { id: 'invite', label: 'Invite Only', apply: { invite_only: true } }
+                  ].map(opt => {
+                    const current = formData.invite_only ? 'invite' : (formData.staffing_mode === 'first-come' ? 'first-come' : 'approval');
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, ...opt.apply })}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                          current === opt.id
+                            ? 'bg-red-900 text-white border-red-900'
+                            : 'bg-white text-gray-700 border-gray-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {formData.invite_only
+                    ? 'Workers can only join if an admin assigns or invites them — the event is hidden from everyone else.'
+                    : formData.staffing_mode === 'first-come'
                       ? 'Workers who apply for an open spot are instantly confirmed — no admin approval needed.'
                       : 'Workers who apply go on a pending list until an admin approves them.'}
-                  </p>
-                </div>
-              )}
+                </p>
+              </div>
               {/* Flat Event Pay (optional) */}
               <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-sm font-medium text-gray-800 mb-1">Flat Event Pay (optional)</p>
@@ -892,21 +895,6 @@ export default function EventFormModal({
                   />
                 </div>
               </div>
-              {/* Invite Only Toggle */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Invite Only</p>
-                  <p className="text-xs text-gray-500">Workers can only join if directly assigned by admin</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, invite_only: !formData.invite_only})}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.invite_only ? 'bg-red-900' : 'bg-gray-300'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.invite_only ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
