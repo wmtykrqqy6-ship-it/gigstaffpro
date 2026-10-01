@@ -496,3 +496,55 @@ export function planMoveEvent({ eventId, fromLoad, toLoad, day }) {
 
   return { allocationUpserts, removeFrom: { loadId: fromLoad.id, eventId }, stopUpdates, stopDeletes };
 }
+
+// ---- Month view: one status per day ---------------------------------------
+// For the dispatch board's mini calendar.
+//   'none'        no (non-cancelled) events that day
+//   'conflict'    the day has at least one error (no truck, over capacity,
+//                 early pickup, dealing clash, driver on two vehicles, ...)
+//   'unscheduled' an event isn't fully on a vehicle yet (or has no stops)
+//   'scheduled'   every event is on a vehicle with no errors
+// `conflicts` is computeDayConflicts() for that day.
+export function dayStatus({ events = [], equipmentByEvent = {}, allocations = [], stops = [], conflicts = [] }) {
+  const active = events.filter(e => e.status !== 'cancelled');
+  if (!active.length) return 'none';
+  if (conflicts.some(c => c.level === 'error')) return 'conflict';
+  const unplanned = active.some(ev => {
+    const required = requiredCounts(equipmentByEvent[ev.id] || []);
+    const needsTruck = ALLOCATABLE_CLASSES.some(c => required[c] > 0);
+    if (needsTruck) return !allocationStatus(required, allocatedCounts(allocations, ev.id)).complete;
+    return !stops.some(s => s.event_id === ev.id);
+  });
+  return unplanned ? 'unscheduled' : 'scheduled';
+}
+
+// Status for every day in a range, from one batch of data covering it.
+//   input: { dates: ['YYYY-MM-DD', ...], events, equipmentByEvent, trucks,
+//            runs, loads, allocations, stops, assignments, workersById,
+//            positions, allEventsById }
+// Returns { 'YYYY-MM-DD': { status, events, errors } }.
+export function monthStatuses(input) {
+  const { dates = [], events = [], runs = [], loads = [], allocations = [], stops = [] } = input;
+  const out = {};
+  for (const date of dates) {
+    const dayEvents = events.filter(e => dateOnly(e.date) === date && e.status !== 'cancelled');
+    if (!dayEvents.length) { out[date] = { status: 'none', events: [], errors: 0 }; continue; }
+    const dayRuns = runs.filter(r => r.run_date === date);
+    const runIds = new Set(dayRuns.map(r => r.id));
+    const dayLoads = loads.filter(l => runIds.has(l.run_id));
+    const loadIds = new Set(dayLoads.map(l => l.id));
+    const day = {
+      runs: dayRuns,
+      loads: dayLoads,
+      allocations: allocations.filter(a => loadIds.has(a.load_id)),
+      stops: stops.filter(s => runIds.has(s.run_id))
+    };
+    const conflicts = computeDayConflicts({ ...input, date, events: dayEvents, ...day });
+    out[date] = {
+      status: dayStatus({ events: dayEvents, equipmentByEvent: input.equipmentByEvent, ...day, conflicts }),
+      events: dayEvents,
+      errors: conflicts.filter(c => c.level === 'error').length
+    };
+  }
+  return out;
+}

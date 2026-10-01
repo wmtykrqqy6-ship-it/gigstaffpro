@@ -108,6 +108,10 @@ allocations will need this to become an in-place update so allocations survive.
 
 Logistics → **Dispatch**. One day at a time, one column per active truck.
 
+- **Mini calendar** (left of the board): click a day to plan it. Days are marked ✓ scheduled (every
+  event on a vehicle), — not on a truck yet, or a red dashed ring for a conflict (any error from the
+  board's own checks), with "Needs a truck" / "Conflicts" lists for the month. Statuses come from
+  `monthStatuses()` / `dayStatus()` in `dispatch.js` (tested) over one batch of the month's data.
 - **Run** (`daily_runs`): a truck on a day with its 2-person setup team. One per truck per day.
 - **Team spots (1 Driver + 1 Set Up, confirmed 2026-09-29):** the Driver spot lists only workers with
   the **Set Up Driver** skill; the Set Up spot lists anyone with **Set Up** or **Set Up Driver**. Both

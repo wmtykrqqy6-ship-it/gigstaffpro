@@ -4,6 +4,7 @@ import {
   AlertTriangle, XCircle, CheckCircle, Minus, Printer, Car
 } from 'lucide-react';
 import LoadSheet from './LoadSheet';
+import DispatchMiniCalendar from './DispatchMiniCalendar';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
@@ -12,11 +13,11 @@ import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
   formatCounts, checkLoad, computeDayConflicts, dealingShifts, orderRunStops,
   sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isPersonalTruck, spotFor, runLabel, teamIds, planMoveEvent
+  isPersonalTruck, spotFor, runLabel, teamIds, planMoveEvent, monthStatuses
 } from '../../utils/logistics/dispatch';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
-  loadDispatchDay, loadEventEquipment, createRun, updateRun, deleteRun, addLoad, deleteLoad,
+  loadDispatchDay, loadDispatchRange, loadEventEquipment, createRun, updateRun, deleteRun, addLoad, deleteLoad,
   setAllocation, insertAllocations, deleteAllocationsFor, insertStops, updateStop, deleteStops,
   resequenceStops, isMissingSchemaError, DISPATCH_MIGRATION
 } from './logisticsData';
@@ -53,6 +54,10 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [sheetLoadIds, setSheetLoadIds] = useState(null); // load ids shown in the load sheet overlay
+  // Mini calendar: which month it shows, and that month's plans for the day markers.
+  const [calMonth, setCalMonth] = useState(() => { const d = parseDateSafe(date); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [monthData, setMonthData] = useState({ plan: EMPTY_DAY, equipmentByEvent: {} });
+  const [monthLoading, setMonthLoading] = useState(false);
 
   const dayEvents = useMemo(
     () => schedulable.filter(e => dateOnly(e.date) === date).sort((a, b) => (a.time || '').localeCompare(b.time || '')),
@@ -104,6 +109,52 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
 
   useEffect(() => { reload(); }, [reload]);
 
+  // The calendar follows the selected day into other months (prev/next day).
+  useEffect(() => {
+    const d = parseDateSafe(date);
+    setCalMonth(m => (m.getFullYear() === d.getFullYear() && m.getMonth() === d.getMonth() ? m : new Date(d.getFullYear(), d.getMonth(), 1)));
+  }, [date]);
+
+  const monthKey = ymd(calMonth).slice(0, 7);
+  const monthEventIds = useMemo(
+    () => schedulable.filter(e => dateOnly(e.date).startsWith(monthKey)).map(e => e.id).join(','),
+    [schedulable, monthKey]
+  );
+  const reloadMonth = useCallback(async () => {
+    setMonthLoading(true);
+    try {
+      const last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0);
+      const ids = monthEventIds ? monthEventIds.split(',') : [];
+      const [plan, rows] = await Promise.all([loadDispatchRange(ymd(calMonth), ymd(last)), loadEventEquipment(ids)]);
+      const byEvent = {};
+      for (const r of rows) (byEvent[r.event_id] ||= []).push(r);
+      setMonthData({ plan, equipmentByEvent: byEvent });
+    } catch (err) {
+      // The day view reports load errors; the calendar just keeps its last markers.
+      console.error('Dispatch calendar load failed:', err);
+    } finally {
+      setMonthLoading(false);
+    }
+  }, [calMonth, monthEventIds]);
+
+  useEffect(() => { reloadMonth(); }, [reloadMonth]);
+
+  const monthStatusMap = useMemo(() => {
+    const last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+    const dates = Array.from({ length: last }, (_, i) => ymd(new Date(calMonth.getFullYear(), calMonth.getMonth(), i + 1)));
+    return monthStatuses({
+      dates,
+      events: schedulable,
+      allEventsById: eventsById,
+      equipmentByEvent: monthData.equipmentByEvent,
+      trucks,
+      ...monthData.plan,
+      assignments,
+      workersById,
+      positions
+    });
+  }, [calMonth, schedulable, eventsById, monthData, trucks, assignments, workersById, positions]);
+
   // Run a mutation, then refresh the whole day from the database.
   const act = async (fn) => {
     setBusy(true);
@@ -113,6 +164,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
       notify(isMissingSchemaError(err) ? `Run ${DISPATCH_MIGRATION} first.` : 'Could not save: ' + (err.message || err));
     } finally {
       await reload();
+      reloadMonth();
       setBusy(false);
     }
   };
@@ -271,7 +323,19 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   ];
 
   return (
-    <div className={`space-y-4 ${busy ? 'opacity-70 pointer-events-none' : ''}`}>
+    <div className={`grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-4 items-start ${busy ? 'opacity-70 pointer-events-none' : ''}`}>
+      <div className="lg:sticky lg:top-4">
+        <DispatchMiniCalendar
+          date={date}
+          onSelectDate={setDate}
+          month={calMonth}
+          onMonthChange={setCalMonth}
+          statuses={monthStatusMap}
+          loading={monthLoading}
+        />
+      </div>
+
+      <div className="space-y-4 min-w-0">
       {/* Date bar */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setDate(d => shiftDate(d, -1))} className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50" title="Previous day">
@@ -283,13 +347,6 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
         <button onClick={() => setDate(d => shiftDate(d, 1))} className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50" title="Next day">
           <ChevronRight size={16} />
         </button>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => e.target.value && setDate(e.target.value)}
-          className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-2 focus:ring-red-500"
-          title="Jump to a date"
-        />
         {day.loads.length > 0 && (
           <button
             onClick={() => setSheetLoadIds(sheetOrder.map(l => l.id))}
@@ -452,6 +509,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
         workersById={workersById}
         timeFormat={timeFormat}
       />
+      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
   crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isOneSpotRun, spotFor, runLabel, planMoveEvent
+  isOneSpotRun, spotFor, runLabel, planMoveEvent, dayStatus, monthStatuses
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -549,5 +549,43 @@ describe('planMoveEvent', () => {
     const plan = planMoveEvent({ eventId: 'eS', fromLoad: B, toLoad: { id: 'lB2', run_id: 'rB' }, day });
     expect(plan.allocationUpserts).toEqual([{ load_id: 'lB2', event_id: 'eS', size_class: 'blackjack', quantity: 3 }]);
     expect(plan.stopUpdates).toEqual([{ id: 'dS', patch: { run_id: 'rB', load_id: 'lB2', sequence: 6 } }]);
+  });
+});
+
+describe('month calendar statuses', () => {
+  it('dayStatus: none / scheduled / unscheduled / conflict', () => {
+    const day = cleanDay();
+    expect(dayStatus({ events: [] })).toBe('none');
+    expect(dayStatus({ events: [{ id: 'x', status: 'cancelled' }] })).toBe('none');
+    expect(dayStatus({ ...day, conflicts: computeDayConflicts(day) })).toBe('scheduled');
+    // Small Party's 3 blackjack only partly loaded -> unscheduled (a warning, not an error).
+    const partial = cleanDay();
+    partial.allocations = partial.allocations.map(a => (a.event_id === 'eS' && a.size_class === 'blackjack' ? { ...a, quantity: 1 } : a));
+    expect(dayStatus({ ...partial, conflicts: computeDayConflicts(partial) })).toBe('unscheduled');
+    // Early pickup is an error -> conflict wins.
+    const early = cleanDay();
+    early.stops = early.stops.map(s => (s.id === 's4' ? { ...s, scheduled_start: '20:00' } : s));
+    expect(dayStatus({ ...early, conflicts: computeDayConflicts(early) })).toBe('conflict');
+  });
+
+  it('an event without a pull sheet counts as scheduled once it has a stop', () => {
+    const ev = { id: 'n', date: DATE };
+    expect(dayStatus({ events: [ev], stops: [] })).toBe('unscheduled');
+    expect(dayStatus({ events: [ev], stops: [{ event_id: 'n' }] })).toBe('scheduled');
+  });
+
+  it('monthStatuses works a whole range from one batch of data', () => {
+    const day = cleanDay();
+    const runs = day.runs.map(r => ({ ...r, run_date: DATE }));
+    const nextDay = { id: 'eN', name: 'Next Day Party', date: '2026-10-07', time: '19:00', end_time: '22:00' };
+    const result = monthStatuses({
+      ...day, runs, dates: ['2026-10-05', DATE, '2026-10-07'],
+      events: [GENEVA, SMALL, nextDay],
+      equipmentByEvent: { ...EQUIPMENT, eN: [{ size_class: 'blackjack', quantity: 2 }] }
+    });
+    expect(result['2026-10-05'].status).toBe('none');
+    expect(result[DATE]).toMatchObject({ status: 'scheduled', errors: 0 });
+    expect(result[DATE].events.map(e => e.id)).toEqual(['eG', 'eS']);
+    expect(result['2026-10-07']).toMatchObject({ status: 'conflict', errors: 1 }); // no truck
   });
 });
