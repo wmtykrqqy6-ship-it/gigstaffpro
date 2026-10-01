@@ -5,8 +5,9 @@ import { parseDateSafe, formatTime } from '../utils/dateHelpers';
 
 // Flat, chronological "agenda" list of events -- the mobile-friendly
 // alternative to MonthCalendar's 7-column grid, which gets cramped at phone
-// width. Shared between ScheduleView and DashboardView's ScheduleSection so
-// both default to this on mobile instead of the calendar.
+// width. ScheduleView defaults to this on mobile instead of the calendar.
+// (The Dashboard used to embed a copy of the schedule too; removed
+// 2026-09-30 since the Schedule tab covers it.)
 //
 // Hides past events by default -- this is meant as an at-a-glance "what's
 // coming up" list, and mixing in everything that already happened (which
