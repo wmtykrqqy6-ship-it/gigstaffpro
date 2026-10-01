@@ -5,6 +5,8 @@ import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
 import EventDeliveryTimes from '../logistics/EventDeliveryTimes';
+import QuarterHourInput from '../ui/QuarterHourInput';
+import { roundToQuarterHour } from '../../utils/dateHelpers';
 import { useToast } from '../ui/Toast';
 
 // Shared by AddEventModal.jsx and EditEventModal.jsx (both now thin wrappers
@@ -153,8 +155,9 @@ export default function EventFormModal({
       client: event.client || '',
       client_contact: event.client_contact || '',
       date: dateOnly,
-      time: event.time || '',
-      end_time: event.end_time || '',
+      // Rounded to the picker's 15-minute steps, so what's shown is what's saved.
+      time: roundToQuarterHour((event.time || '').slice(0, 5)),
+      end_time: roundToQuarterHour((event.end_time || '').slice(0, 5)),
       venue: event.venue || '',
       room: event.room || '',
       address: event.address || '',
@@ -234,16 +237,6 @@ export default function EventFormModal({
     return found ? found.count : 0;
   };
 
-  // Events almost always land on a quarter-hour, so snap typed/picked times
-  // to the nearest 15 minutes instead of allowing e.g. 8:37.
-  const roundToNearestQuarterHour = (timeStr) => {
-    if (!timeStr) return timeStr;
-    const [h, m] = timeStr.split(':').map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return timeStr;
-    const total = ((Math.round((h * 60 + m) / 15) * 15) % 1440 + 1440) % 1440;
-    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-  };
-
   const addHoursToTime = (timeStr, hours) => {
     if (!timeStr) return '';
     const [h, m] = timeStr.split(':').map(Number);
@@ -251,11 +244,7 @@ export default function EventFormModal({
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   };
 
-  // Rounding happens on blur, not on every keystroke -- the native time
-  // input assembles a typed value (e.g. "37" for minutes) across multiple
-  // onChange events, and overwriting its value mid-typing with an already-
-  // rounded one resets the field's own segment state, making it impossible
-  // to type a two-digit minute at all.
+  // Times come from QuarterHourInput, so they're already on a quarter hour.
   const handleStartTimeChange = (rawValue) => {
     setFormData(f => {
       const shouldAutoFillEnd = !endTimeManuallySet && (!isEdit || !f.end_time);
@@ -267,25 +256,9 @@ export default function EventFormModal({
     });
   };
 
-  const handleStartTimeBlur = () => {
-    setFormData(f => {
-      const rounded = roundToNearestQuarterHour(f.time);
-      const shouldAutoFillEnd = !endTimeManuallySet && (!isEdit || !f.end_time);
-      return {
-        ...f,
-        time: rounded,
-        end_time: shouldAutoFillEnd && rounded ? addHoursToTime(rounded, 3) : f.end_time
-      };
-    });
-  };
-
   const handleEndTimeChange = (rawValue) => {
     setEndTimeManuallySet(true);
     setFormData(f => ({ ...f, end_time: rawValue }));
-  };
-
-  const handleEndTimeBlur = () => {
-    setFormData(f => ({ ...f, end_time: roundToNearestQuarterHour(f.end_time) }));
   };
 
   // Auto-assign nearest warehouse by distance
@@ -557,30 +530,12 @@ export default function EventFormModal({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 min-w-0">
                     <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
-                        <input
-                          type="time"
-                          step="900"
-                          required
-                          value={formData.time}
-                          onChange={(e) => handleStartTimeChange(e.target.value)}
-                          onBlur={handleStartTimeBlur}
-                          className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
-                        />
-                      </div>
+                      {/* 15-minute picker (Chrome's native time picker ignores step="900"). */}
+                      <QuarterHourInput required value={formData.time} onChange={handleStartTimeChange} />
                     </div>
                     <div className="min-w-0">
                       <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-red-500 focus-within:border-transparent">
-                        <input
-                          type="time"
-                          step="900"
-                          value={formData.end_time}
-                          onChange={(e) => handleEndTimeChange(e.target.value)}
-                          onBlur={handleEndTimeBlur}
-                          className="w-full max-w-full min-w-0 box-border px-3 py-2 border-none outline-none focus:ring-0"
-                        />
-                      </div>
+                      <QuarterHourInput value={formData.end_time} onChange={handleEndTimeChange} />
                     </div>
                   </div>
                 </div>

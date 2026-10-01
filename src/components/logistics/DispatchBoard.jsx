@@ -5,9 +5,10 @@ import {
 } from 'lucide-react';
 import LoadSheet from './LoadSheet';
 import DispatchMiniCalendar from './DispatchMiniCalendar';
+import QuarterHourInput from '../ui/QuarterHourInput';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
-import { parseDateSafe, formatTime, roundToQuarterHour } from '../../utils/dateHelpers';
+import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import {
   ALLOCATABLE_CLASSES, CLASS_LABELS, requiredCounts, allocatedCounts, allocationStatus,
@@ -917,25 +918,14 @@ function RouteOrder({ trips, evening, ordered, eventsById, fmt, onMoveStop }) {
   );
 }
 
-// Saves on blur/enter, not on every keystroke (each save reloads the day).
-// 15-minute steps; anything typed in between snaps to the nearest quarter hour.
+// 15-minute time picker; saves as soon as a part changes.
 function TimeInput({ value, onSave }) {
-  const [v, setV] = useState((value || '').slice(0, 5));
-  useEffect(() => setV((value || '').slice(0, 5)), [value]);
-  const commit = () => {
-    const rounded = roundToQuarterHour(v);
-    if (rounded !== v) setV(rounded);
-    if (rounded !== (value || '').slice(0, 5)) onSave(rounded || null);
-  };
+  const current = (value || '').slice(0, 5);
   return (
-    <input
-      type="time"
-      step="900"
-      value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      className="px-1.5 py-1 border border-gray-300 rounded text-xs w-[6.5rem] focus:ring-2 focus:ring-red-500"
+    <QuarterHourInput
+      size="sm"
+      value={current}
+      onChange={(v) => { if (v !== current) onSave(v || null); }}
     />
   );
 }

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Truck, Car, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
-import { parseDateSafe, roundToQuarterHour } from '../../utils/dateHelpers';
+import { parseDateSafe } from '../../utils/dateHelpers';
+import QuarterHourInput from '../ui/QuarterHourInput';
 import { updateStop, isMissingSchemaError } from './logisticsData';
 
 // "Delivery & pickup" section of the Edit Event form: this event's stops from
@@ -97,24 +98,8 @@ export default function EventDeliveryTimes({ event, eventDate, workers = [] }) {
   );
 }
 
-// Saves on blur/enter. 15-minute steps; anything typed in between snaps to
-// the nearest quarter hour.
+// 15-minute time picker; saves as soon as a part changes.
 function TimeField({ value, onSave }) {
-  const [v, setV] = useState((value || '').slice(0, 5));
-  useEffect(() => setV((value || '').slice(0, 5)), [value]);
-  return (
-    <input
-      type="time"
-      step="900"
-      value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => {
-        const rounded = roundToQuarterHour(v);
-        if (rounded !== v) setV(rounded);
-        if (rounded !== (value || '').slice(0, 5)) onSave(rounded);
-      }}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
-      className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
-    />
-  );
+  const current = (value || '').slice(0, 5);
+  return <QuarterHourInput value={current} onChange={(v) => { if (v !== current) onSave(v); }} />;
 }
