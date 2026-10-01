@@ -48,7 +48,7 @@ export default function Navigation({
 
   return (
     <div className="bg-white border-b shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8 overflow-x-auto">
           {navItems.map(({ id, label, icon: Icon, badge }) => (
             <button
