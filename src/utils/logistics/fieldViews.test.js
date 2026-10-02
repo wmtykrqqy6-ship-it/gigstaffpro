@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   itemKey, apportion, loadOrderOf, splitEventAcrossLoads, mergeItems, groupItems,
-  stopItems, buildLoadSheet, checkTypeForStop, expectedReturns, returnReport
+  stopItems, buildLoadSheet, checkTypeForStop, expectedReturns, returnReport, pickupUnlocked
 } from './fieldViews';
 
 // Grand Geneva's real pull sheet (231581508), as event_equipment rows.
@@ -211,5 +211,26 @@ describe('returns', () => {
     const delivered = [{ stop_id: 'dG', item_key: key('Blackjack Table'), check_type: 'delivered', quantity: 4 }];
     const exp = expectedReturns(STOPS[2], ctx, STOPS, delivered);
     expect(exp.find(i => i.name === 'Blackjack Table').quantity).toBe(4);
+  });
+});
+
+describe('pickupUnlocked (crew route)', () => {
+  const at = (s) => { const [d, t] = s.split(' '); const [y, m, dd] = d.split('-').map(Number); const [h, mi] = t.split(':').map(Number); return new Date(y, m - 1, dd, h, mi); };
+
+  it('stays collapsed until the party starts on the route day', () => {
+    expect(pickupUnlocked('2026-10-06', '19:30', at('2026-10-06 15:00'))).toBe(false);
+    expect(pickupUnlocked('2026-10-06', '19:30', at('2026-10-06 19:29'))).toBe(false);
+    expect(pickupUnlocked('2026-10-06', '19:30', at('2026-10-06 19:30'))).toBe(true);
+    expect(pickupUnlocked('2026-10-06', '19:30:00', at('2026-10-06 23:10'))).toBe(true);
+  });
+
+  it('stays open after midnight and is collapsed on earlier days', () => {
+    expect(pickupUnlocked('2026-10-06', '19:30', at('2026-10-07 00:30'))).toBe(true);
+    expect(pickupUnlocked('2026-10-06', '19:30', at('2026-10-01 20:00'))).toBe(false);
+  });
+
+  it('never holds back an event without a start time', () => {
+    expect(pickupUnlocked('2026-10-06', null)).toBe(true);
+    expect(pickupUnlocked(null, '19:30')).toBe(true);
   });
 });

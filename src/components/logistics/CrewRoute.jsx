@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Truck, MapPin, Navigation, CheckCircle, Circle, ChevronDown, ChevronRight, Minus, Plus, Users } from 'lucide-react';
+import { Truck, MapPin, Navigation, CheckCircle, Circle, ChevronDown, ChevronRight, Minus, Plus, Users, Clock } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { orderRunStops } from '../../utils/logistics/dispatch';
-import { stopItems, groupItems, checkTypeForStop } from '../../utils/logistics/fieldViews';
+import { stopItems, groupItems, checkTypeForStop, pickupUnlocked } from '../../utils/logistics/fieldViews';
 import { TruckSwatch } from './CapacityDisplay';
 import { loadWorkerRoutes, loadEventEquipment, loadChecks, loadTrucks, isMissingSchemaError } from './logisticsData';
 
@@ -34,6 +34,12 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
   const [trucksById, setTrucksById] = useState({});
   const [expanded, setExpanded] = useState({});
   const [saving, setSaving] = useState({});
+  // Re-render every minute so a pickup opens up on its own when the party starts.
+  const [, setMinuteTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setMinuteTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const now = new Date();
   const today = ymd(now);
@@ -166,6 +172,7 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
                     checks={checks.filter(c => c.stop_id === stop.id)}
                     myAssignments={assignments.filter(a => a.event_id === stop.event_id && a.worker_id === worker.id && isAssignmentFilled(a.status))}
                     editable={editable}
+                    runDate={run.run_date}
                     saving={saving}
                     timeFormat={timeFormat}
                     onCheck={(item, qty, checked) => setCheck(stop, item, qty, checked)}
@@ -181,7 +188,25 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
   );
 }
 
-function RouteStop({ number, stop, prevLoadId, tripNumber, event, items, checks, myAssignments, editable, saving, timeFormat, onCheck, onStatus }) {
+function RouteStop({ number, stop, prevLoadId, tripNumber, event, items, checks, myAssignments, editable, runDate, saving, timeFormat, onCheck, onStatus }) {
+  // Pickups stay collapsed until the party starts (unless already started).
+  if (stop.stop_type === 'pickup' && stop.status !== 'done' && !checks.length && !pickupUnlocked(runDate, event?.time)) {
+    return (
+      <div className="px-4 py-2.5 flex items-start gap-3 text-gray-500">
+        <span className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 bg-gray-200 text-gray-600">{number}</span>
+        <div className="min-w-0">
+          <div className="text-sm">
+            <Clock size={13} className="inline -mt-0.5 mr-1" />
+            <span className="font-semibold text-gray-700">Pick up later</span> — {event?.name || 'Event'}
+            {stop.scheduled_start ? ` at ${formatTime(stop.scheduled_start.slice(0, 5), timeFormat)}` : ''}
+          </div>
+          <div className="text-xs">
+            Details show once the party starts{event?.time ? ` (${formatTime(event.time.slice(0, 5), timeFormat)})` : ''}.
+          </div>
+        </div>
+      </div>
+    );
+  }
   const type = checkTypeForStop(stop);
   const byKey = new Map(checks.filter(c => c.check_type === type).map(c => [c.item_key, c]));
   const allChecked = items.length > 0 && items.every(i => byKey.has(i.key));

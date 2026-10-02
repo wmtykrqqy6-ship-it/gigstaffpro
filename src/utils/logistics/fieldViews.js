@@ -186,6 +186,19 @@ export function buildLoadSheet(load, ctx, stops = []) {
 const TYPE_FOR_STOP = { deliver: 'delivered', pickup: 'returned' };
 export const checkTypeForStop = (stop) => TYPE_FOR_STOP[stop?.stop_type] || null;
 
+// Crew route: a pickup stays collapsed ("Pick up later") until the party has
+// started, so the setup crew isn't looking at a second checklist while
+// they're still delivering (Dylan, 2026-10-01). Unlocks at the event's start
+// time on the route's day; an event without a start time is never held back.
+//   runDate 'YYYY-MM-DD', eventTime 'HH:MM', now: Date (device time)
+export function pickupUnlocked(runDate, eventTime, now = new Date()) {
+  if (!runDate || !eventTime) return true;
+  const [y, m, d] = runDate.split('-').map(Number);
+  const [hh, mm] = String(eventTime).split(':').map(Number);
+  if ([y, m, d, hh].some(Number.isNaN)) return true;
+  return now >= new Date(y, m - 1, d, hh, mm || 0);
+}
+
 // What should come back from a pickup: what this truck actually delivered
 // to the event if the crew checked deliveries off, otherwise the plan.
 export function expectedReturns(pickupStop, ctx, stops = [], checks = []) {
