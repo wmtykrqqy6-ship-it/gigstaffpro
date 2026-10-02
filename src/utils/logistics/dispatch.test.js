@@ -5,7 +5,8 @@ import {
   dealingShifts, defaultStopsForEvent, computeDayConflicts,
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
   crewRoles, isDriver, isSetUp, eligibleForSpot,
-  isOneSpotRun, spotFor, runLabel, planMoveEvent, dayStatus, monthStatuses
+  isOneSpotRun, spotFor, runLabel, planMoveEvent, dayStatus, monthStatuses,
+  warehouseKeys, isWarehouseWorker
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -587,5 +588,22 @@ describe('month calendar statuses', () => {
     expect(result[DATE]).toMatchObject({ status: 'scheduled', errors: 0 });
     expect(result[DATE].events.map(e => e.id)).toEqual(['eG', 'eS']);
     expect(result['2026-10-07']).toMatchObject({ status: 'conflict', errors: 1 }); // no truck
+  });
+});
+
+describe('warehouse loaders', () => {
+  const POSITIONS = [{ key: 'blackjack', label: 'Blackjack' }, { key: 'warehouse', label: 'Warehouse' }, { key: 'driver', label: 'Set Up Driver' }];
+
+  it('recognizes the Warehouse position by key or label', () => {
+    expect([...warehouseKeys(POSITIONS)]).toEqual(['warehouse']);
+    expect([...warehouseKeys([{ key: 'loader', label: 'Warehouse Crew' }])]).toEqual(['loader']);
+    expect([...warehouseKeys([{ key: 'blackjack', label: 'Blackjack' }])]).toEqual([]);
+  });
+
+  it('only workers with the skill see load sheets; nobody does before the position exists', () => {
+    expect(isWarehouseWorker({ skills: ['warehouse'] }, POSITIONS)).toBe(true);
+    expect(isWarehouseWorker({ skills: ['driver', 'blackjack'] }, POSITIONS)).toBe(false);
+    expect(isWarehouseWorker({ skills: null }, POSITIONS)).toBe(false);
+    expect(isWarehouseWorker({ skills: ['warehouse'] }, [{ key: 'blackjack' }])).toBe(false);
   });
 });

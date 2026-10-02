@@ -179,6 +179,13 @@ the pull sheet exactly). Anything loaded beyond the pull sheet shows as "(extra 
 trip). Events are listed in load order, last delivery stop first, with every table and accessory and a
 checkbox, plus the delivery order and the truck's notes. Printing shows only the sheet.
 
+**Warehouse loading (worker portal).** Workers with a **Warehouse** skill (a position in Settings →
+Positions, matched by key or label) get a "Loading — next 7 days" card: every truck and trip planned
+for the coming week with its live load sheet (load order, every table and accessory, delivery order,
+notes) and "Print this day". Read-only; the tick boxes are a per-device scratchpad, not saved. Nobody
+sees it until the Warehouse position exists (`WarehouseLoading.jsx`, `isWarehouseWorker` in
+`dispatch.js`, tested).
+
 **Crew route (worker portal).** A "Your route today" card at the top of the worker dashboard for
 anyone on a truck team (upcoming days within a week show collapsed). Stops are in order, with trip
 reload markers, times, a Google Maps link, and the gear list. The crew checks items off as they unload

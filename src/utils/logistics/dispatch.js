@@ -155,6 +155,20 @@ export function eligibleForSpot(workers = [], positions = [], spot = 'driver') {
 
 export const SPOT_FOR_FIELD = { worker1_id: 'driver', worker2_id: 'setup' };
 
+// Warehouse loaders (Dylan, 2026-10-01): workers with a "Warehouse" skill see
+// the next 7 days of load sheets in their portal. Recognized by key or label
+// like the crew roles. No such position -> nobody sees it.
+export function warehouseKeys(positions = []) {
+  return new Set((positions || [])
+    .filter(p => p?.key && (/^warehouse/.test(p.key) || /warehouse/i.test(String(p.label || ''))))
+    .map(p => p.key));
+}
+
+export const isWarehouseWorker = (worker, positions = []) => {
+  const keys = warehouseKeys(positions);
+  return keys.size > 0 && Array.isArray(worker?.skills) && worker.skills.some(k => keys.has(k));
+};
+
 // ---- Solo trucks and personal vehicles ------------------------------------
 // Confirmed with Dylan 2026-09-30: small events are sometimes delivered by one
 // person -- on a truck (a "solo" run) or in their own car (a personal-vehicle
