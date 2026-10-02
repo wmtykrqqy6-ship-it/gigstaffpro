@@ -116,9 +116,8 @@ From `docs/CODEBASE_AUDIT.md` (re-verified 2026-10-01), in priority order:
 1. **Confirm a full database backup and schedule it** — none confirmed since 2026-08-09, and many migrations have run since.
 2. **Real worker sessions** — `api/worker-actions.js` trusts the client-supplied worker id; finish moving workers off legacy PINs and verify identity server-side.
 3. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files (and consider rotating the key).
-4. **Fix the `AssignWorkersModal.jsx` `worker.reliability.toFixed()` crash** (no null guard).
-5. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
+4. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
 
-Previously listed items now resolved: core-table RLS write lockdown and `pin_hash` read revocation, the `Navigation.jsx` and `PaymentCalculatorModal.jsx` crashes, legacy PIN hashing (now server-side salted PBKDF2), `getPayRateKey` / event-modal / email-template duplication, and the Vitest + CI safety net.
+Previously listed items now resolved: core-table RLS write lockdown and `pin_hash` read revocation, the `Navigation.jsx`, `PaymentCalculatorModal.jsx` and `AssignWorkersModal.jsx` (`reliability.toFixed()`) crashes, legacy PIN hashing (now server-side salted PBKDF2), `getPayRateKey` / event-modal / email-template duplication, and the Vitest + CI safety net.
 
 Default to working on these before adding new features, unless explicitly directed otherwise.

@@ -103,7 +103,7 @@
 ### Bugs
 - ✅ `Navigation.jsx` missing `MapPin`/`ChevronDown` imports — fixed.
 - ✅ `PaymentCalculatorModal.jsx` Rules-of-Hooks violation — fixed (the no-payment path is a hook, not an early return).
-- ❌ **`AssignWorkersModal.jsx:785` — `worker.reliability.toFixed(1)` with no null guard.** Crashes the Assign Workers list for any worker whose `reliability` is null. Elsewhere the code uses `?? 5.0`. One-line fix.
+- ✅ `AssignWorkersModal.jsx` `worker.reliability.toFixed(1)` with no null guard — fixed 2026-10-01 (`?? 5.0`, matching the rest of the code); the reliability sort in the same list now treats a missing score as 5.0 too, so the order matches what's displayed. No live worker had a null score at the time, so it was latent.
 
 ### Security (ranked)
 1. ❌ **Worker actions trust the client `workerId`** (§5.2) — the main remaining gap.
@@ -136,5 +136,4 @@
 1. **Confirm a full database backup and schedule it** — before more schema changes.
 2. **Real worker sessions** — verify worker identity server-side in `api/worker-actions.js`; finish moving workers off legacy PINs.
 3. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files; consider rotating the key.
-4. **Fix the `AssignWorkersModal` `reliability.toFixed()` crash.**
-5. **Widen the safety net** — add a linter and a few browser smoke tests (e.g. Playwright) for the main flows; current tests cover logic, not the UI.
+4. **Widen the safety net** — add a linter and a few browser smoke tests (e.g. Playwright) for the main flows; current tests cover logic, not the UI.

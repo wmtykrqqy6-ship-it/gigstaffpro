@@ -512,7 +512,7 @@ export default function AssignWorkersModal({
                     }
                     // Default: rank first (lower is better), then reliability
                     if (a.rank !== b.rank) return a.rank - b.rank;
-                    return b.reliability - a.reliability;
+                    return (b.reliability ?? 5.0) - (a.reliability ?? 5.0);
                   });
 
                 return (
@@ -782,7 +782,7 @@ export default function AssignWorkersModal({
                                         Rank {worker.rank}
                                       </span>
                                       <span className="text-xs text-gray-600 flex items-center">
-                                        ⭐ {worker.reliability.toFixed(1)}
+                                        ⭐ {(worker.reliability ?? 5.0).toFixed(1)}
                                       </span>
                                       {workerDistances[worker.id] != null && (
                                         <span className="text-xs text-gray-500 flex items-center space-x-0.5">
