@@ -11,6 +11,7 @@ It manages:
 - Shift assignments and worker applications
 - Pay calculation (hourly rate + travel tiers + bonuses)
 - Worker/admin communication (invites, reminders, notifications)
+- Delivery logistics: Goodshuffle pull-sheet import, truck dispatch, load sheets, crew routes, returns (see `docs/LOGISTICS.md`)
 
 Two user roles exist:
 - **Admin** — staff/event management, payments, settings
@@ -18,14 +19,16 @@ Two user roles exist:
 
 Stack:
 - Frontend: React 18 + Vite 5 + Tailwind CSS
-- Backend: Supabase Postgres is the primary database; Supabase Storage may also be available through the platform. Authentication is currently a custom client-side system (see §3), not Supabase Auth.
-- Serverless: Vercel functions under `api/` for email (Resend), Google Maps distance lookups, and calendar (`.ics`) generation
-- Automation: GitHub Actions cron workflows that trigger those functions on a schedule
+- Backend: Supabase Postgres is the primary database; Supabase Storage may also be available through the platform. Admins use Supabase Auth; workers are mid-migration from a legacy phone + PIN login to Supabase Auth (see §3).
+- Serverless: Vercel functions under `api/` for email (Resend), Google Maps distance lookups, calendar (`.ics`) generation, worker auth/actions, and scheduled reminder jobs
+- Automation: GitHub Actions cron workflows that trigger those functions on a schedule, plus a CI workflow that runs the test suite
+- Tests: Vitest (`npm test`)
 
 ## 2. Source-of-Truth Documents
 
 - `docs/CODEBASE_AUDIT.md` — the current repository audit: architecture, known bugs, security findings, duplication, and stabilization priorities. Treat it as authoritative background.
 - Consult the audit before touching auth, payments, or Supabase access code specifically — those are the areas it flags as highest-risk.
+- `docs/LOGISTICS.md` — the Delivery Logistics feature: business rules (truck capacity, crew roles, staffing per table), data model, and decisions made with Dylan.
 - Additional files will be added under `docs/` over time for product requirements and business rules — check that directory for relevant context before large changes.
 - This file governs *how* to work in the repo; the audit governs *what state the code is currently in*.
 - If the two ever seem to disagree on a fact about the code, re-verify against the actual source rather than trusting either document blindly — both can go stale.
@@ -34,15 +37,13 @@ Stack:
 
 - `src/App.jsx` is the root component and owns most application state, loading and mutating data via direct Supabase calls (no service/repository layer).
 - `src/supabaseClient.js` holds the single Supabase client, using the anon key.
-- Two custom auth flows exist, checked against `admin_users`/`workers` tables client-side:
-  - Admin: username/password
-  - Worker: phone number + 4-digit PIN
-- This is **not** Supabase Auth — see the audit for known weaknesses in this scheme.
-- No RLS policies or SQL migrations are currently tracked in this repo; `supabase/` only contains local CLI config (`config.toml`).
-- Schema and access-control state currently live only in the hosted Supabase project, not in git.
-- `api/*.js` are independent Vercel functions. Several currently duplicate a hardcoded Supabase URL/anon key instead of reading environment variables.
+- Authentication:
+  - Admin: Supabase Auth (email/password) + `get_authenticated_admin_profile()`. Backend admin routes verify the bearer token via `api/_lib/verifyAdmin.js`; RLS write policies use `public.is_admin()`.
+  - Worker: migrated workers use Supabase Auth (phone-derived email + 6-digit PIN); legacy workers use phone + 4-digit PIN, checked server-side in `api/worker-pin-login.js` (salted PBKDF2). Worker writes go through `api/worker-actions.js` with the service role and currently trust the client-supplied worker id — a known gap (see the audit).
+- Schema and RLS are tracked as SQL migrations in `supabase/migrations/`, applied by Dylan in the Supabase SQL editor (see §6).
+- `api/*.js` are independent Vercel functions (shared helpers in `api/_lib/`). Server code that writes data uses `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from the environment. Four files still hardcode the Supabase URL/anon key as a fallback: `src/supabaseClient.js`, `api/calendar-event.js`, `api/send-availability-notifications.js`, `api/send-shift-reminders.js`.
 - That hardcoded-key issue is a known finding — do not silently "fix" it as a side effect of unrelated work; treat it as its own scoped task (see §7).
-- No automated tests, linter, or CI checks currently exist in this repo.
+- Tests: Vitest, colocated `*.test.js` files under `src/` and `api/`. CI (`.github/workflows/run-tests.yml`) runs them on every push to `main`/`development/claude-code` and on PRs. No linter is configured.
 
 ## 4. Development Safety Rules
 
@@ -65,12 +66,13 @@ Stack:
 - Do not modify any production or Vercel/Supabase project settings unless explicitly asked.
 - Do not commit or push changes unless explicitly asked, even when working on a feature branch.
 - A prior approval for one git action does not extend to later, similar-looking actions — confirm scope each time for anything that touches shared or remote state.
+- When Dylan asks to "commit and deploy": commit on `development/claude-code`, push it, fast-forward `main` to it and push `main`, then switch back to `development/claude-code`. Confirm the Vercel status for the commit and that gigstaffpro.com serves the new bundle (it can lag ~20 seconds) before reporting it live.
 
 ## 6. Supabase and Database Rules
 
-- **No database-changing work is allowed right now**: the live Supabase database has not yet been fully backed up.
-- Until a backup is confirmed complete and explicit approval is given, do not run: migrations, schema changes, data writes, or seed operations.
-- Do not connect to or query the live database as part of routine code work.
+- **Claude never runs migrations, schema changes, data writes, or seed operations against the live database.** Schema changes are written as migration files in `supabase/migrations/`, explained, and run by Dylan in the Supabase SQL editor after he approves each one.
+- **Backups:** no full backup has been confirmed since 2026-08-09 (the only one in `database-backup/`). Recommend confirming one before further schema changes; a scheduled backup is an open priority (§10).
+- Do not connect to or query the live database as part of routine code work. Narrow read-only checks with the public anon key (e.g. confirming a migration Dylan just ran, or reading a setting the code depends on) are fine when they serve the current task.
 - Do not weaken, disable, or add bypasses around Row Level Security under any circumstances.
 - If RLS appears to be blocking something during investigation, flag it and ask — do not work around it.
 - Any future schema or RLS change should be written as a reviewable migration file, not applied ad hoc.
@@ -89,9 +91,10 @@ For anything beyond a trivial one-line fix:
 
 ## 8. Testing and Verification Expectations
 
-- There is currently no test suite, linter, or CI pipeline in this repo.
-- Do not assume one exists, and do not claim something is "tested" without an actual check having been run.
-- Do not run builds, tests, linting, or installs unless explicitly asked to do so for that task.
+- A Vitest suite exists (`npm test`) and runs in CI; there is no linter and no browser/E2E testing.
+- Do not claim something is "tested" without an actual check having been run, and say what kind of check it was (unit test, build, server-side render, live read-only check).
+- Running `npm test` and `npm run build` locally is expected after code changes (both are read-only). Do not run installs or anything that changes `node_modules` without approval.
+- Add or update tests for logic you change; keep logic in testable modules (e.g. `src/utils/`, `src/utils/logistics/`, `api/_lib/`).
 - When real verification isn't possible or authorized — no harness, no safe way to exercise a live-data path — say so plainly rather than implying the change was validated.
 - Where dynamic verification isn't available or allowed, prefer static review instead:
   - Read the diff carefully
@@ -108,12 +111,14 @@ For anything beyond a trivial one-line fix:
 
 ## 10. Current Stabilization Priorities
 
-From `docs/CODEBASE_AUDIT.md`, in priority order:
+From `docs/CODEBASE_AUDIT.md` (re-verified 2026-10-01), in priority order:
 
-1. **Verify and secure Supabase data access and RLS** — confirm the anon role cannot read password/PIN hashes or write sensitive fields (rank, reliability) directly.
-2. **Fix confirmed crash bugs** — `Navigation.jsx` missing `MapPin`/`ChevronDown` imports, `PaymentCalculatorModal.jsx` hook-order violation, unguarded `reliability.toFixed()` in `AssignWorkersModal.jsx`.
-3. **Improve authentication security** — move off unsalted SHA-256 for admin passwords and worker PINs toward a proper server-side scheme.
-4. **Reduce duplicated high-risk business logic** — `getPayRateKey` (5+ copies), the near-duplicate `AddEventModal`/`EditEventModal` pair, and the repeated email-template code.
-5. **Add a minimal test, lint, and CI safety net** — there is currently no automated check of any kind before changes reach production.
+1. **Confirm a full database backup and schedule it** — none confirmed since 2026-08-09, and many migrations have run since.
+2. **Real worker sessions** — `api/worker-actions.js` trusts the client-supplied worker id; finish moving workers off legacy PINs and verify identity server-side.
+3. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files (and consider rotating the key).
+4. **Fix the `AssignWorkersModal.jsx` `worker.reliability.toFixed()` crash** (no null guard).
+5. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
+
+Previously listed items now resolved: core-table RLS write lockdown and `pin_hash` read revocation, the `Navigation.jsx` and `PaymentCalculatorModal.jsx` crashes, legacy PIN hashing (now server-side salted PBKDF2), `getPayRateKey` / event-modal / email-template duplication, and the Vitest + CI safety net.
 
 Default to working on these before adding new features, unless explicitly directed otherwise.
