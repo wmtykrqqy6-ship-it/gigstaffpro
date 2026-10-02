@@ -24,7 +24,7 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 | Field views: per-trip item lists, load sheet order, returns (pure, tested) | `src/utils/logistics/fieldViews.js` |
 | Crew check-off endpoint logic (tested) | `api/_lib/routeActions.js` (actions `routeCheck`, `routeStopStatus` in `api/worker-actions.js`) |
 | UI | `src/components/views/LogisticsView.jsx`, `src/components/logistics/*` |
-| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql`, `20260930120000_add_catalog_staffing.sql`, `20261001120000_add_solo_and_personal_vehicle_runs.sql` |
+| Schema | `supabase/migrations/20260927120000_add_logistics_foundation.sql`, `20260928120000_add_logistics_dispatch.sql`, `20260929120000_add_logistics_field_views.sql`, `20260930120000_add_catalog_staffing.sql`, `20261001120000_add_solo_and_personal_vehicle_runs.sql`, `20261002120000_add_route_reminders_sent.sql` |
 | Test fixtures (3 real pull sheets + their receipts) | `src/utils/logistics/__fixtures__/` |
 
 ## Staffing from pull sheets
@@ -178,6 +178,14 @@ the pull sheet exactly). Anything loaded beyond the pull sheet shows as "(extra 
 **Warehouse load sheet.** Printer icon on each trip, or "All load sheets" for the day (one page per
 trip). Events are listed in load order, last delivery stop first, with every table and accessory and a
 checkbox, plus the delivery order and the truck's notes. Printing shows only the sheet.
+
+**Day-before route reminder (email).** From 4 PM business time, everyone on tomorrow's truck or
+personal-vehicle run gets one email: vehicle, teammate, notes, every stop in order with times, a Maps
+link and what's being delivered, reload markers, the pickup time ("details open once the party
+starts"), and a link to their route. Runs on the existing hourly `send-shift-reminders` cron
+(`api/_lib/routeReminders.js`, tested; service-role key from the environment). One email per person per
+run, logged in `route_reminders_sent` (migration `20261002120000`). Plans changed after the email went
+out aren't re-sent — the portal route is always the latest.
 
 **Warehouse loading (worker portal).** Workers with a **Warehouse** skill (a position in Settings →
 Positions, matched by key or label) get a "Loading — next 7 days" card: every truck and trip planned
