@@ -278,11 +278,7 @@ export default function DashboardView({
           <div className="space-y-3">
             {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => {
               const urgent = tier === '24h';
-              const whenLabel = urgent
-                ? (hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}H AWAY`)
-                : daysUntil === 0 ? 'TODAY'
-                : daysUntil === 1 ? 'TOMORROW'
-                : null;
+              const whenLabel = urgent ? 'Under 24h' : `${daysUntil}d away`;
               const totalOpen = unfilledPositions.reduce((sum, p) => sum + p.open, 0);
               const eventDate = parseDateSafe(event.date);
               return (
@@ -291,12 +287,7 @@ export default function DashboardView({
                   className={`p-4 border border-l-4 ${urgent ? 'border-l-red-500' : 'border-l-orange-400'} rounded-lg bg-white hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center gap-3`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
-                      {whenLabel
-                        ? <span className={`${urgent || daysUntil === 0 ? 'bg-red-500' : 'bg-orange-400'} text-white text-xs px-1.5 py-0.5 rounded font-bold`}>{whenLabel}</span>
-                        : <span className="text-xs text-gray-400">in {daysUntil} days</span>}
-                    </div>
+                    <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
                     <div className="flex items-center flex-wrap gap-x-1 text-xs text-gray-500 mt-1">
                       <Calendar size={11} className="flex-shrink-0" />
                       <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
@@ -311,12 +302,18 @@ export default function DashboardView({
                         <span className="truncate">{event.venue}</span>
                       </>)}
                     </div>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {unfilledPositions.map(({ label, open }) => (
-                        <span key={label} className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded-full">
-                          {label} <strong>{open}</strong>
-                        </span>
-                      ))}
+                    {/* Same strip as the Events tab */}
+                    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg mt-2 text-sm border ${
+                      urgent
+                        ? 'bg-red-50 border-red-200 text-red-800'
+                        : 'bg-amber-50 border-amber-200 text-amber-800'
+                    }`}>
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>{whenLabel}</strong>
+                        {' — '}
+                        {unfilledPositions.map(({ label, open }) => `${label} ×${open}`).join(', ')} open
+                      </span>
                     </div>
                   </div>
                   <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 flex-shrink-0">
