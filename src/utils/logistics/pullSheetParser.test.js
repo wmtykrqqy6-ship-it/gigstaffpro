@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { parsePullSheet, textContentToItems, cleanAddress, isStreetPart, parseEventTime, resolveYear } from './pullSheetParser';
+import { parsePullSheet, textContentToItems, cleanAddress, isStreetPart, parseEventTime, resolveYear, parseClientLine } from './pullSheetParser';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => path.join(here, '__fixtures__', name);
@@ -297,5 +297,22 @@ describe('helpers', () => {
     expect(resolveYear(1, 1, '12/31/2026 - 1/1/2027')).toBe(2027);
     expect(resolveYear(12, 31, '12/31/2026 - 1/1/2027')).toBe(2026);
     expect(resolveYear(9, 25, '')).toBeNull();
+  });
+});
+
+describe('parseClientLine', () => {
+  it('stops at the next column label', () => {
+    expect(parseClientLine('Iyonna Isom  Sales Lead: Alyssa Newsom')).toEqual({ name: 'Iyonna Isom', phone: null });
+  });
+  it('keeps an extension off the name', () => {
+    expect(parseClientLine('Jessi H  x237')).toEqual({ name: 'Jessi H', phone: null });
+    expect(parseClientLine('Jessi H (414) 555-1212 x237')).toEqual({ name: 'Jessi H', phone: '(414) 555-1212 x237' });
+  });
+  it('plain name and name + phone still work', () => {
+    expect(parseClientLine('Carly Kass')).toEqual({ name: 'Carly Kass', phone: null });
+    expect(parseClientLine('Dave Pawelek (262) 555-0100')).toEqual({ name: 'Dave Pawelek', phone: '(262) 555-0100' });
+  });
+  it('keeps names with x in them', () => {
+    expect(parseClientLine('Alex Baxter')).toEqual({ name: 'Alex Baxter', phone: null });
   });
 });

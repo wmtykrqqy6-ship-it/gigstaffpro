@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { findClientByName, newClientFromEvent } from '../../utils/clientMatch';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -281,6 +282,31 @@ export default function EventFormModal({
     }
   };
 
+  // Link the typed client to Settings -> Clients: an existing client with the
+  // same name, or a new one. Best-effort -- if it fails the event still saves
+  // with the client name as text, like before.
+  const resolveClientId = async () => {
+    if (formData.client_id) return formData.client_id;
+    const name = String(formData.client || '').trim();
+    if (!name) return null;
+    try {
+      const { data: all, error: listError } = await supabase.from('clients').select('id, name');
+      if (listError) throw listError;
+      const existing = findClientByName(all || [], name);
+      if (existing) return existing.id;
+      const { data: created, error } = await supabase
+        .from('clients')
+        .insert([newClientFromEvent(formData)])
+        .select('id')
+        .single();
+      if (error) throw error;
+      return created?.id || null;
+    } catch (err) {
+      console.error('Could not add client to the client list:', err.message);
+      return null;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -298,8 +324,10 @@ export default function EventFormModal({
     setSaving(true);
     try {
       const warehouseId = await assignNearestWarehouse(formData.address);
+      const clientId = await resolveClientId();
       const saveData = {
         ...formData,
+        client_id: clientId,
         warehouse_id: warehouseId,
         flat_pay_amount: formData.flat_pay_amount === '' ? null : parseFloat(formData.flat_pay_amount),
       };

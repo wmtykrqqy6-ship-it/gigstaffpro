@@ -125,6 +125,20 @@ const isDayDateLine = (text) =>
   /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+\d{1,2}\/\d{1,2}/i.test(text) || /\[(TBD|[^\]]*(AM|PM)[^\]]*)\]/i.test(text);
 
 // Main entry point. `pages` is [{ items: [{ str, x, y, height }] }] in page order.
+// Text after "Client:" -> { name, phone }. The line can run into the next
+// column's label ("Iyonna Isom  Sales Lead: Alyssa Newsom") -- stop there --
+// and can carry a phone extension ("Jessi H  x237"), which belongs with the
+// phone, not the name.
+export function parseClientLine(text) {
+  const clientText = String(text || '').replace(/\s+[A-Z][a-z]+(?: [A-Z][a-z]+)?:.*$/, '');
+  const phone = clientText.match(/\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}(?:\s*(?:x|ext\.?)\s*\d{1,6})?/i);
+  const name = (phone ? clientText.replace(phone[0], '') : clientText)
+    .replace(/\s+(?:x|ext\.?)\s*\d{1,6}\b/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { name: name || null, phone: phone ? phone[0].trim() : null };
+}
+
 export function parsePullSheet(pages) {
   const warnings = [];
   const result = {
@@ -185,9 +199,9 @@ export function parsePullSheet(pages) {
       result._year = et.year;
     }
     if ((m = t.match(/Client:\s*(.+)$/i))) {
-      const phone = m[1].match(/\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/);
-      result.clientPhone = phone ? phone[0].trim() : null;
-      result.clientName = (phone ? m[1].replace(phone[0], '') : m[1]).trim() || null;
+      const client = parseClientLine(m[1]);
+      result.clientName = client.name;
+      result.clientPhone = client.phone;
     }
   }
 
