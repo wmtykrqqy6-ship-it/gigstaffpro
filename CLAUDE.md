@@ -28,6 +28,7 @@ Stack:
 
 - `docs/CODEBASE_AUDIT.md` — the current repository audit: architecture, known bugs, security findings, duplication, and stabilization priorities. Treat it as authoritative background.
 - Consult the audit before touching auth, payments, or Supabase access code specifically — those are the areas it flags as highest-risk.
+- `docs/PAY_RULES.md` — how worker pay is calculated, including the minimum-paid-hours rule.
 - `docs/LOGISTICS.md` — the Delivery Logistics feature: business rules (truck capacity, crew roles, staffing per table), data model, and decisions made with Dylan.
 - Additional files will be added under `docs/` over time for product requirements and business rules — check that directory for relevant context before large changes.
 - This file governs *how* to work in the repo; the audit governs *what state the code is currently in*.

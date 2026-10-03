@@ -6,6 +6,7 @@ import { getPayRateKey } from '../../utils/positionHelpers';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import MinimumHoursCard from '../settings/MinimumHoursCard';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -2064,6 +2065,9 @@ export default function SettingsView({
               </div>
             )}
           </div>
+
+          {/* Minimum paid hours per shift (payHelpers.js) */}
+          <MinimumHoursCard positions={positions} onSaved={onPayRatesChanged} />
 
           {/* Travel Pay Tiers */}
           <div className="bg-white rounded-lg shadow p-6">

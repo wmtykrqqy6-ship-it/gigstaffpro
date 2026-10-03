@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
 import { isAssignmentFilled } from '../../utils/positionHelpers';
+import { paidHours } from '../../utils/payHelpers';
 
 export default function PaymentCalculatorModal({
   open,
@@ -17,11 +18,13 @@ export default function PaymentCalculatorModal({
   getEffectiveRate,
   calculatePay,
   getPayRateKey,
+  minHoursRule = null,
   onClose,
   onSuccess
 }) {
   const notify = useToast();
   const [hours, setHours] = useState(0);
+  const [scheduledHours, setScheduledHours] = useState(null); // event length before the minimum, for the note
   const [miles, setMiles] = useState(0);
   const [isLakeGeneva, setIsLakeGeneva] = useState(false);
   const [isHoliday, setIsHoliday] = useState(false);
@@ -105,6 +108,16 @@ export default function PaymentCalculatorModal({
     assignWithoutPayment();
   }, [paymentTrackingEnabled, open, assignmentData, selectedEvent, workers, onSuccess, onClose]);
 
+  // Minimum paid hours (Settings -> Pay Rates): a 2-hour event pays a covered
+  // contractor the minimum. Applied when the calculator opens; the admin can
+  // still type a different number for this one assignment.
+  const setHoursWithMinimum = (scheduled) => {
+    const worker = workers.find(w => w.id === assignmentData?.workerId);
+    const paid = paidHours(scheduled, minHoursRule, assignmentData?.position, worker);
+    setScheduledHours(paid !== Number(scheduled) ? Number(scheduled) : null);
+    setHours(paid);
+  };
+
   useEffect(() => {
     if (!paymentTrackingEnabled) return;
     if (assignmentData) {
@@ -112,12 +125,12 @@ export default function PaymentCalculatorModal({
       if (eventPaymentSettings[selectedEvent.id]) {
         const settings = eventPaymentSettings[selectedEvent.id];
         // Use live event hours if available, otherwise fall back to saved settings
-        setHours(calcHoursFromEvent(selectedEvent) ?? settings.hours);
+        setHoursWithMinimum(calcHoursFromEvent(selectedEvent) ?? settings.hours);
         setMiles(settings.miles);
         setIsLakeGeneva(settings.isLakeGeneva);
         setIsHoliday(settings.isHoliday);
       } else {
-        setHours(calcHoursFromEvent(selectedEvent) ?? assignmentData.defaultHours ?? 0);
+        setHoursWithMinimum(calcHoursFromEvent(selectedEvent) ?? assignmentData.defaultHours ?? 0);
         setMiles(0);
         // Auto-detect Lake Geneva from event address zip code
         setIsLakeGeneva(isLakeGenevaZip(selectedEvent?.address));
@@ -359,6 +372,11 @@ export default function PaymentCalculatorModal({
                   onChange={(e) => setHours(parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
+                {scheduledHours != null && hours === minHoursRule?.hours && (
+                  <p className="text-xs text-green-700 mt-1">
+                    {minHoursRule.hours}-hour minimum applied (event is {scheduledHours}h).
+                  </p>
+                )}
               </div>
 
               <div>

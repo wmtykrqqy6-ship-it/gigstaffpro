@@ -11,6 +11,7 @@ import PostEventReportModal from '../modals/PostEventReportModal';
 import CrewRoute from '../logistics/CrewRoute';
 import WarehouseLoading from '../logistics/WarehouseLoading';
 import RouteNotice from '../logistics/RouteNotice';
+import { paidHours } from '../../utils/payHelpers';
 import { isWarehouseWorker } from '../../utils/logistics/dispatch';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -138,6 +139,7 @@ export default function WorkerPortalView({  loggedInWorker,
   onReloadWorker,
   currentTab = 'dashboard',
   onTabChange,
+  minHoursRule = null,
   workerAuthMode
 }) {
     const currentWorker = loggedInWorker;
@@ -715,7 +717,7 @@ export default function WorkerPortalView({  loggedInWorker,
                           const s = eventPaymentSettings[inv.event_id];
                           const rateKey = getPayRateKey(inv.position_key);
                           const hourlyRate = payRates[rateKey] || payRates[inv.position_key] || 0;
-                          const numHours = Number(s.hours) || 0;
+                          const numHours = paidHours(s.hours, minHoursRule, inv.position_key, currentWorker);
                           const numMiles = Number(s.miles) || 0;
                           if (!hourlyRate || !numHours) return null;
                           const basePay = numHours * hourlyRate;
@@ -853,6 +855,7 @@ export default function WorkerPortalView({  loggedInWorker,
           locationPayRates={locationPayRates}
           locations={locations}
           getEffectiveRate={getEffectiveRate}
+          minHoursRule={minHoursRule}
           onReloadAssignments={onReloadAssignments}
         />
 

@@ -8,6 +8,7 @@ import { renderEmailShell } from '../../utils/emailShell.js';
 import { escapeHtml } from '../../utils/escapeHtml.js';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { paidHours } from '../../utils/payHelpers';
 
 const fmtDate = (d) => {
   if (!d) return d;
@@ -25,7 +26,7 @@ const fmtTime = (t) => {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 };
 
-export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, onClose, onReloadAssignments, defaultPosition = null, onSessionExpired }) {
+export default function InviteWorkersModal({ open, event, workers, assignments, events, payRates = {}, eventPaymentSettings = {}, travelTiers = [], bonuses = {}, locations = [], getEffectiveRate, minHoursRule = null, onClose, onReloadAssignments, defaultPosition = null, onSessionExpired }) {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -79,7 +80,8 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
     const settings = eventPaymentSettings[eventId];
     if (!settings || !positionLabel) return null;
     const { hours, isLakeGeneva, isHoliday } = settings;
-    const numHours = Number(hours) || 0;
+    // Minimum paid hours (e.g. a 2-hour event pays 3) for covered positions
+    const numHours = paidHours(hours, minHoursRule, positionLabel, worker);
     if (!numHours) return null;
 
     // Hourly rate: worker's own home market, not the event's — traveling

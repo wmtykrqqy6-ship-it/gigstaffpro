@@ -5,8 +5,9 @@ import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches, isAss
 import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
+import { paidHours } from '../utils/payHelpers';
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, onReloadAssignments }) => {
+const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, minHoursRule = null, onReloadAssignments }) => {
     const confirm = useConfirm();
     const notify = useToast();
     const [applying, setApplying] = useState(false);
@@ -555,7 +556,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                         : (payRates[rateKey] ?? payRates[position] ?? 0);
                       if (!isFlatPay && !hourlyRate) return null;
 
-                      const basePay = isFlatPay ? event.flat_pay_amount : numHours * hourlyRate;
+                      // Minimum paid hours (e.g. a 2-hour event pays 3) for covered positions
+                      const payHours = paidHours(numHours, minHoursRule, position, currentWorker);
+                      const basePay = isFlatPay ? event.flat_pay_amount : payHours * hourlyRate;
 
                       let travelPay = 0;
                       for (const tier of travelTiers) {
@@ -569,19 +572,19 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                       const subtotal = basePay + travelPay + lakeBonus;
                       const holidayMult = isHoliday ? (bonuses['Holiday Multiplier'] || 1.5) : 1.0;
                       const total = subtotal * holidayMult;
-                      return { position, hourlyRate, travelPay, total: total.toFixed(0) };
+                      return { position, hourlyRate, payHours, travelPay, total: total.toFixed(0) };
                     }).filter(Boolean);
 
                     if (payLines.length === 0) return null;
                     return (
                       <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
                         <p className="text-xs font-semibold text-gray-700 mb-1">💰 Estimated Pay:</p>
-                        {payLines.map(({ position, hourlyRate, travelPay, total }) => (
+                        {payLines.map(({ position, hourlyRate, payHours, travelPay, total }) => (
                           <div key={position} className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">
                               {isFlatPay
                                 ? `${position} · $${event.flat_pay_amount.toFixed(0)} flat`
-                                : `${position} · ${numHours}h × $${hourlyRate}/hr`}
+                                : `${position} · ${payHours}h${payHours > numHours ? ' min' : ''} × $${hourlyRate}/hr`}
                               {travelPay > 0 && ` + $${travelPay} travel`}
                             </span>
                             <span className="text-sm font-bold text-green-700">~${total}</span>

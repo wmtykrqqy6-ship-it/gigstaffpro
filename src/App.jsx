@@ -43,6 +43,7 @@ import LogisticsView from './components/views/LogisticsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
 import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
 import { hasLogisticsRole } from './utils/logistics/dispatch';
+import { MIN_HOURS_SETTING_KEY, parseMinHoursRule } from './utils/payHelpers';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -64,6 +65,7 @@ const GigStaffPro = () => {
   const [payRates, setPayRates] = useState({});
   const [travelTiers, setTravelTiers] = useState([]);
   const [bonuses, setBonuses] = useState({});
+  const [minHoursRule, setMinHoursRule] = useState(null); // minimum paid hours per shift (payHelpers.js)
   const [locationPayRates, setLocationPayRates] = useState({}); // { location_id: { position_key: rate } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -638,6 +640,14 @@ setPayRates(ratesMap);
         });
         setBonuses(bonusesMap);
       }
+
+      // Minimum paid hours per shift (Settings -> Pay Rates); null = none.
+      const { data: minHoursRow } = await supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', MIN_HOURS_SETTING_KEY)
+        .maybeSingle();
+      setMinHoursRule(parseMinHoursRule(minHoursRow?.setting_value));
 
       // Load travel tiers
       const { data: tiersData, error: tiersError } = await supabase
@@ -1254,6 +1264,7 @@ setAppPositions(storedPositions);
           locationPayRates={locationPayRates}
           locations={locations}
           getEffectiveRate={getEffectiveRate}
+          minHoursRule={minHoursRule}
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
@@ -1670,6 +1681,7 @@ setAppPositions(storedPositions);
         bonuses={bonuses}
         locations={locations}
         getEffectiveRate={getEffectiveRate}
+        minHoursRule={minHoursRule}
         onClose={() => { setShowInviteModal(false); setSelectedEventForInvite(null); }}
         onReloadAssignments={() => { loadAssignments(); loadInvitations(); }}
         onSessionExpired={handleAdminSessionExpired}
@@ -1778,6 +1790,7 @@ setAppPositions(storedPositions);
         getEffectiveRate={getEffectiveRate}
         calculatePay={calculatePay}
         getPayRateKey={getPayRateKey}
+        minHoursRule={minHoursRule}
         onClose={() => {
           setShowPaymentModal(false);
           setAssignmentPaymentData(null);
