@@ -169,6 +169,15 @@ export const isWarehouseWorker = (worker, positions = []) => {
   return keys.size > 0 && Array.isArray(worker?.skills) && worker.skills.some(k => keys.has(k));
 };
 
+// Who gets the "Logistics" tab in the worker portal (Dylan, 2026-10-03:
+// staffing first, logistics as a feature): anyone tagged Set Up Driver,
+// Set Up, or Warehouse.
+export function hasLogisticsRole(worker, positions = []) {
+  if (!worker) return false;
+  const roles = crewRoles(positions);
+  return isDriver(worker, roles) || isSetUp(worker, roles) || isWarehouseWorker(worker, positions);
+}
+
 // ---- Solo trucks and personal vehicles ------------------------------------
 // Confirmed with Dylan 2026-09-30: small events are sometimes delivered by one
 // person -- on a truck (a "solo" run) or in their own car (a personal-vehicle

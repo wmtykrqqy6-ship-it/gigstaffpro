@@ -6,7 +6,7 @@ import {
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
   crewRoles, isDriver, isSetUp, eligibleForSpot,
   isOneSpotRun, spotFor, runLabel, planMoveEvent, dayStatus, monthStatuses,
-  warehouseKeys, isWarehouseWorker
+  warehouseKeys, isWarehouseWorker, hasLogisticsRole
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -605,5 +605,22 @@ describe('warehouse loaders', () => {
     expect(isWarehouseWorker({ skills: ['driver', 'blackjack'] }, POSITIONS)).toBe(false);
     expect(isWarehouseWorker({ skills: null }, POSITIONS)).toBe(false);
     expect(isWarehouseWorker({ skills: ['warehouse'] }, [{ key: 'blackjack' }])).toBe(false);
+  });
+});
+
+describe('hasLogisticsRole (worker portal Logistics tab)', () => {
+  const POSITIONS = [
+    { key: 'blackjack', label: 'Blackjack' }, { key: 'driver', label: 'Set Up Driver' },
+    { key: 'set_up', label: 'Set Up' }, { key: 'warehouse', label: 'Warehouse' }
+  ];
+  it('drivers, set up crew and warehouse staff get the tab; dealers do not', () => {
+    expect(hasLogisticsRole({ skills: ['driver'] }, POSITIONS)).toBe(true);
+    expect(hasLogisticsRole({ skills: ['set_up'] }, POSITIONS)).toBe(true);
+    expect(hasLogisticsRole({ skills: ['warehouse'] }, POSITIONS)).toBe(true);
+    expect(hasLogisticsRole({ skills: ['blackjack'] }, POSITIONS)).toBe(false);
+    expect(hasLogisticsRole(null, POSITIONS)).toBe(false);
+  });
+  it('nobody gets it before the positions exist', () => {
+    expect(hasLogisticsRole({ skills: ['driver'] }, [{ key: 'blackjack', label: 'Blackjack' }])).toBe(false);
   });
 });

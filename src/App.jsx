@@ -42,6 +42,7 @@ import ScheduleView from './components/views/ScheduleView';
 import LogisticsView from './components/views/LogisticsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
 import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
+import { hasLogisticsRole } from './utils/logistics/dispatch';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -1256,6 +1257,7 @@ setAppPositions(storedPositions);
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
+          onTabChange={setWorkerTab}
           workerAuthMode={workerAuthMode}
         />
       );
@@ -1633,6 +1635,7 @@ setAppPositions(storedPositions);
   onGoDashboard={() => navigate('dashboard')}
   currentTab={workerTab}
   onTabChange={setWorkerTab}
+  showLogisticsTab={userRole === 'worker' && hasLogisticsRole(loggedInWorker, positions)}
   locations={locations}
   activeLocation={activeLocation}
   onSetActiveLocation={handleSetActiveLocation}

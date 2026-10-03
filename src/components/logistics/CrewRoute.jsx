@@ -26,7 +26,7 @@ const mapsUrl = (address) => `https://www.google.com/maps/dir/?api=1&destination
 // week, collapsed), with delivered / returned check-offs. Renders nothing
 // for workers who aren't on a truck team, or before the logistics tables
 // exist.
-export default function CrewRoute({ worker, events = [], workers = [], assignments = [], timeFormat }) {
+export default function CrewRoute({ worker, events = [], workers = [], assignments = [], timeFormat, emptyMessage = null }) {
   const notify = useToast();
   const [data, setData] = useState(null);
   const [equipmentByEvent, setEquipmentByEvent] = useState({});
@@ -72,12 +72,14 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
   const eventsById = useMemo(() => Object.fromEntries(events.map(e => [e.id, e])), [events]);
   const workersById = useMemo(() => Object.fromEntries(workers.map(w => [w.id, w])), [workers]);
 
-  if (!data || !data.mine.length) return null;
+  const empty = emptyMessage ? <div className="bg-white rounded-lg shadow p-6 text-center text-sm text-gray-500">{emptyMessage}</div> : null;
+  if (!data) return null;
+  if (!data.mine.length) return empty;
 
   const visibleRuns = data.mine
     .filter(r => r.run_date >= today || canEdit(r.run_date))
     .sort((a, b) => a.run_date.localeCompare(b.run_date));
-  if (!visibleRuns.length) return null;
+  if (!visibleRuns.length) return empty;
 
   const ctx = { loads: data.day.loads, allocations: data.day.allocations, equipmentByEvent };
 

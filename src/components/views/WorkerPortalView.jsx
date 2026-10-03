@@ -10,6 +10,8 @@ import HistoryView from './HistoryView';
 import PostEventReportModal from '../modals/PostEventReportModal';
 import CrewRoute from '../logistics/CrewRoute';
 import WarehouseLoading from '../logistics/WarehouseLoading';
+import RouteNotice from '../logistics/RouteNotice';
+import { isWarehouseWorker } from '../../utils/logistics/dispatch';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
@@ -135,6 +137,7 @@ export default function WorkerPortalView({  loggedInWorker,
   onReloadAssignments,
   onReloadWorker,
   currentTab = 'dashboard',
+  onTabChange,
   workerAuthMode
 }) {
     const currentWorker = loggedInWorker;
@@ -599,6 +602,26 @@ export default function WorkerPortalView({  loggedInWorker,
         {/* Tab Content */}
         {currentTab === 'profile' ? (
           <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} assignments={assignments} events={events} workerAuthMode={workerAuthMode} />
+        ) : currentTab === 'logistics' ? (
+          // Logistics tab (2026-10-03: staffing first, logistics as a feature) --
+          // the crew route and, for Warehouse staff, the next week's load sheets.
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Logistics</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Delivery routes you're on for the next 7 days{isWarehouseWorker(currentWorker, positions) ? ', and what to load' : ''}.
+              </p>
+            </div>
+            <CrewRoute
+              worker={currentWorker}
+              events={events}
+              workers={workers}
+              assignments={assignments}
+              timeFormat={timeFormat}
+              emptyMessage="You're not on a delivery route in the next 7 days."
+            />
+            <WarehouseLoading worker={currentWorker} positions={positions} events={events} workers={workers} timeFormat={timeFormat} />
+          </div>
         ) : currentTab === 'history' ? (
           <HistoryView 
             worker={currentWorker}
@@ -609,11 +632,8 @@ export default function WorkerPortalView({  loggedInWorker,
           />
         ) : (
           <>
-        {/* Setup crew's truck route (renders nothing unless they're on a truck team) */}
-        <CrewRoute worker={currentWorker} events={events} workers={workers} assignments={assignments} timeFormat={timeFormat} />
-
-        {/* Warehouse loaders' load sheets (renders nothing without the Warehouse skill) */}
-        <WarehouseLoading worker={currentWorker} positions={positions} events={events} workers={workers} timeFormat={timeFormat} />
+        {/* One slim line if they're on a vehicle today/tomorrow -> Logistics tab */}
+        <RouteNotice worker={currentWorker} onOpen={() => onTabChange?.('logistics')} />
 
         {/* Pending Invites Banner - highest priority */}
         {pendingInvites.length > 0 && (
