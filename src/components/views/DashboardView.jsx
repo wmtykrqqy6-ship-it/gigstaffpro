@@ -272,58 +272,58 @@ export default function DashboardView({
               <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
               <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
             </div>
-            <span className="text-xs text-gray-400 hidden sm:inline">Events with open positions</span>
+            <button onClick={() => onNavigate('events')} className="text-xs text-red-600 hover:underline font-medium">View all →</button>
           </div>
 
           <div className="space-y-3">
-            {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => {
+            {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, tier }) => {
               const urgent = tier === '24h';
               const whenLabel = urgent ? 'Under 24h' : `${daysUntil}d away`;
-              const totalOpen = unfilledPositions.reduce((sum, p) => sum + p.open, 0);
               const eventDate = parseDateSafe(event.date);
               return (
                 <div
                   key={event.id}
-                  className={`p-4 border border-l-4 ${urgent ? 'border-l-red-500' : 'border-l-orange-400'} rounded-lg bg-white hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center gap-3`}
+                  className={`p-4 border border-l-4 ${urgent ? 'border-l-red-500' : 'border-l-orange-400'} rounded-lg bg-white hover:shadow-md transition-all`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
-                    <div className="flex items-center flex-wrap gap-x-1 text-xs text-gray-500 mt-1">
-                      <Calendar size={11} className="flex-shrink-0" />
-                      <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                      {event.time && (<>
-                        <span className="text-gray-300">·</span>
-                        <Clock size={11} className="flex-shrink-0" />
-                        <span>{formatTime(event.time, timeFormat)}</span>
-                      </>)}
-                      {event.venue && (<>
-                        <span className="text-gray-300">·</span>
-                        <MapPin size={11} className="flex-shrink-0" />
-                        <span className="truncate">{event.venue}</span>
-                      </>)}
+                  {/* Name + details on the left, button top-right */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
+                      <div className="flex items-center flex-wrap gap-x-1 text-xs text-gray-500 mt-1">
+                        <Calendar size={11} className="flex-shrink-0" />
+                        <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                        {event.time && (<>
+                          <span className="text-gray-300">·</span>
+                          <Clock size={11} className="flex-shrink-0" />
+                          <span>{formatTime(event.time, timeFormat)}</span>
+                        </>)}
+                        {event.venue && (<>
+                          <span className="text-gray-300">·</span>
+                          <MapPin size={11} className="flex-shrink-0" />
+                          <span className="truncate">{event.venue}</span>
+                        </>)}
+                      </div>
                     </div>
-                    {/* Same strip as the Events tab */}
-                    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg mt-2 text-sm border ${
-                      urgent
-                        ? 'bg-red-50 border-red-200 text-red-800'
-                        : 'bg-amber-50 border-amber-200 text-amber-800'
-                    }`}>
-                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>{whenLabel}</strong>
-                        {' — '}
-                        {unfilledPositions.map(({ label, open }) => `${label} ×${open}`).join(', ')} open
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 flex-shrink-0">
-                    <span className="text-xs font-semibold text-red-700">{totalOpen} open</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
-                      className="bg-red-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-800 transition-colors"
+                      className="flex-shrink-0 bg-red-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-800 transition-colors"
                     >
                       Assign Staff
                     </button>
+                  </div>
+
+                  {/* Same strip as the Events tab, full width */}
+                  <div className={`flex items-start gap-2 px-3 py-2 rounded-lg mt-3 text-sm border ${
+                    urgent
+                      ? 'bg-red-50 border-red-200 text-red-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>{whenLabel}</strong>
+                      {' — '}
+                      {unfilledPositions.map(({ label, open }) => `${label} ×${open}`).join(', ')} open
+                    </span>
                   </div>
                 </div>
               );
