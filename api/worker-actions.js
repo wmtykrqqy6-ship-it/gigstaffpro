@@ -15,6 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 import { handleRouteCheck, handleRouteStopStatus } from './_lib/routeActions.js';
+import { handleHideEvent, handleUnhideEvent, handleListHiddenEvents } from './_lib/hiddenEvents.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -577,6 +578,15 @@ export default async function handler(req, res) {
         break;
       case 'routeStopStatus':
         result = await handleRouteStopStatus(supabase, params);
+        break;
+      case 'hideEvent':
+        result = await handleHideEvent(supabase, params);
+        break;
+      case 'unhideEvent':
+        result = await handleUnhideEvent(supabase, params);
+        break;
+      case 'listHiddenEvents':
+        result = await handleListHiddenEvents(supabase, params);
         break;
       default:
         return res.status(400).json({ ok: false, error: 'Unknown action' });

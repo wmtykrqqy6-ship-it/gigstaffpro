@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime, parseTimeToMinutes, timeRangesOverlap } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches, isAssignmentFilled } from '../utils/positionHelpers';
-import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation, EyeOff, Eye } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import { paidHours } from '../utils/payHelpers';
@@ -15,6 +15,41 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
     const [travelPayDistances, setTravelPayDistances] = useState({}); // { eventId: miles } from worker home location (for pay calc)
     const fetchedRef = useRef(false);
     const travelFetchedRef = useRef(false);
+
+    // "Not interested": events this worker hid from their list (server-side,
+    // so it follows them across devices). Hiding never changes staffing.
+    const [hiddenIds, setHiddenIds] = useState(() => new Set());
+    const [showHidden, setShowHidden] = useState(false);
+    const hiddenAction = (action, eventId) => fetch('/api/worker-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, workerId: currentWorker.id, eventId })
+    }).then(r => r.json());
+
+    useEffect(() => {
+      if (!currentWorker?.id) return;
+      let cancelled = false;
+      hiddenAction('listHiddenEvents')
+        .then(r => { if (!cancelled && r?.ok) setHiddenIds(new Set(r.eventIds)); })
+        .catch(() => {}); // not set up yet / offline: just show everything
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentWorker?.id]);
+
+    const setHidden = async (event, hide) => {
+      const before = hiddenIds;
+      const next = new Set(hiddenIds);
+      hide ? next.add(event.id) : next.delete(event.id);
+      setHiddenIds(next); // optimistic
+      try {
+        const r = await hiddenAction(hide ? 'hideEvent' : 'unhideEvent', event.id);
+        if (!r?.ok) throw new Error(r?.error || 'Something went wrong');
+        if (hide) notify(`Hidden ${event.name}. Tap "Show hidden" at the bottom to bring it back.`);
+      } catch (e) {
+        setHiddenIds(before);
+        notify('Could not update: ' + e.message);
+      }
+    };
 
     // Fetch distances from worker's personal address → each event (for "X mi from you" display)
     useEffect(() => {
@@ -189,6 +224,9 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
     };
     
     const availableEvents = getAvailableEvents();
+    const visibleEvents = availableEvents.filter(e => !hiddenIds.has(e.id));
+    const hiddenCount = availableEvents.length - visibleEvents.length;
+    const listedEvents = showHidden ? availableEvents : visibleEvents;
     
     const applyToEvent = async (event, position) => {
       // ✅ Check if position is already full before allowing application
@@ -429,12 +467,19 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-900">Available Events</h3>
           <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-            {availableEvents.length} Available
+            {visibleEvents.length} Available
           </span>
         </div>
-        
+
+        {listedEvents.length === 0 && (
+          <p className="text-center text-sm text-gray-500 py-6 bg-gray-50 rounded-lg">
+            You've hidden all {hiddenCount} available event{hiddenCount === 1 ? '' : 's'}.
+          </p>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {availableEvents.map(event => {
+          {listedEvents.map(event => {
+            const isHidden = hiddenIds.has(event.id);
             // Get positions that match worker skills (using position keys)
             const eventPositions = Array.isArray(event.positions) ? event.positions : [];
             
@@ -461,14 +506,24 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             const daysUntil = Math.ceil((parseDateSafe(event.date) - todayMidnightForBadge) / (1000 * 60 * 60 * 24));
             
             return (
-              <div key={event.id} className="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-blue-50">
-                <div className="flex justify-between items-start mb-2">
+              <div key={event.id} className={`border-2 rounded-lg p-4 hover:shadow-md transition-shadow ${isHidden ? 'border-gray-200 bg-gray-50 opacity-75' : 'border-blue-200 bg-blue-50'}`}>
+                <div className="flex justify-between items-start gap-2 mb-2">
                   <h4 className="font-bold text-gray-900">{event.name}</h4>
-                  {daysUntil <= 7 && (
-                    <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded font-semibold">
-                      Soon!
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {daysUntil <= 7 && (
+                      <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded font-semibold">
+                        Soon!
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setHidden(event, !isHidden)}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-white"
+                      title={isHidden ? 'Show this event in your list again' : 'Hide this event from your list'}
+                    >
+                      {isHidden ? <><Eye size={14} /> Show again</> : <><EyeOff size={14} /> Not interested</>}
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-1 text-sm text-gray-700 mb-3">
@@ -657,6 +712,18 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
             );
           })}
         </div>
+
+        {hiddenCount > 0 && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setShowHidden(v => !v)}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              {showHidden ? 'Hide the events I passed on' : `Show hidden (${hiddenCount})`}
+            </button>
+          </div>
+        )}
       </div>
     );
 }
