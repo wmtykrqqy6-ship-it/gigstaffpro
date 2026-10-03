@@ -71,7 +71,7 @@ Stack:
 ## 6. Supabase and Database Rules
 
 - **Claude never runs migrations, schema changes, data writes, or seed operations against the live database.** Schema changes are written as migration files in `supabase/migrations/`, explained, and run by Dylan in the Supabase SQL editor after he approves each one.
-- **Backups:** no full backup has been confirmed since 2026-08-09 (the only one in `database-backup/`). Recommend confirming one before further schema changes; a scheduled backup is an open priority (§10).
+- **Backups:** a GitHub Actions workflow takes a nightly encrypted `pg_dump` (90-day retention; first run 2026-10-03). Setup and restore: `docs/BACKUPS.md`. Before a risky schema change, Dylan can also run it on demand (Actions → Backup Database → Run workflow).
 - Do not connect to or query the live database as part of routine code work. Narrow read-only checks with the public anon key (e.g. confirming a migration Dylan just ran, or reading a setting the code depends on) are fine when they serve the current task.
 - Do not weaken, disable, or add bypasses around Row Level Security under any circumstances.
 - If RLS appears to be blocking something during investigation, flag it and ask — do not work around it.
@@ -113,11 +113,10 @@ For anything beyond a trivial one-line fix:
 
 From `docs/CODEBASE_AUDIT.md` (re-verified 2026-10-01), in priority order:
 
-1. **Confirm a full database backup and schedule it** — none confirmed since 2026-08-09, and many migrations have run since.
-2. **Real worker sessions** — `api/worker-actions.js` trusts the client-supplied worker id; finish moving workers off legacy PINs and verify identity server-side.
-3. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files (and consider rotating the key).
-4. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
+1. **Real worker sessions** — `api/worker-actions.js` trusts the client-supplied worker id; finish moving workers off legacy PINs and verify identity server-side.
+2. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files (and consider rotating the key).
+3. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
 
-Previously listed items now resolved: core-table RLS write lockdown and `pin_hash` read revocation, the `Navigation.jsx`, `PaymentCalculatorModal.jsx` and `AssignWorkersModal.jsx` (`reliability.toFixed()`) crashes, legacy PIN hashing (now server-side salted PBKDF2), `getPayRateKey` / event-modal / email-template duplication, and the Vitest + CI safety net.
+Previously listed items now resolved: nightly encrypted database backups (`docs/BACKUPS.md`), core-table RLS write lockdown and `pin_hash` read revocation, the `Navigation.jsx`, `PaymentCalculatorModal.jsx` and `AssignWorkersModal.jsx` (`reliability.toFixed()`) crashes, legacy PIN hashing (now server-side salted PBKDF2), `getPayRateKey` / event-modal / email-template duplication, and the Vitest + CI safety net.
 
 Default to working on these before adding new features, unless explicitly directed otherwise.

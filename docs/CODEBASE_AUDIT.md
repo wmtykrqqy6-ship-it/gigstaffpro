@@ -110,7 +110,7 @@
 2. ⚠️ **Hardcoded anon key** in 4 files (§4).
 3. ✅ Anon writes to `pay_rates`, `settings`, `travel_tiers`, `bonuses`, `events`, `assignments`, `workers`, `location_pay_rates` and all logistics tables require `is_admin()`. `workers.pin_hash` not readable; `rank`/`reliability` only admin-writable.
 4. ✅ Cron endpoints (`send-shift-reminders`, `send-availability-notifications`) require `x-cron-secret`. ❓ `api/calendar-event.js` has no auth check — it only builds `.ics` files for calendar links, so likely fine, but it also carries a hardcoded key.
-5. ⚠️ **No confirmed recent database backup.** The only local backup is from 2026-08-09; six-plus migrations have run since. Set up a scheduled backup.
+5. ✅ **Database backups** — nightly encrypted `pg_dump` via GitHub Actions (`backup-database.yml`, 90-day retention; see `docs/BACKUPS.md`). First run succeeded 2026-10-03. A test decrypt with the saved passphrase is still worth doing once.
 6. ✅ `.env` gitignored; holds only the browser Google Places key (confirm it's referrer-restricted in Google Cloud).
 
 ---
@@ -133,7 +133,6 @@
 
 ## 11. Highest-Priority Stabilization Areas (as of 2026-10-01)
 
-1. **Confirm a full database backup and schedule it** — before more schema changes.
-2. **Real worker sessions** — verify worker identity server-side in `api/worker-actions.js`; finish moving workers off legacy PINs.
-3. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files; consider rotating the key.
-4. **Widen the safety net** — add a linter and a few browser smoke tests (e.g. Playwright) for the main flows; current tests cover logic, not the UI.
+1. **Real worker sessions** — verify worker identity server-side in `api/worker-actions.js`; finish moving workers off legacy PINs.
+2. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files; consider rotating the key.
+3. **Widen the safety net** — add a linter and a few browser smoke tests (e.g. Playwright) for the main flows; current tests cover logic, not the UI.
