@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { parsePullSheet, textContentToItems, cleanAddress, isStreetPart, parseEventTime, resolveYear, parseClientLine } from './pullSheetParser';
+import { parsePullSheet, textContentToItems, cleanAddress, isStreetPart, parseEventTime, resolveYear, parseClientLine, eventNameWithoutClient } from './pullSheetParser';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => path.join(here, '__fixtures__', name);
@@ -102,10 +102,10 @@ describe('parsePullSheet — Weimer Bearing fixture (231273157)', () => {
   let r;
   beforeAll(async () => { r = parsePullSheet(await loadPages(fixture(WEIMER))); });
 
-  it('reads the header, keeping " - " inside the event name', () => {
+  it('reads the header, naming the event by venue (client prefix dropped)', () => {
     expect(r).toMatchObject({
       invoice: '231273157',
-      eventName: 'Armstrong - Weimer Bearing & Transmission, Inc.',
+      eventName: 'Weimer Bearing & Transmission, Inc.',
       clientName: 'Catherine Armstrong',
       clientPhone: null,
       date: '2026-09-30',
@@ -159,7 +159,7 @@ describe('parsePullSheet — Grand Geneva fixture (231581508)', () => {
   it('reads the header', () => {
     expect(r).toMatchObject({
       invoice: '231581508',
-      eventName: 'Kass - Grand Geneva Resort & Spa',
+      eventName: 'Grand Geneva Resort & Spa',
       clientName: 'Carly Kass',
       clientPhone: '(301) 331-2221',
       date: '2026-10-06',
@@ -314,5 +314,21 @@ describe('parseClientLine', () => {
   });
   it('keeps names with x in them', () => {
     expect(parseClientLine('Alex Baxter')).toEqual({ name: 'Alex Baxter', phone: null });
+  });
+});
+
+describe('eventNameWithoutClient', () => {
+  it('drops the client last name Goodshuffle puts first', () => {
+    expect(eventNameWithoutClient('Kass - Grand Geneva Resort & Spa', 'Carly Kass')).toBe('Grand Geneva Resort & Spa');
+    expect(eventNameWithoutClient('Boettcher - Embassy Suites by Hilton Milwaukee Brookfield', 'Jacqueline Boettcher'))
+      .toBe('Embassy Suites by Hilton Milwaukee Brookfield');
+  });
+  it('keeps " - " inside the venue', () => {
+    expect(eventNameWithoutClient('Olson - Ozaukee Country Club - Main Hall', 'Jaime Olson')).toBe('Ozaukee Country Club - Main Hall');
+  });
+  it('leaves names alone when the first part is not the client', () => {
+    expect(eventNameWithoutClient('Holiday Party - Ozaukee Country Club', 'Jaime Olson')).toBe('Holiday Party - Ozaukee Country Club');
+    expect(eventNameWithoutClient('Grand Geneva Resort & Spa', 'Carly Kass')).toBe('Grand Geneva Resort & Spa');
+    expect(eventNameWithoutClient('Kass - Grand Geneva', null)).toBe('Kass - Grand Geneva');
   });
 });

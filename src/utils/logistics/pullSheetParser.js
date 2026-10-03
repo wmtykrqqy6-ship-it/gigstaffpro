@@ -139,6 +139,22 @@ export function parseClientLine(text) {
   return { name: name || null, phone: phone ? phone[0].trim() : null };
 }
 
+// Goodshuffle names projects "<client last name> - <venue>". Events in
+// GigStaffPro are named by venue only (Dylan, 2026-10-03), so drop the
+// leading client part when it's the client's name. Anything else is left
+// alone, including " - " inside the venue itself.
+export function eventNameWithoutClient(eventName, clientName) {
+  const name = String(eventName || '').trim();
+  const sep = name.indexOf(' - ');
+  if (sep <= 0 || !clientName) return name;
+  const lead = name.slice(0, sep).trim().toLowerCase();
+  const client = String(clientName).trim().toLowerCase();
+  const clientWords = client.split(/\s+/);
+  const isClient = lead === client || clientWords.includes(lead);
+  const rest = name.slice(sep + 3).trim();
+  return isClient && rest ? rest : name;
+}
+
 export function parsePullSheet(pages) {
   const warnings = [];
   const result = {
@@ -348,5 +364,7 @@ export function parsePullSheet(pages) {
   });
 
   if (!result.lineItems.length) warnings.push('No rental items found on this pull sheet.');
+  // "Kass - Grand Geneva Resort & Spa" -> "Grand Geneva Resort & Spa"
+  if (result.eventName) result.eventName = eventNameWithoutClient(result.eventName, result.clientName);
   return result;
 }
