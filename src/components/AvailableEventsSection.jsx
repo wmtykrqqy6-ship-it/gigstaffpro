@@ -518,7 +518,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                     <button
                       type="button"
                       onClick={() => setHidden(event, !isHidden)}
-                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-white"
+                      className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md shadow-sm transition-colors ${isHidden ? 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100' : 'bg-red-600 text-white hover:bg-red-700'}`}
                       title={isHidden ? 'Show this event in your list again' : 'Hide this event from your list'}
                     >
                       {isHidden ? <><Eye size={14} /> Show again</> : <><EyeOff size={14} /> Not interested</>}
