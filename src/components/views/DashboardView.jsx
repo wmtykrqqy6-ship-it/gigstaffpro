@@ -264,69 +264,74 @@ export default function DashboardView({
         </button>
       </div>
 
-      {/* Staffing Alerts */}
+      {/* Staffing Alerts -- same card style as Next 7 Days / Recent Activity */}
       {unfilledAlerts.length > 0 && (
-        <div style={{background:'white',borderRadius:'12px',border:'0.5px solid #e5e7eb',overflow:'hidden'}}>
-          {/* Header */}
-          <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 16px 12px',borderBottom:'0.5px solid #f3f4f6'}}>
-            <AlertCircle size={20} style={{color:'#E24B4A',flexShrink:0}} />
-            <div style={{flex:1}}>
-              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <h3 style={{fontSize:'15px',fontWeight:'500',color:'#111827',margin:0}}>Staffing Alerts</h3>
-                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#E24B4A',color:'white',fontSize:'11px',fontWeight:'500',width:'18px',height:'18px',borderRadius:'50%'}}>{unfilledAlerts.length}</span>
-              </div>
-              <p style={{fontSize:'12px',color:'#9ca3af',margin:'1px 0 0'}}>Events with open positions that need attention</p>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-gray-900">Staffing Alerts</h3>
+              <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{unfilledAlerts.length}</span>
             </div>
+            <span className="text-xs text-gray-400 hidden sm:inline">Events with open positions</span>
           </div>
 
-          {/* Alert rows */}
-          {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }, idx) => (
-            <div key={event.id} style={{display:'flex',borderTop: idx > 0 ? '0.5px solid #f3f4f6' : 'none'}}>
-              {/* Colored left bar */}
-              <div style={{width:'4px',flexShrink:0,background: tier === '24h' ? '#E24B4A' : '#EF9F27'}} />
-              {/* Event detail */}
-              <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'#f9fafb',gap:'12px'}}>
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'3px',flexWrap:'wrap'}}>
-                    <span style={{
-                      fontSize:'11px',fontWeight:'500',padding:'3px 8px',borderRadius:'6px',flexShrink:0,
-                      background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
-                      color: tier === '24h' ? '#791F1F' : '#633806'
-                    }}>
-                      {tier === '24h'
-                        ? hoursUntil < 1 ? 'Now' : `${Math.round(hoursUntil)}h away`
-                        : daysUntil === 0 ? 'Today'
-                        : daysUntil === 1 ? 'Tomorrow'
-                        : `${daysUntil} days`}
-                    </span>
-                    <span style={{fontSize:'14px',fontWeight:'500',color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.name}</span>
+          <div className="space-y-3">
+            {unfilledAlerts.map(({ event, unfilledPositions, daysUntil, hoursUntil, tier }) => {
+              const urgent = tier === '24h';
+              const whenLabel = urgent
+                ? (hoursUntil < 1 ? 'NOW' : `${Math.round(hoursUntil)}H AWAY`)
+                : daysUntil === 0 ? 'TODAY'
+                : daysUntil === 1 ? 'TOMORROW'
+                : null;
+              const totalOpen = unfilledPositions.reduce((sum, p) => sum + p.open, 0);
+              const eventDate = parseDateSafe(event.date);
+              return (
+                <div
+                  key={event.id}
+                  className={`p-4 border border-l-4 ${urgent ? 'border-l-red-500' : 'border-l-orange-400'} rounded-lg bg-white hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center gap-3`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-semibold text-gray-900 text-sm truncate">{event.name}</h4>
+                      {whenLabel
+                        ? <span className={`${urgent || daysUntil === 0 ? 'bg-red-500' : 'bg-orange-400'} text-white text-xs px-1.5 py-0.5 rounded font-bold`}>{whenLabel}</span>
+                        : <span className="text-xs text-gray-400">in {daysUntil} days</span>}
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-1 text-xs text-gray-500 mt-1">
+                      <Calendar size={11} className="flex-shrink-0" />
+                      <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                      {event.time && (<>
+                        <span className="text-gray-300">·</span>
+                        <Clock size={11} className="flex-shrink-0" />
+                        <span>{formatTime(event.time, timeFormat)}</span>
+                      </>)}
+                      {event.venue && (<>
+                        <span className="text-gray-300">·</span>
+                        <MapPin size={11} className="flex-shrink-0" />
+                        <span className="truncate">{event.venue}</span>
+                      </>)}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {unfilledPositions.map(({ label, open }) => (
+                        <span key={label} className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded-full">
+                          {label} <strong>{open}</strong>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{fontSize:'12px',color:'#9ca3af',marginBottom:'6px'}}>
-                    {[event.venue, event.time ? formatTime(event.time, timeFormat) : null].filter(Boolean).join(' · ')}
-                  </div>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:'5px'}}>
-                    {unfilledPositions.map(({ label, open }) => (
-                      <span key={label} style={{
-                        fontSize:'11px',fontWeight:'500',padding:'2px 8px',borderRadius:'6px',
-                        display:'inline-flex',alignItems:'center',gap:'4px',
-                        background: tier === '24h' ? '#FCEBEB' : '#FAEEDA',
-                        border: `0.5px solid ${tier === '24h' ? '#F7C1C1' : '#FAC775'}`,
-                        color: tier === '24h' ? '#791F1F' : '#633806'
-                      }}>
-                        {label} <strong>{open} open</strong>
-                      </span>
-                    ))}
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 flex-shrink-0">
+                    <span className="text-xs font-semibold text-red-700">{totalOpen} open</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
+                      className="bg-red-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-800 transition-colors"
+                    >
+                      Assign Staff
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onOpenAssignModal(event); }}
-                  style={{flexShrink:0,fontSize:'12px',fontWeight:'500',padding:'7px 14px',borderRadius:'8px',border:'none',background:'#7c1d1d',color:'white',cursor:'pointer',whiteSpace:'nowrap'}}
-                >
-                  Assign Staff
-                </button>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
 
