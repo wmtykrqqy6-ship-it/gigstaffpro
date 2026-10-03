@@ -594,8 +594,7 @@ export default function WorkerPortalView({  loggedInWorker,
           <div className="bg-gradient-to-r from-red-900 to-black text-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-3xl font-bold mb-2">Welcome, {currentWorker.name}!</h2>
-                <p className="text-red-200">Your worker portal</p>
+                <h2 className="text-3xl font-bold">Welcome, {currentWorker.name}!</h2>
               </div>
             </div>
           </div>
