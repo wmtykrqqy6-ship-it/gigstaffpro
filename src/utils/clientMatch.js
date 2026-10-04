@@ -29,3 +29,18 @@ export function newClientFromEvent({ client, client_contact } = {}) {
     is_active: true
   };
 }
+
+// Settings -> Clients search: name, company, email, or phone. Phones match
+// on digits only, so "414-555", "4145551212" and "(414) 555-1212" all find
+// the same client.
+export function clientMatchesSearch(client, query) {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return true;
+  const text = [client?.name, client?.company, client?.email]
+    .filter(Boolean)
+    .some(v => String(v).toLowerCase().includes(q));
+  if (text) return true;
+  const qDigits = q.replace(/\D/g, '');
+  const phoneDigits = String(client?.phone ?? '').replace(/\D/g, '');
+  return qDigits.length >= 3 && phoneDigits.includes(qDigits);
+}

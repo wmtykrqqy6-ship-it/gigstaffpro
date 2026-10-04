@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeClientName, findClientByName, newClientFromEvent } from './clientMatch';
+import { normalizeClientName, findClientByName, newClientFromEvent, clientMatchesSearch } from './clientMatch';
 
 const CLIENTS = [
   { id: 'a', name: 'Kass', is_active: true },
@@ -40,5 +40,26 @@ describe('newClientFromEvent', () => {
 
   it('normalizeClientName', () => {
     expect(normalizeClientName('  A   B ')).toBe('a b');
+  });
+});
+
+describe('clientMatchesSearch', () => {
+  const c = { name: 'Carly Kass', company: 'Kass Events', email: 'carly@example.com', phone: '(414) 555-1212' };
+  it('name, company and email (any case)', () => {
+    expect(clientMatchesSearch(c, 'kass')).toBe(true);
+    expect(clientMatchesSearch(c, 'EVENTS')).toBe(true);
+    expect(clientMatchesSearch(c, 'carly@')).toBe(true);
+  });
+  it('phone in any format', () => {
+    expect(clientMatchesSearch(c, '4145551212')).toBe(true);
+    expect(clientMatchesSearch(c, '414-555')).toBe(true);
+    expect(clientMatchesSearch(c, '(414) 555-1212')).toBe(true);
+    expect(clientMatchesSearch(c, '1212')).toBe(true);
+  });
+  it('no match, blank query, missing fields', () => {
+    expect(clientMatchesSearch(c, 'olson')).toBe(false);
+    expect(clientMatchesSearch(c, '99')).toBe(false); // too short to search phones
+    expect(clientMatchesSearch(c, '  ')).toBe(true);
+    expect(clientMatchesSearch({ name: 'Isom' }, '262')).toBe(false);
   });
 });

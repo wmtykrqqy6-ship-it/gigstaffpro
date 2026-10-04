@@ -7,6 +7,7 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
+import { clientMatchesSearch } from '../../utils/clientMatch';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -1138,7 +1139,7 @@ export default function SettingsView({
                 type="text"
                 value={clientSearch}
                 onChange={e => setClientSearch(e.target.value)}
-                placeholder="Search clients..."
+                placeholder="Search by name, email or phone..."
                 className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
               />
             </div>
@@ -1245,7 +1246,7 @@ export default function SettingsView({
           ) : (
             <div className="space-y-3">
               {clients
-                .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.company?.toLowerCase().includes(clientSearch.toLowerCase()))
+                .filter(c => clientMatchesSearch(c, clientSearch))
                 .map(client => {
                   const isExpanded = expandedClient === client.id;
                   const events = clientEvents[client.id] || [];
