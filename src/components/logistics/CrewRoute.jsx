@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Truck, MapPin, Navigation, CheckCircle, Circle, ChevronDown, ChevronRight, Minus, Plus, Users, Clock } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import MeetingPointCard from '../MeetingPointCard';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { orderRunStops } from '../../utils/logistics/dispatch';
@@ -174,6 +175,7 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
                     checks={checks.filter(c => c.stop_id === stop.id)}
                     myAssignments={assignments.filter(a => a.event_id === stop.event_id && a.worker_id === worker.id && isAssignmentFilled(a.status))}
                     editable={editable}
+                    worker={worker}
                     runDate={run.run_date}
                     saving={saving}
                     timeFormat={timeFormat}
@@ -190,7 +192,7 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
   );
 }
 
-function RouteStop({ number, stop, prevLoadId, tripNumber, event, items, checks, myAssignments, editable, runDate, saving, timeFormat, onCheck, onStatus }) {
+function RouteStop({ number, stop, prevLoadId, tripNumber, event, items, checks, myAssignments, editable, worker, runDate, saving, timeFormat, onCheck, onStatus }) {
   // Pickups stay collapsed until the party starts (unless already started).
   if (stop.stop_type === 'pickup' && stop.status !== 'done' && !checks.length && !pickupUnlocked(runDate, event?.time)) {
     return (
@@ -270,6 +272,11 @@ function RouteStop({ number, stop, prevLoadId, tripNumber, event, items, checks,
               <span>{event.venue ? `${event.venue}, ` : ''}{event.address}</span>
               <Navigation size={12} className="mt-1 flex-shrink-0" />
             </a>
+          )}
+
+          {/* The setup crew gets there first: they can drop the meeting-point pin */}
+          {event && stop.stop_type !== 'pickup' && (
+            <MeetingPointCard event={event} worker={worker} canSet className="mt-2" />
           )}
 
           {stop.stop_type === 'work' && (

@@ -7,6 +7,8 @@ import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
 import EventDeliveryTimes from '../logistics/EventDeliveryTimes';
 import { eventPositionOptions } from '../../utils/logistics/dispatch';
+import MeetingPointMap from '../MeetingPointMap';
+import { coordsFromMapsUrl, pinUrl } from '../../utils/meetingPoint';
 import QuarterHourInput from '../ui/QuarterHourInput';
 import { roundToQuarterHour } from '../../utils/dateHelpers';
 import { useToast } from '../ui/Toast';
@@ -181,6 +183,24 @@ export default function EventFormModal({
     });
     setEndTimeManuallySet(false);
   }, [event]);
+
+  // Set or clear the meeting-point pin. Moving it here also clears the
+  // "Set by <worker>" line (when that optional column exists on the event).
+  const setMeetingPin = (coords, url) => {
+    setFormData(f => {
+      const next = {
+        ...f,
+        meeting_point_lat: coords ? coords.lat : null,
+        meeting_point_lng: coords ? coords.lng : null,
+        meeting_point_url: coords ? (url ?? pinUrl(coords.lat, coords.lng)) : ''
+      };
+      if (event && 'meeting_point_set_by_name' in event) {
+        next.meeting_point_set_by_name = null;
+        next.meeting_point_set_at = null;
+      }
+      return next;
+    });
+  };
 
   const handleClientInput = (val) => {
     setFormData(f => ({ ...f, client: val, client_id: null }));
@@ -793,7 +813,7 @@ export default function EventFormModal({
               <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div>
                   <p className="text-sm font-semibold text-blue-900">📍 Meeting Point</p>
-                  <p className="text-xs text-blue-600 mt-0.5">For large venues or resorts — set the exact spot where workers should meet. This also sets the geo-fence center for check-in.</p>
+                  <p className="text-xs text-blue-600 mt-0.5">For large venues or resorts — set the exact spot where workers should meet. Check-in is measured from this pin (within 0.25 mi). The Host or setup crew can also drop it from their phone on site.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
@@ -812,21 +832,38 @@ export default function EventFormModal({
                     value={formData.meeting_point_url}
                     onChange={(e) => {
                       const url = e.target.value;
-                      const match = url.match(/[/@](-?[0-9]+[.][0-9]+),(-?[0-9]+[.][0-9]+)/);
-                      if (match) {
-                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: parseFloat(match[1]), meeting_point_lng: parseFloat(match[2])});
+                      const coords = coordsFromMapsUrl(url);
+                      if (coords) {
+                        setMeetingPin(coords, url);
                       } else {
-                        setFormData({...formData, meeting_point_url: url, meeting_point_lat: null, meeting_point_lng: null});
+                        // Keep a pin dropped on the map; just store the link text.
+                        setFormData(f => ({ ...f, meeting_point_url: url }));
                       }
                     }}
                     placeholder="Paste a Google Maps link..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
                   />
-                  {formData.meeting_point_lat && formData.meeting_point_lng && (
-                    <p className="text-xs text-green-600 mt-1">✓ Coordinates extracted — geo-fence will center here</p>
+                  {formData.meeting_point_url && !coordsFromMapsUrl(formData.meeting_point_url) && !formData.meeting_point_lat && (
+                    <p className="text-xs text-amber-600 mt-1">⚠ This link doesn't include a location (short share links don't). Drop the pin on the map below instead.</p>
                   )}
-                  {formData.meeting_point_url && !formData.meeting_point_lat && (
-                    <p className="text-xs text-amber-600 mt-1">⚠ Could not extract coordinates — geo-fence will use venue address</p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-700">Pin</label>
+                    {formData.meeting_point_lat != null && (
+                      <button type="button" onClick={() => setMeetingPin(null)} className="text-xs text-red-600 hover:underline">Remove pin</button>
+                    )}
+                  </div>
+                  <MeetingPointMap
+                    lat={formData.meeting_point_lat != null ? Number(formData.meeting_point_lat) : null}
+                    lng={formData.meeting_point_lng != null ? Number(formData.meeting_point_lng) : null}
+                    address={formData.address}
+                    onChange={(p) => setMeetingPin(p)}
+                  />
+                  {formData.meeting_point_lat != null ? (
+                    <p className="text-xs text-green-600 mt-1">✓ Pin set — check-in is measured from here.</p>
+                  ) : (
+                    <p className="text-xs text-amber-600 mt-1">No pin yet — check-ins will be flagged for review until one is set (here, or by the Host / setup crew on site).</p>
                   )}
                 </div>
               </div>

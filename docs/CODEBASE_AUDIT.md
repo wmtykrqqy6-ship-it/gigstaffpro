@@ -72,7 +72,7 @@
 ### 5.2 Workers — ⚠️ two systems, mid-migration
 - **Migrated**: Supabase Auth with a synthetic phone-derived email + 6-digit PIN (`worker_auth_links`).
 - **Legacy**: phone + 4-digit PIN, now checked **server-side** in `api/worker-pin-login.js`; stored hashes upgraded from unsalted SHA-256 to **salted PBKDF2** on login. `workers.pin_hash` is no longer readable by anon/authenticated (column-level grants).
-- ❌ **Worker writes trust the client-supplied `workerId`**: `api/worker-actions.js` (apply, cancel, switch, check-in, profile, route check-offs, hide/unhide events) uses the service role but has no worker session token to verify — anyone with a worker's UUID can act as them. Rate-limited where abuse is cheapest. Fix: real worker sessions (finish the Supabase Auth migration, verify the token server-side).
+- ❌ **Worker writes trust the client-supplied `workerId`**: `api/worker-actions.js` (apply, cancel, switch, check-in, profile, route check-offs, hide/unhide events, meeting-point pin) uses the service role but has no worker session token to verify — anyone with a worker's UUID can act as them. Rate-limited where abuse is cheapest. Fix: real worker sessions (finish the Supabase Auth migration, verify the token server-side).
 - As of 2026-09-09, 15 of 16 real workers were still on legacy PINs.
 
 ---

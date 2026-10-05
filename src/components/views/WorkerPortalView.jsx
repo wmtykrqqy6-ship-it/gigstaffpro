@@ -11,6 +11,8 @@ import PostEventReportModal from '../modals/PostEventReportModal';
 import CrewRoute from '../logistics/CrewRoute';
 import WarehouseLoading from '../logistics/WarehouseLoading';
 import RouteNotice from '../logistics/RouteNotice';
+import MeetingPointCard from '../MeetingPointCard';
+import { isHostPosition } from '../../utils/meetingPoint';
 import { paidHours } from '../../utils/payHelpers';
 import { isWarehouseWorker } from '../../utils/logistics/dispatch';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -1304,19 +1306,13 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     )}
 
-                    {/* Meeting Point */}
-                    {assignment.event.meeting_point_description && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm font-semibold text-blue-900 mb-1">📍 Meeting Point</p>
-                        <p className="text-sm text-blue-800">{assignment.event.meeting_point_description}</p>
-                        {assignment.event.meeting_point_url && (
-                          <a href={assignment.event.meeting_point_url} target="_blank" rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-1 inline-flex items-center space-x-1">
-                            <MapPin size={13} /><span>Open Meeting Point in Maps</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
+                    {/* Meeting Point -- the Host can drop the pin on site */}
+                    <MeetingPointCard
+                      event={assignment.event}
+                      worker={currentWorker}
+                      canSet={isHostPosition(assignment.position) && isAssignmentFilled(assignment.status)}
+                      className="mt-3"
+                    />
 
                     {/* Team roster — who else is confirmed for this event */}
                     {(() => {
@@ -1647,19 +1643,13 @@ export default function WorkerPortalView({  loggedInWorker,
                           </div>
                         )}
 
-                        {/* Meeting Point */}
-                    {assignment.event.meeting_point_description && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm font-semibold text-blue-900 mb-1">📍 Meeting Point</p>
-                        <p className="text-sm text-blue-800">{assignment.event.meeting_point_description}</p>
-                        {assignment.event.meeting_point_url && (
-                          <a href={assignment.event.meeting_point_url} target="_blank" rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-1 inline-flex items-center space-x-1">
-                            <MapPin size={13} /><span>Open Meeting Point in Maps</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
+                    {/* Meeting Point -- the Host can drop the pin on site */}
+                    <MeetingPointCard
+                      event={assignment.event}
+                      worker={currentWorker}
+                      canSet={isHostPosition(assignment.position) && isAssignmentFilled(assignment.status)}
+                      className="mt-3"
+                    />
 
                     {/* Team roster — who else is confirmed for this event */}
                     {(() => {

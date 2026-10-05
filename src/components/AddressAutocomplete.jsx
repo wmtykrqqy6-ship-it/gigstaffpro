@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY;
 
-function loadGoogleMapsScript() {
+export function loadGoogleMapsScript() {
   if (window.google?.maps?.places) return Promise.resolve();
   if (window._googleMapsPromise) return window._googleMapsPromise;
   window._googleMapsPromise = new Promise((resolve, reject) => {
