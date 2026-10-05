@@ -169,13 +169,13 @@ export const isWarehouseWorker = (worker, positions = []) => {
   return keys.size > 0 && Array.isArray(worker?.skills) && worker.skills.some(k => keys.has(k));
 };
 
-// Who gets the "Logistics" tab in the worker portal (Dylan, 2026-10-03:
-// staffing first, logistics as a feature): anyone tagged Set Up Driver,
-// Set Up, or Warehouse.
+// Worker portal tabs (Dylan, 2026-10-04: separate tabs, one per job):
+//   "Logistics" -- delivery routes -- for anyone tagged Set Up Driver or Set Up
+//   "Warehouse" -- loading sheets   -- for anyone tagged Warehouse (isWarehouseWorker)
 export function hasLogisticsRole(worker, positions = []) {
   if (!worker) return false;
   const roles = crewRoles(positions);
-  return isDriver(worker, roles) || isSetUp(worker, roles) || isWarehouseWorker(worker, positions);
+  return isDriver(worker, roles) || isSetUp(worker, roles);
 }
 
 // ---- Solo trucks and personal vehicles ------------------------------------

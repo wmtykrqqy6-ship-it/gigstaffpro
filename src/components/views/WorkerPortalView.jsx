@@ -604,14 +604,11 @@ export default function WorkerPortalView({  loggedInWorker,
         {currentTab === 'profile' ? (
           <ProfileView worker={currentWorker} onProfileUpdate={onReloadWorker} assignments={assignments} events={events} workerAuthMode={workerAuthMode} />
         ) : currentTab === 'logistics' ? (
-          // Logistics tab (2026-10-03: staffing first, logistics as a feature) --
-          // the crew route and, for Warehouse staff, the next week's load sheets.
+          // Logistics tab: the delivery routes this worker is on.
           <div className="space-y-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Logistics</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Delivery routes you're on for the next 7 days{isWarehouseWorker(currentWorker, positions) ? ', and what to load' : ''}.
-              </p>
+              <p className="text-sm text-gray-600 mt-1">Delivery routes you're on for the next 7 days.</p>
             </div>
             <CrewRoute
               worker={currentWorker}
@@ -621,7 +618,21 @@ export default function WorkerPortalView({  loggedInWorker,
               timeFormat={timeFormat}
               emptyMessage="You're not on a delivery route in the next 7 days."
             />
-            <WarehouseLoading worker={currentWorker} positions={positions} events={events} workers={workers} timeFormat={timeFormat} />
+          </div>
+        ) : currentTab === 'warehouse' ? (
+          // Warehouse tab: what to load onto each truck, next 7 days.
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Warehouse</h2>
+              <p className="text-sm text-gray-600 mt-1">What to load onto each truck for the next 7 days.</p>
+            </div>
+            {isWarehouseWorker(currentWorker, positions) ? (
+              <WarehouseLoading worker={currentWorker} positions={positions} events={events} workers={workers} timeFormat={timeFormat} />
+            ) : (
+              <div className="bg-white rounded-lg shadow p-6 text-center text-sm text-gray-500">
+                Loading sheets are for staff with the Warehouse position.
+              </div>
+            )}
           </div>
         ) : currentTab === 'history' ? (
           <HistoryView 

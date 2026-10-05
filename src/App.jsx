@@ -42,7 +42,7 @@ import ScheduleView from './components/views/ScheduleView';
 import LogisticsView from './components/views/LogisticsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
 import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
-import { hasLogisticsRole } from './utils/logistics/dispatch';
+import { hasLogisticsRole, isWarehouseWorker } from './utils/logistics/dispatch';
 import { MIN_HOURS_SETTING_KEY, parseMinHoursRule } from './utils/payHelpers';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
@@ -1647,6 +1647,7 @@ setAppPositions(storedPositions);
   currentTab={workerTab}
   onTabChange={setWorkerTab}
   showLogisticsTab={userRole === 'worker' && hasLogisticsRole(loggedInWorker, positions)}
+  showWarehouseTab={userRole === 'worker' && isWarehouseWorker(loggedInWorker, positions)}
   locations={locations}
   activeLocation={activeLocation}
   onSetActiveLocation={handleSetActiveLocation}

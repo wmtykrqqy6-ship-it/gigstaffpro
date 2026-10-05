@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, LogOut, Menu, X, User, Calendar, History, MapPin, ChevronDown, Truck } from 'lucide-react';
+import { Bell, LogOut, Menu, X, User, Calendar, History, MapPin, ChevronDown, Truck, Package } from 'lucide-react';
 
 export default function Header({
   userRole,
@@ -11,6 +11,7 @@ export default function Header({
   currentTab,
   onTabChange,
   showLogisticsTab = false,
+  showWarehouseTab = false,
   locations = [],
   activeLocation = 'all',
   onSetActiveLocation
@@ -143,6 +144,15 @@ export default function Header({
                       >
                         <Truck size={18} />
                         <span>Logistics</span>
+                      </button>
+                    )}
+                    {(showWarehouseTab || currentTab === 'warehouse') && (
+                      <button
+                        onClick={() => { onTabChange('warehouse'); setShowMenu(false); }}
+                        className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${currentTab === 'warehouse' ? 'bg-red-50 text-red-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <Package size={18} />
+                        <span>Warehouse</span>
                       </button>
                     )}
                   </div>

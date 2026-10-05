@@ -613,10 +613,11 @@ describe('hasLogisticsRole (worker portal Logistics tab)', () => {
     { key: 'blackjack', label: 'Blackjack' }, { key: 'driver', label: 'Set Up Driver' },
     { key: 'set_up', label: 'Set Up' }, { key: 'warehouse', label: 'Warehouse' }
   ];
-  it('drivers, set up crew and warehouse staff get the tab; dealers do not', () => {
+  it('drivers and set up crew get the Logistics tab; warehouse-only staff and dealers do not', () => {
     expect(hasLogisticsRole({ skills: ['driver'] }, POSITIONS)).toBe(true);
     expect(hasLogisticsRole({ skills: ['set_up'] }, POSITIONS)).toBe(true);
-    expect(hasLogisticsRole({ skills: ['warehouse'] }, POSITIONS)).toBe(true);
+    expect(hasLogisticsRole({ skills: ['warehouse'] }, POSITIONS)).toBe(false);
+    expect(isWarehouseWorker({ skills: ['warehouse'] }, POSITIONS)).toBe(true);
     expect(hasLogisticsRole({ skills: ['blackjack'] }, POSITIONS)).toBe(false);
     expect(hasLogisticsRole(null, POSITIONS)).toBe(false);
   });

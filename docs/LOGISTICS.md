@@ -179,12 +179,17 @@ the pull sheet exactly). Anything loaded beyond the pull sheet shows as "(extra 
 trip). Events are listed in load order, last delivery stop first, with every table and accessory and a
 checkbox, plus the delivery order and the truck's notes. Printing shows only the sheet.
 
-**Worker portal: Logistics tab (2026-10-03).** GigStaffPro is a staffing tool first, so the worker
-Dashboard stays about shifts. The crew route and the warehouse loading sheets live in a **Logistics**
-item in the worker ☰ menu, shown to anyone tagged Set Up Driver, Set Up or Warehouse
-(`hasLogisticsRole`). On a day someone is on a vehicle (today or tomorrow), their Dashboard shows one
-slim "You're on the Black truck today · View route" line linking to the tab, so a route is never
-missed even without the tags.
+**Worker portal: Logistics and Warehouse tabs (2026-10-03, split 2026-10-04).** GigStaffPro is a
+staffing tool first, so the worker Dashboard stays about shifts. Delivery work lives in two separate
+items in the worker ☰ menu, one per job:
+- **Logistics:** the crew route (stops, Maps links, check-offs). Shown to anyone tagged Set Up Driver
+  or Set Up (`hasLogisticsRole`).
+- **Warehouse:** loading sheets for the next 7 days. Shown to anyone tagged Warehouse
+  (`isWarehouseWorker`).
+
+On a day someone is on a vehicle (today or tomorrow), their Dashboard shows one slim "You're on the
+Black truck today · View route" line that opens the Logistics tab, so a route is never missed even
+without the tags.
 
 **Day-before route reminder (email).** From 4 PM business time, everyone on tomorrow's truck or
 personal-vehicle run gets one email: vehicle, teammate, notes, every stop in order with times, a Maps
