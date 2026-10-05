@@ -32,6 +32,14 @@ export default function MeetingPointMap({ lat, lng, address, onChange }) {
   // Create the map once.
   useEffect(() => {
     let cancelled = false;
+    // Google calls this when the key isn't allowed to draw maps (Maps
+    // JavaScript API not enabled / not in the key's API restrictions);
+    // without it Google's grey "Oops! Something went wrong" box shows.
+    const prevAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      if (!cancelled) setStatus('error');
+      if (typeof prevAuthFailure === 'function') prevAuthFailure();
+    };
     loadGoogleMapsScript()
       .then(() => {
         if (cancelled || !mapDivRef.current || !window.google?.maps) return;
@@ -64,10 +72,13 @@ export default function MeetingPointMap({ lat, lng, address, onChange }) {
             }
           );
         }
-        setStatus('ready');
+        setStatus(s => (s === 'error' ? s : 'ready'));
       })
       .catch(() => { if (!cancelled) setStatus('error'); });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.gm_authFailure = prevAuthFailure;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -90,7 +101,9 @@ export default function MeetingPointMap({ lat, lng, address, onChange }) {
   if (status === 'error') {
     return (
       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-        The map couldn't load. Paste a Google Maps link above instead.
+        The map couldn't load — Google didn't allow this site's key to show maps (the Maps JavaScript API
+        needs to be enabled for the key in Google Cloud). For now, paste a Google Maps link above, or have
+        the Host / setup crew set the pin from their phone.
       </p>
     );
   }
