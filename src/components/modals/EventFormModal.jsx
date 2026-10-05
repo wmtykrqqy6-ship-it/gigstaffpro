@@ -6,6 +6,7 @@ import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
 import EventDeliveryTimes from '../logistics/EventDeliveryTimes';
+import { eventPositionOptions } from '../../utils/logistics/dispatch';
 import QuarterHourInput from '../ui/QuarterHourInput';
 import { roundToQuarterHour } from '../../utils/dateHelpers';
 import { useToast } from '../ui/Toast';
@@ -207,7 +208,9 @@ export default function EventFormModal({
 
   if (!open || (isEdit && !event)) return null;
 
-  const positionOptions = positions;
+  // Crew roles (Set Up Driver, Set Up, Warehouse) are staffed on the
+  // Logistics page, so they're not offered here.
+  const positionOptions = eventPositionOptions(positions, formData.positions);
 
   const updatePositionCount = (positionKey, count) => {
     setFormData(prev => {

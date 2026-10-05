@@ -172,6 +172,22 @@ export const isWarehouseWorker = (worker, positions = []) => {
 // Worker portal tabs (Dylan, 2026-10-04: separate tabs, one per job):
 //   "Logistics" -- delivery routes -- for anyone tagged Set Up Driver or Set Up
 //   "Warehouse" -- loading sheets   -- for anyone tagged Warehouse (isWarehouseWorker)
+// Logistics crew positions (Set Up Driver, Set Up, Warehouse). They're
+// staffed on the Logistics page, not per event, so the event form doesn't
+// offer them (Dylan, 2026-10-04).
+export function crewPositionKeys(positions = []) {
+  const roles = crewRoles(positions);
+  return new Set([...roles.driverKeys, ...roles.setupKeys, ...warehouseKeys(positions)]);
+}
+
+// Positions to offer on an event: everything except the crew roles -- but an
+// event that already has one keeps it listed, so it can still be removed.
+export function eventPositionOptions(positions = [], eventPositions = []) {
+  const crew = crewPositionKeys(positions);
+  const onEvent = new Set((eventPositions || []).map(p => p?.key).filter(Boolean));
+  return (positions || []).filter(p => !crew.has(p?.key) || onEvent.has(p?.key));
+}
+
 export function hasLogisticsRole(worker, positions = []) {
   if (!worker) return false;
   const roles = crewRoles(positions);

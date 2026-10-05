@@ -6,7 +6,7 @@ import {
   orderRunStops, sequenceChanges, moveStop, planAddEventToLoad,
   crewRoles, isDriver, isSetUp, eligibleForSpot,
   isOneSpotRun, spotFor, runLabel, planMoveEvent, dayStatus, monthStatuses,
-  warehouseKeys, isWarehouseWorker, hasLogisticsRole
+  warehouseKeys, isWarehouseWorker, hasLogisticsRole, crewPositionKeys, eventPositionOptions
 } from './dispatch';
 
 const YELLOW = { id: 'tY', name: 'Yellow', craps_capacity: 1, craps_stretch: 2, roulette_capacity: 2, poker_capacity: 2, blackjack_capacity: 10, can_carry_archway: false, priority: 1 };
@@ -623,5 +623,21 @@ describe('hasLogisticsRole (worker portal Logistics tab)', () => {
   });
   it('nobody gets it before the positions exist', () => {
     expect(hasLogisticsRole({ skills: ['driver'] }, [{ key: 'blackjack', label: 'Blackjack' }])).toBe(false);
+  });
+});
+
+describe('event form positions (crew roles hidden)', () => {
+  const POSITIONS = [
+    { key: 'blackjack', label: 'Blackjack' }, { key: 'host', label: 'Host' },
+    { key: 'driver', label: 'Set Up Driver' }, { key: 'set_up', label: 'Set Up' }, { key: 'warehouse', label: 'Warehouse' }
+  ];
+  it('crew keys are driver, set up and warehouse', () => {
+    expect([...crewPositionKeys(POSITIONS)].sort()).toEqual(['driver', 'set_up', 'warehouse']);
+  });
+  it('new events are offered dealer positions and Host only', () => {
+    expect(eventPositionOptions(POSITIONS, []).map(p => p.key)).toEqual(['blackjack', 'host']);
+  });
+  it('an event that already has a crew position keeps it listed', () => {
+    expect(eventPositionOptions(POSITIONS, [{ key: 'set_up', count: 1 }]).map(p => p.key)).toEqual(['blackjack', 'host', 'set_up']);
   });
 });
