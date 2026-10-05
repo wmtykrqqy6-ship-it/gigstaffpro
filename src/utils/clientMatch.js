@@ -44,3 +44,27 @@ export function clientMatchesSearch(client, query) {
   const phoneDigits = String(client?.phone ?? '').replace(/\D/g, '');
   return qDigits.length >= 3 && phoneDigits.includes(qDigits);
 }
+
+// Settings -> Clients "Add missing clients": events that have a client name
+// but aren't linked to a client (saved before 2026-10-03). Groups them by
+// cleaned name -> [{ name, contact, eventIds, existing }], where `existing`
+// is the client to link to, or null if a new one is needed. `cleanName`
+// turns raw text into { name, phone } (the pull-sheet client-line cleaner),
+// so "Iyonna Isom  Sales Lead: ..." becomes "Iyonna Isom".
+export function planMissingClients(events = [], clients = [], cleanName = (t) => ({ name: t, phone: null })) {
+  const groups = new Map();
+  for (const ev of events) {
+    if (!ev || ev.client_id || !String(ev.client ?? '').trim()) continue;
+    const cleaned = cleanName(String(ev.client));
+    const name = String(cleaned?.name ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    const key = normalizeClientName(name);
+    if (!groups.has(key)) {
+      groups.set(key, { name, contact: null, eventIds: [], existing: findClientByName(clients, name) });
+    }
+    const g = groups.get(key);
+    g.eventIds.push(ev.id);
+    g.contact = g.contact || String(ev.client_contact ?? '').trim() || cleaned?.phone || null;
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeClientName, findClientByName, newClientFromEvent, clientMatchesSearch } from './clientMatch';
+import { normalizeClientName, findClientByName, newClientFromEvent, clientMatchesSearch, planMissingClients } from './clientMatch';
+import { parseClientLine } from './logistics/pullSheetParser';
 
 const CLIENTS = [
   { id: 'a', name: 'Kass', is_active: true },
@@ -61,5 +62,33 @@ describe('clientMatchesSearch', () => {
     expect(clientMatchesSearch(c, '99')).toBe(false); // too short to search phones
     expect(clientMatchesSearch(c, '  ')).toBe(true);
     expect(clientMatchesSearch({ name: 'Isom' }, '262')).toBe(false);
+  });
+});
+
+describe('planMissingClients', () => {
+  const clients = [{ id: 'c1', name: 'Carly Kass' }];
+  const events = [
+    { id: 'e1', client: 'Carly Kass', client_id: null },
+    { id: 'e2', client: 'Iyonna Isom  Sales Lead: Alyssa Newsom', client_id: null, client_contact: '262-555-0101' },
+    { id: 'e3', client: 'Jessi H  x237', client_id: null },
+    { id: 'e4', client: 'jessi h', client_id: null, client_contact: 'jessi@example.com' },
+    { id: 'e5', client: 'Linked Already', client_id: 'c9' },
+    { id: 'e6', client: '   ', client_id: null },
+    { id: 'e7', client: null, client_id: null }
+  ];
+  const plan = planMissingClients(events, clients, parseClientLine);
+
+  it('one entry per cleaned name; linked and blank events skipped', () => {
+    expect(plan.map(p => p.name)).toEqual(['Carly Kass', 'Iyonna Isom', 'Jessi H']);
+  });
+  it('links to an existing client when the name matches', () => {
+    expect(plan[0]).toMatchObject({ existing: { id: 'c1' }, eventIds: ['e1'] });
+  });
+  it('new clients group their events and keep the first contact', () => {
+    expect(plan[1]).toMatchObject({ existing: null, eventIds: ['e2'], contact: '262-555-0101' });
+    expect(plan[2]).toMatchObject({ existing: null, eventIds: ['e3', 'e4'], contact: 'jessi@example.com' });
+  });
+  it('nothing missing -> empty plan', () => {
+    expect(planMissingClients([{ id: 'x', client: 'A', client_id: 'c' }], clients, parseClientLine)).toEqual([]);
   });
 });

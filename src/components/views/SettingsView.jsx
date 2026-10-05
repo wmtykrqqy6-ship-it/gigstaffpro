@@ -7,7 +7,8 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
-import { clientMatchesSearch } from '../../utils/clientMatch';
+import { clientMatchesSearch, planMissingClients, newClientFromEvent } from '../../utils/clientMatch';
+import { parseClientLine } from '../../utils/logistics/pullSheetParser';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -394,6 +395,9 @@ export default function SettingsView({
   const [expandedClient, setExpandedClient] = useState(null);
   const [clientEvents, setClientEvents] = useState({});
   const [clientSearch, setClientSearch] = useState('');
+  // "Add missing clients": events with a client name that isn't linked yet
+  const [missingClients, setMissingClients] = useState([]);
+  const [addingMissing, setAddingMissing] = useState(false);
   const [clientForm, setClientForm] = useState({
     name: '', company: '', phone: '', email: '', notes: '', tags: [], is_active: true
   });
@@ -426,6 +430,60 @@ export default function SettingsView({
     loadVenues();
     loadClients();
   }, []);
+
+  // Recompute whenever the client list changes (load, add, delete).
+  useEffect(() => {
+    if (loadingClients) return;
+    let cancelled = false;
+    supabase
+      .from('events')
+      .select('id, client, client_contact, client_id')
+      .is('client_id', null)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        setMissingClients(planMissingClients(data || [], clients, parseClientLine));
+      });
+    return () => { cancelled = true; };
+  }, [clients, loadingClients]);
+
+  const addMissingClients = async () => {
+    if (!missingClients.length || addingMissing) return;
+    const lines = missingClients.map(g =>
+      `• ${g.name} — ${g.existing ? 'link to existing client' : 'new client'} (${g.eventIds.length} event${g.eventIds.length === 1 ? '' : 's'})`
+    ).join('\n');
+    if (!(await confirm(`Add these clients and link their events?\n\n${lines}`))) return;
+    setAddingMissing(true);
+    let added = 0, linked = 0, failed = 0;
+    for (const g of missingClients) {
+      try {
+        let clientId = g.existing?.id;
+        if (!clientId) {
+          const { data, error } = await supabase
+            .from('clients')
+            .insert([newClientFromEvent({ client: g.name, client_contact: g.contact })])
+            .select('id')
+            .single();
+          if (error) throw error;
+          clientId = data.id;
+          added++;
+        }
+        // Link the events, and store the cleaned name on them
+        const { error: linkError } = await supabase
+          .from('events')
+          .update({ client_id: clientId, client: g.name })
+          .in('id', g.eventIds);
+        if (linkError) throw linkError;
+        linked += g.eventIds.length;
+      } catch (err) {
+        console.error(`Could not add client ${g.name}:`, err.message);
+        failed++;
+      }
+    }
+    setAddingMissing(false);
+    await loadClients();
+    notify(`Added ${added} client${added === 1 ? '' : 's'} and linked ${linked} event${linked === 1 ? '' : 's'}`
+      + (failed ? ` — ${failed} couldn't be added, try again` : ''));
+  };
 
   const loadLocations = async () => {
     setLoadingLocations(true);
@@ -1122,13 +1180,26 @@ export default function SettingsView({
               <h3 className="text-xl font-bold text-gray-900">Clients</h3>
               <p className="text-sm text-gray-500 mt-0.5">Manage client profiles, view event history, and auto-fill event details</p>
             </div>
-            <button
-              onClick={openAddClient}
-              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
-            >
-              <Plus size={16} />
-              <span>Add Client</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {missingClients.length > 0 && (
+                <button
+                  onClick={addMissingClients}
+                  disabled={addingMissing}
+                  className="bg-white text-red-900 border border-red-900 px-4 py-2 rounded-lg hover:bg-red-50 flex items-center space-x-2 text-sm disabled:opacity-50"
+                  title="Add the clients from your events that aren't in this list yet"
+                >
+                  <Plus size={16} />
+                  <span>{addingMissing ? 'Adding…' : `Add missing clients (${missingClients.length})`}</span>
+                </button>
+              )}
+              <button
+                onClick={openAddClient}
+                className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
+              >
+                <Plus size={16} />
+                <span>Add Client</span>
+              </button>
+            </div>
           </div>
 
           {/* Search */}
