@@ -44,6 +44,7 @@ import WorkerPortalView from './components/views/WorkerPortalView';
 import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
 import { hasLogisticsRole, isWarehouseWorker } from './utils/logistics/dispatch';
 import { MIN_HOURS_SETTING_KEY, parseMinHoursRule } from './utils/payHelpers';
+import { workerFetch } from './utils/workerApi';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -79,6 +80,9 @@ const GigStaffPro = () => {
   const [showMessageStaff, setShowMessageStaff] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  // Worker inbox: Message Staff messages (worker_messages), shown in the bell
+  // so a tapped-away push notification isn't lost.
+  const [workerMessages, setWorkerMessages] = useState([]);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedWorkerForEdit, setSelectedWorkerForEdit] = useState(null);
@@ -177,7 +181,41 @@ const GigStaffPro = () => {
   // Generate notifications whenever assignments change
   useEffect(() => {
     generateNotifications();
-  }, [assignments, events, workers, userRole, loggedInWorker, standbyPromotions]);
+  }, [assignments, events, workers, userRole, loggedInWorker, standbyPromotions, workerMessages]);
+
+  // Worker inbox: load on login and whenever the app comes back to the front
+  // (e.g. after tapping a push notification).
+  useEffect(() => {
+    if (userRole !== 'worker' || !loggedInWorker?.id) { setWorkerMessages([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await workerFetch({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'listMessages', workerId: loggedInWorker.id })
+        });
+        const result = await res.json();
+        if (!cancelled && result?.ok) setWorkerMessages(result.messages || []);
+      } catch { /* inbox is a bonus -- ignore failures */ }
+    };
+    load();
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); };
+  }, [userRole, loggedInWorker?.id]);
+
+  // Opened from a message push (/?inbox=1): show the bell's list right away.
+  useEffect(() => {
+    if (userRole !== 'worker' || !loggedInWorker?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('inbox') === '1') {
+      setShowNotifications(true);
+      params.delete('inbox');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+    }
+  }, [userRole, loggedInWorker?.id]);
 
   // Auto-archive past events when viewing Events tab
   useEffect(() => {
@@ -323,6 +361,18 @@ const saveDismissedNotificationIds = (ids) => {
 
     } else if (userRole === 'worker' && loggedInWorker) {
       // Worker notifications
+
+      // 0. Messages from the office (Message Staff), newest first
+      workerMessages.forEach(m => {
+        newNotifications.push({
+          id: `msg-${m.id}`,
+          type: 'message',
+          title: m.title,
+          message: m.body,
+          timestamp: m.created_at,
+          action: () => {}
+        });
+      });
       
       // 1. Upcoming events within 24 hours
       const workerAssignments = assignments.filter(a => 

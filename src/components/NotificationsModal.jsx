@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Mail, AlertCircle, Clock, CheckCircle, X, UserPlus } from 'lucide-react';
+import { Bell, Mail, AlertCircle, Clock, CheckCircle, X, UserPlus, Megaphone } from 'lucide-react';
 
 export default function NotificationsModal({
   open,
@@ -16,6 +16,7 @@ export default function NotificationsModal({
       case 'warning':      return { icon: <AlertCircle size={18} className="text-amber-600" />, bg: 'bg-amber-50', border: 'border-amber-200' };
       case 'reminder':     return { icon: <Clock size={18} className="text-orange-600" />,  bg: 'bg-orange-50', border: 'border-orange-100' };
       case 'success':      return { icon: <CheckCircle size={18} className="text-green-600" />, bg: 'bg-green-50', border: 'border-green-100' };
+      case 'message':      return { icon: <Megaphone size={18} className="text-red-800" />,  bg: 'bg-red-50',    border: 'border-red-100'    };
       case 'new_worker':   return { icon: <UserPlus size={18} className="text-purple-600" />,  bg: 'bg-purple-50', border: 'border-purple-100' };
       default:             return { icon: <Bell size={18} className="text-gray-600" />,      bg: 'bg-gray-50',   border: 'border-gray-100'   };
     }

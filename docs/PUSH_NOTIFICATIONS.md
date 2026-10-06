@@ -25,6 +25,12 @@ notifications to workers who turn them on. Emails keep going as before; push is 
 | Day-before route reminder | `api/_lib/routeReminders.js` | Sent once with the route email |
 | Message Staff | `MessageStaffModal.jsx` → `api/send-email.js` (`kind: 'message'`) | Checkbox, on by default. Also reaches workers with no email |
 
+**Inbox (2026-10-06).** A push disappears from the phone once it's tapped, so every Message Staff
+message is also saved per worker (table `worker_messages`, migration `20261006120000`). It appears
+in the worker's 🔔 bell, even for workers without push. Tapping a message push opens the app with
+the bell open (`/?inbox=1`). The bell reloads messages whenever the app comes back to the front
+(worker-actions `listMessages`). Dismissing hides a message on that device.
+
 Staff shows a 🔔 **Notifications** chip on workers who have push on, and an "X of Y have notifications
 on" count (`kind: 'status'`), so you know who still needs a text.
 

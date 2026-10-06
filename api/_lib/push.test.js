@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   validSubscription, handleSavePushSubscription, handleRemovePushSubscription, sendPushToWorkers,
-  inviteNotification, shiftReminderNotification, routeReminderNotification, testNotification, handleAdminPush, messageNotification
+  inviteNotification, shiftReminderNotification, routeReminderNotification, testNotification, handleAdminPush, messageNotification, handleListMessages
 } from './push.js';
 
 const W1 = '11111111-1111-4111-8111-111111111111';
@@ -196,5 +196,51 @@ describe('Message Staff push + status', () => {
     expect(r.status).toBe(200);
     expect(r.body.workers[W1]).toEqual({ devices: 2, lastSuccessAt: '2026-10-05T10:00:00Z' });
     expect(r.body.workers[W2].devices).toBe(1);
+  });
+});
+
+describe('worker inbox', () => {
+  it('Message Staff saves a copy for every targeted worker, even without a phone set up', async () => {
+    const inserted = [];
+    const sb = fakeSupabase([]);
+    const from = sb.from;
+    sb.from = (table) => table === 'worker_messages'
+      ? { insert: async (rows) => { inserted.push(...rows); return { error: null }; } }
+      : from(table);
+    const r = await handleAdminPush(sb, { kind: 'message', workerIds: [W1, W2], title: 'Time Change', message: 'Now 6-9' }, { send: async () => {} });
+    expect(r.status).toBe(200);
+    expect(inserted).toEqual([
+      { worker_id: W1, title: '📣 Time Change', body: 'Now 6-9', kind: 'message' },
+      { worker_id: W2, title: '📣 Time Change', body: 'Now 6-9', kind: 'message' }
+    ]);
+  });
+
+  it('a missing inbox table does not stop the push', async () => {
+    const sb = fakeSupabase([{ id: 's1', worker_id: W1, endpoint: 'https://push/1', p256dh: 'k', auth: 'a' }]);
+    const from = sb.from;
+    sb.from = (table) => table === 'worker_messages'
+      ? { insert: async () => ({ error: { message: 'relation "worker_messages" does not exist' } }) }
+      : from(table);
+    const r = await handleAdminPush(sb, { kind: 'message', workerIds: [W1], title: 'x', message: 'y' }, { send: async () => {} });
+    expect(r.body.sent).toBe(1);
+  });
+
+  it('tapping a message push opens the inbox', () => {
+    expect(messageNotification('a', 'b').url).toBe('/?inbox=1');
+  });
+
+  it('listMessages returns that worker’s recent messages', async () => {
+    const calls = [];
+    const chain = {
+      select: () => chain,
+      eq: (c, v) => { calls.push(['eq', c, v]); return chain; },
+      gte: (c) => { calls.push(['gte', c]); return chain; },
+      order: () => chain,
+      limit: async () => ({ data: [{ id: 'm1', title: 't', body: 'b' }], error: null })
+    };
+    const r = await handleListMessages({ from: () => chain }, { workerId: W1 });
+    expect(r.body.messages).toHaveLength(1);
+    expect(calls).toContainEqual(['eq', 'worker_id', W1]);
+    expect((await handleListMessages({ from: () => chain }, {})).status).toBe(400);
   });
 });

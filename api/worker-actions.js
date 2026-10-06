@@ -18,7 +18,7 @@ import { handleRouteCheck, handleRouteStopStatus } from './_lib/routeActions.js'
 import { handleHideEvent, handleUnhideEvent, handleListHiddenEvents } from './_lib/hiddenEvents.js';
 import { handleSetMeetingPoint } from './_lib/meetingPoint.js';
 import { bearerToken, resolveWorkerIdentity, decideWorkerAccess, workerAuthEnforced } from './_lib/verifyWorker.js';
-import { handlePushConfig, handleSavePushSubscription, handleRemovePushSubscription } from './_lib/push.js';
+import { handlePushConfig, handleSavePushSubscription, handleRemovePushSubscription, handleListMessages } from './_lib/push.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -619,6 +619,9 @@ export default async function handler(req, res) {
         break;
       case 'removePushSubscription':
         result = await handleRemovePushSubscription(supabase, params);
+        break;
+      case 'listMessages':
+        result = await handleListMessages(supabase, params);
         break;
       default:
         return res.status(400).json({ ok: false, error: 'Unknown action' });

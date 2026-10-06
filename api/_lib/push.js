@@ -171,7 +171,7 @@ export function messageNotification(title, message) {
   return {
     title: `📣 ${t}`,
     body: text.length > 300 ? `${text.slice(0, 297)}…` : text,
-    url: '/',
+    url: '/?inbox=1',
     tag: `msg-${Date.now()}`
   };
 }
@@ -214,6 +214,15 @@ export async function handleAdminPush(supabase, body = {}, opts = {}) {
   } else if (kind === 'message') {
     notification = messageNotification(body.title, body.message);
     if (!notification) return bad('A message is required');
+    // Keep a copy in each worker's in-app inbox (a tapped push disappears).
+    // Missing table (migration not run yet) must not stop the push itself.
+    const rows = workerIds.map(worker_id => ({ worker_id, title: notification.title, body: notification.body, kind: 'message' }));
+    try {
+      const { error: inboxError } = await supabase.from('worker_messages').insert(rows);
+      if (inboxError) throw inboxError;
+    } catch (err) {
+      console.error('worker_messages insert failed:', err?.message || err);
+    }
   } else if (kind === 'invite') {
     if (!isId(eventId)) return bad('eventId is required');
     const { data: event, error } = await supabase.from('events').select('id, name, date, time').eq('id', eventId).maybeSingle();
@@ -226,4 +235,21 @@ export async function handleAdminPush(supabase, body = {}, opts = {}) {
 
   const result = await sendPushToWorkers(supabase, workerIds, notification, opts);
   return { status: 200, body: { ok: true, configured: pushConfigured() || !!opts.send, ...result } };
+}
+
+// ---- worker inbox (worker-actions 'listMessages') ----
+
+// The worker's messages from the last 30 days, newest first (max 30).
+export async function handleListMessages(supabase, { workerId } = {}) {
+  if (!isId(workerId)) return bad('workerId is required');
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('worker_messages')
+    .select('id, title, body, kind, created_at')
+    .eq('worker_id', workerId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (error) throw error;
+  return { status: 200, body: { ok: true, messages: data || [] } };
 }
