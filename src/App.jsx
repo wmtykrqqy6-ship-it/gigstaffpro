@@ -45,6 +45,7 @@ import PullSheetImportLauncher from './components/logistics/PullSheetImportLaunc
 import { hasLogisticsRole, isWarehouseWorker } from './utils/logistics/dispatch';
 import { MIN_HOURS_SETTING_KEY, parseMinHoursRule } from './utils/payHelpers';
 import { workerFetch } from './utils/workerApi';
+import MessageDetailModal from './components/MessageDetailModal';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import AddWorkerModal from './components/modals/AddWorkerModal';
@@ -83,6 +84,7 @@ const GigStaffPro = () => {
   // Worker inbox: Message Staff messages (worker_messages), shown in the bell
   // so a tapped-away push notification isn't lost.
   const [workerMessages, setWorkerMessages] = useState([]);
+  const [openMessage, setOpenMessage] = useState(null); // message tapped in the bell
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedWorkerForEdit, setSelectedWorkerForEdit] = useState(null);
@@ -370,7 +372,7 @@ const saveDismissedNotificationIds = (ids) => {
           title: m.title,
           message: m.body,
           timestamp: m.created_at,
-          action: () => {}
+          action: () => setOpenMessage(m) // full message + the event it's about
         });
       });
       
@@ -394,7 +396,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Event Tomorrow!',
               message: `${event.name} at ${formatTime(event.time, timeFormat)}`,
               timestamp: new Date().toISOString(),
-              action: () => {} // Could open event details
+              action: () => setWorkerTab('dashboard') // their shift cards
             });
           }
         }
@@ -422,7 +424,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Application Approved!',
               message: `You're confirmed for ${event.name}`,
               timestamp: assignment.updated_at,
-              action: () => {}
+              action: () => setWorkerTab('dashboard')
             });
           }
         }
@@ -1713,6 +1715,13 @@ setAppPositions(storedPositions);
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}
       </div>
+      <MessageDetailModal
+        message={openMessage}
+        event={openMessage?.event_id ? events.find(e => e.id === openMessage.event_id) : null}
+        timeFormat={timeFormat}
+        onClose={() => setOpenMessage(null)}
+        onViewShifts={userRole === 'worker' ? () => { setOpenMessage(null); setWorkerTab('dashboard'); } : null}
+      />
       <NotificationsModal
   open={showNotifications}
   notifications={notifications}

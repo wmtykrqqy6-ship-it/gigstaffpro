@@ -164,10 +164,12 @@ export const confirmationNotification = () => ({
 
 // Message Staff broadcast: subject as the title, the text as the body.
 // Each message gets its own tag so several don't replace each other.
-export function messageNotification(title, message) {
-  const text = typeof message === 'string' ? message.trim().replace(/\s+/g, ' ') : '';
-  if (!text) return null;
+export function messageNotification(title, message, event = null) {
+  const raw = typeof message === 'string' ? message.trim().replace(/\s+/g, ' ') : '';
+  if (!raw) return null;
   const t = typeof title === 'string' && title.trim() ? title.trim().slice(0, 80) : 'Message from your manager';
+  // "Grand Geneva Resort & Spa · Tue, Oct 6: <message>" when it's about one event
+  const text = event?.name ? `${[event.name, shortDate(event.date)].filter(Boolean).join(' · ')}: ${raw}` : raw;
   return {
     title: `📣 ${t}`,
     body: text.length > 300 ? `${text.slice(0, 297)}…` : text,
@@ -212,13 +214,22 @@ export async function handleAdminPush(supabase, body = {}, opts = {}) {
   if (kind === 'test') {
     notification = testNotification();
   } else if (kind === 'message') {
-    notification = messageNotification(body.title, body.message);
+    // Sent to one event's staff? Name the event so workers know which one.
+    let event = null;
+    if (isId(eventId)) {
+      const { data } = await supabase.from('events').select('id, name, date, time').eq('id', eventId).maybeSingle();
+      event = data || null;
+    }
+    notification = messageNotification(body.title, body.message, event);
     if (!notification) return bad('A message is required');
     // Keep a copy in each worker's in-app inbox (a tapped push disappears).
-    // Missing table (migration not run yet) must not stop the push itself.
-    const rows = workerIds.map(worker_id => ({ worker_id, title: notification.title, body: notification.body, kind: 'message' }));
+    // Missing table/column (migration not run yet) must not stop the push.
+    const rows = workerIds.map(worker_id => ({ worker_id, title: notification.title, body: notification.body, kind: 'message', event_id: event?.id || null }));
     try {
-      const { error: inboxError } = await supabase.from('worker_messages').insert(rows);
+      let { error: inboxError } = await supabase.from('worker_messages').insert(rows);
+      if (inboxError && /event_id/.test(inboxError.message || '')) {
+        ({ error: inboxError } = await supabase.from('worker_messages').insert(rows.map(({ event_id, ...r }) => r)));
+      }
       if (inboxError) throw inboxError;
     } catch (err) {
       console.error('worker_messages insert failed:', err?.message || err);
@@ -243,13 +254,16 @@ export async function handleAdminPush(supabase, body = {}, opts = {}) {
 export async function handleListMessages(supabase, { workerId } = {}) {
   if (!isId(workerId)) return bad('workerId is required');
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
+  const query = (cols) => supabase
     .from('worker_messages')
-    .select('id, title, body, kind, created_at')
+    .select(cols)
     .eq('worker_id', workerId)
     .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(30);
+  let { data, error } = await query('id, title, body, kind, created_at, event_id');
+  // event_id is an optional later migration (20261006130000)
+  if (error && /event_id/.test(error.message || '')) ({ data, error } = await query('id, title, body, kind, created_at'));
   if (error) throw error;
   return { status: 200, body: { ok: true, messages: data || [] } };
 }

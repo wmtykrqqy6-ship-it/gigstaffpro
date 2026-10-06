@@ -184,7 +184,14 @@ export default function MessageStaffModal({
     // Push first, in one request (fire-and-forget; email below is unaffected).
     let pushed = 0;
     if (alsoPush && pushCount > 0) {
-      const r = await sendAdminPush({ kind: 'message', workerIds: recipients.map(w => w.id), title: subject, message }, accessToken);
+      const r = await sendAdminPush({
+        kind: 'message',
+        workerIds: recipients.map(w => w.id),
+        title: subject,
+        message,
+        // About one event? The push and the saved message name it.
+        eventId: audienceType === 'event' && selectedEventId ? selectedEventId : undefined
+      }, accessToken);
       pushed = r?.sent || 0;
     }
 

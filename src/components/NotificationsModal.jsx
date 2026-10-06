@@ -111,7 +111,7 @@ export default function NotificationsModal({
                   {onDismiss && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onDismiss(notification.id); }}
-                      className="flex-shrink-0 text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded"
+                      className="flex-shrink-0 text-gray-400 hover:text-gray-600 sm:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 -m-0.5 rounded"
                       title="Dismiss"
                     >
                       <X size={14} />

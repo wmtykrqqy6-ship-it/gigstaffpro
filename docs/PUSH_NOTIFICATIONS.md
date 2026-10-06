@@ -28,7 +28,10 @@ notifications to workers who turn them on. Emails keep going as before; push is 
 **Inbox (2026-10-06).** A push disappears from the phone once it's tapped, so every Message Staff
 message is also saved per worker (table `worker_messages`, migration `20261006120000`). It appears
 in the worker's 🔔 bell, even for workers without push. Tapping a message push opens the app with
-the bell open (`/?inbox=1`). The bell reloads messages whenever the app comes back to the front
+the bell open (`/?inbox=1`). Tapping a message in the bell opens it in full
+(`MessageDetailModal.jsx`). When it was sent to one event's staff, the push and the saved message
+name the event ("Grand Geneva Resort & Spa · Tue, Oct 6: …"), and the full view shows that event's
+current date, time, venue and directions (`worker_messages.event_id`, migration `20261006130000`). The bell reloads messages whenever the app comes back to the front
 (worker-actions `listMessages`). Dismissing hides a message on that device.
 
 Staff shows a 🔔 **Notifications** chip on workers who have push on, and an "X of Y have notifications

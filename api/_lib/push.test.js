@@ -210,8 +210,8 @@ describe('worker inbox', () => {
     const r = await handleAdminPush(sb, { kind: 'message', workerIds: [W1, W2], title: 'Time Change', message: 'Now 6-9' }, { send: async () => {} });
     expect(r.status).toBe(200);
     expect(inserted).toEqual([
-      { worker_id: W1, title: '📣 Time Change', body: 'Now 6-9', kind: 'message' },
-      { worker_id: W2, title: '📣 Time Change', body: 'Now 6-9', kind: 'message' }
+      { worker_id: W1, title: '📣 Time Change', body: 'Now 6-9', kind: 'message', event_id: null },
+      { worker_id: W2, title: '📣 Time Change', body: 'Now 6-9', kind: 'message', event_id: null }
     ]);
   });
 
@@ -242,5 +242,40 @@ describe('worker inbox', () => {
     expect(r.body.messages).toHaveLength(1);
     expect(calls).toContainEqual(['eq', 'worker_id', W1]);
     expect((await handleListMessages({ from: () => chain }, {})).status).toBe(400);
+  });
+});
+
+describe('messages about one event', () => {
+  const EV = { id: '44444444-4444-4444-8444-444444444444', name: 'Grand Geneva Resort & Spa', date: '2026-10-06', time: '18:00' };
+  const sbWith = (inserted, { rejectEventId = false } = {}) => {
+    const sb = fakeSupabase([]);
+    const from = sb.from;
+    sb.from = (table) => {
+      if (table === 'events') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: EV, error: null }) }) }) };
+      if (table === 'worker_messages') return {
+        insert: async (rows) => {
+          if (rejectEventId && 'event_id' in rows[0]) return { error: { message: "Could not find the 'event_id' column" } };
+          inserted.push(...rows); return { error: null };
+        }
+      };
+      return from(table);
+    };
+    return sb;
+  };
+
+  it('names the event in the push and saves the event link', async () => {
+    const inserted = [];
+    await handleAdminPush(sbWith(inserted), { kind: 'message', workerIds: [W1], eventId: EV.id, title: 'Time Change', message: 'Time changed to 6-9' }, { send: async () => {} });
+    expect(inserted[0]).toEqual({
+      worker_id: W1, title: '📣 Time Change', kind: 'message', event_id: EV.id,
+      body: 'Grand Geneva Resort & Spa · Tue, Oct 6: Time changed to 6-9'
+    });
+  });
+
+  it('still saves the message before the event_id column exists', async () => {
+    const inserted = [];
+    await handleAdminPush(sbWith(inserted, { rejectEventId: true }), { kind: 'message', workerIds: [W1], eventId: EV.id, title: 'x', message: 'y' }, { send: async () => {} });
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).not.toHaveProperty('event_id');
   });
 });
