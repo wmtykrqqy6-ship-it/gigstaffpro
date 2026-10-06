@@ -268,7 +268,7 @@ describe('messages about one event', () => {
     await handleAdminPush(sbWith(inserted), { kind: 'message', workerIds: [W1], eventId: EV.id, title: 'Time Change', message: 'Time changed to 6-9' }, { send: async () => {} });
     expect(inserted[0]).toEqual({
       worker_id: W1, title: '📣 Time Change', kind: 'message', event_id: EV.id,
-      body: 'Grand Geneva Resort & Spa · Tue, Oct 6: Time changed to 6-9'
+      body: 'Tue, Oct 6 · Grand Geneva Resort & Spa: Time changed to 6-9'
     });
   });
 

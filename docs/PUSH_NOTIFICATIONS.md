@@ -30,7 +30,7 @@ message is also saved per worker (table `worker_messages`, migration `2026100612
 in the worker's 🔔 bell, even for workers without push. Tapping a message push opens the app with
 the bell open (`/?inbox=1`). Tapping a message in the bell opens it in full
 (`MessageDetailModal.jsx`). When it was sent to one event's staff, the push and the saved message
-name the event ("Grand Geneva Resort & Spa · Tue, Oct 6: …"), and the full view shows that event's
+name the event ("Tue, Oct 6 · Grand Geneva Resort & Spa: …"), and the full view shows that event's
 current date, time, venue and directions (`worker_messages.event_id`, migration `20261006130000`). The bell reloads messages whenever the app comes back to the front
 (worker-actions `listMessages`). Dismissing hides a message on that device.
 

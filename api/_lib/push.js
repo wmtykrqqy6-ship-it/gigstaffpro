@@ -168,8 +168,8 @@ export function messageNotification(title, message, event = null) {
   const raw = typeof message === 'string' ? message.trim().replace(/\s+/g, ' ') : '';
   if (!raw) return null;
   const t = typeof title === 'string' && title.trim() ? title.trim().slice(0, 80) : 'Message from your manager';
-  // "Grand Geneva Resort & Spa · Tue, Oct 6: <message>" when it's about one event
-  const text = event?.name ? `${[event.name, shortDate(event.date)].filter(Boolean).join(' · ')}: ${raw}` : raw;
+  // "Tue, Oct 6 · Grand Geneva Resort & Spa: <message>" when it's about one event (date first)
+  const text = event?.name ? `${[shortDate(event.date), event.name].filter(Boolean).join(' · ')}: ${raw}` : raw;
   return {
     title: `📣 ${t}`,
     body: text.length > 300 ? `${text.slice(0, 297)}…` : text,
