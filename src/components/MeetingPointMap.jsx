@@ -59,19 +59,6 @@ export default function MeetingPointMap({ lat, lng, address, onChange }) {
           placeMarker(p);
           onChangeRef.current?.(p);
         });
-        // No pin yet: center on the venue so you can find the right door.
-        if (!hasPin && address && g.places?.PlacesService) {
-          new g.places.PlacesService(mapRef.current).findPlaceFromQuery(
-            { query: address, fields: ['geometry'] },
-            (results, st) => {
-              const loc = results?.[0]?.geometry?.location;
-              if (st === g.places.PlacesServiceStatus.OK && loc && !markerRef.current) {
-                mapRef.current.setCenter(loc);
-                mapRef.current.setZoom(18);
-              }
-            }
-          );
-        }
         setStatus(s => (s === 'error' ? s : 'ready'));
       })
       .catch(() => { if (!cancelled) setStatus('error'); });
@@ -81,6 +68,30 @@ export default function MeetingPointMap({ lat, lng, address, onChange }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // No pin yet: center on the venue so you can find the right door. Runs
+  // whenever the address is known or changes -- in Edit Event the form fills
+  // in the event's address just after the map is created, so a one-time
+  // lookup on creation saw an empty address and stayed on Milwaukee.
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current || markerRef.current?.getMap()) return;
+    const query = String(address || '').trim();
+    const g = window.google?.maps;
+    if (!query || !g?.places?.PlacesService) return;
+    let cancelled = false;
+    const t = setTimeout(() => { // wait for typing to pause
+      new g.places.PlacesService(mapRef.current).findPlaceFromQuery(
+        { query, fields: ['geometry'] },
+        (results, st) => {
+          const loc = results?.[0]?.geometry?.location;
+          if (cancelled || st !== g.places.PlacesServiceStatus.OK || !loc || markerRef.current?.getMap()) return;
+          mapRef.current.setCenter(loc);
+          mapRef.current.setZoom(18);
+        }
+      );
+    }, 600);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [address, status]);
 
   // Follow changes made outside the map (pasted link, "Remove pin").
   useEffect(() => {
