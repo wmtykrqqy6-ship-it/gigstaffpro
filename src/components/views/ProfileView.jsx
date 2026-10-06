@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { workerFetch } from '../../utils/workerApi';
+import PushSettings from '../PushSettings';
 import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
@@ -872,6 +873,9 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           </div>
         )}
       </div>
+
+      {/* Push notifications on this device */}
+      <PushSettings worker={worker} variant="setting" />
 
       {/* Reminder Preferences */}
       <div className="bg-white rounded-lg shadow p-6">

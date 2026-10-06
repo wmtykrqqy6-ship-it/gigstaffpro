@@ -11,6 +11,7 @@
 // SUPABASE_SERVICE_ROLE_KEY, like api/worker-actions.js), not the hardcoded
 // anon key in send-shift-reminders.js.
 import { escapeHtml } from './escapeHtml.js';
+import { routeReminderNotification } from './push.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { businessNow } from './routeActions.js';
 
@@ -116,7 +117,7 @@ export function buildRouteReminder({ run, truck, worker, teammate, stops, loads,
 
 // ---- runner ---------------------------------------------------------------
 
-export async function sendRouteReminders({ now = businessNow(), env = process.env, fetchImpl = fetch } = {}) {
+export async function sendRouteReminders({ now = businessNow(), env = process.env, fetchImpl = fetch, pushImpl = null } = {}) {
   const results = { target: null, runs: 0, sent: 0, skipped: 0, errors: [] };
   const target = reminderTargetDate(now);
   results.target = target;
@@ -187,6 +188,11 @@ export async function sendRouteReminders({ now = businessNow(), env = process.en
         });
         sentSet.add(`${run.id}:${workerId}`);
         results.sent++;
+        // Push to their phone too, if they turned notifications on (never throws).
+        if (pushImpl) {
+          const vehicle = run.is_personal ? 'doing a delivery in your own vehicle' : `on the ${trucksById[run.truck_id]?.name || ''} truck`.replace('  ', ' ');
+          await pushImpl([workerId], routeReminderNotification({ vehicleLabel: vehicle, runDate: run.run_date, stopCount: runStops.length }));
+        }
       } catch (err) {
         results.errors.push({ runId: run.id, workerId, error: err.message });
       }

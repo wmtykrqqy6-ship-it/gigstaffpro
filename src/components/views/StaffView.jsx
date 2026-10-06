@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck, MessageSquare } from 'lucide-react';
+import { Users, Plus, Mail, Edit, Trash2, Search, Lock, Phone, Shield, MapPin, UserX, UserCheck, MessageSquare, Bell } from 'lucide-react';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
 import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
+import { sendAdminPush } from '../../utils/adminPush';
 
 
 const formatPhone = (p) => {
@@ -30,6 +31,19 @@ export default function StaffView({
   onRetryLoad
 }) {
   const notify = useToast();
+  const [testingPush, setTestingPush] = useState(null); // worker id being sent a test push
+
+  // Staff -> "Test" sends a test push to every device the worker turned
+  // notifications on for (docs/PUSH_NOTIFICATIONS.md).
+  const sendTestPush = async (worker) => {
+    setTestingPush(worker.id);
+    const r = await sendAdminPush({ kind: 'test', workerIds: [worker.id] });
+    setTestingPush(null);
+    if (!r.ok) notify(r.error || 'Could not send the test notification.');
+    else if (!r.configured) notify('Notifications aren’t set up on the server yet (push keys missing in Vercel).');
+    else if (r.sent > 0) notify(`Test notification sent to ${worker.name} (${r.sent} device${r.sent === 1 ? '' : 's'}).`);
+    else notify(`${worker.name} hasn’t turned on notifications on any device yet.`);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('all');
   const [rankFilter, setRankFilter] = useState('all');
@@ -585,6 +599,12 @@ export default function StaffView({
                         <button onClick={(e)=>{e.stopPropagation();onSetPin(worker);}}
                           style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #d1fae5',background:'#f0fdf4',color:'#065f46',fontSize:'11px',fontWeight:'500',cursor:'pointer'}}>
                           <Lock size={11}/>PIN
+                        </button>
+                        <button onClick={(e)=>{e.stopPropagation();sendTestPush(worker);}}
+                          disabled={testingPush===worker.id}
+                          title="Send a test notification to this worker's phone"
+                          style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #fecaca',background:'#fef2f2',color:'#7f1d1d',fontSize:'11px',fontWeight:'500',cursor:'pointer',opacity:testingPush===worker.id?0.5:1}}>
+                          <Bell size={11}/>{testingPush===worker.id ? 'Sending…' : 'Test'}
                         </button>
                         <button onClick={(e)=>{e.stopPropagation();onEditWorker(worker);}}
                           style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px',padding:'6px',borderRadius:'8px',border:'0.5px solid #dbeafe',background:'#eff6ff',color:'#1e40af',fontSize:'11px',fontWeight:'500',cursor:'pointer'}}>

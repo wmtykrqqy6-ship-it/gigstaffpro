@@ -40,7 +40,7 @@ export async function resolveWorkerIdentity(supabaseAdmin, token) {
 }
 
 // Actions anyone may call without being a logged-in worker.
-const PUBLIC_ACTIONS = new Set(['signup']);
+const PUBLIC_ACTIONS = new Set(['signup', 'pushConfig']); // pushConfig only returns the public VAPID key
 
 // Pure decision. Returns { allow: true, mode } or { allow: false, status, error }.
 //   mode: 'public' | 'verified' | 'legacy-trust'

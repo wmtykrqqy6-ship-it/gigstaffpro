@@ -13,6 +13,7 @@ import CrewRoute from '../logistics/CrewRoute';
 import WarehouseLoading from '../logistics/WarehouseLoading';
 import RouteNotice from '../logistics/RouteNotice';
 import MeetingPointCard from '../MeetingPointCard';
+import PushSettings from '../PushSettings';
 import { isHostPosition } from '../../utils/meetingPoint';
 import { paidHours } from '../../utils/payHelpers';
 import { isWarehouseWorker } from '../../utils/logistics/dispatch';
@@ -649,6 +650,9 @@ export default function WorkerPortalView({  loggedInWorker,
           <>
         {/* One slim line if they're on a vehicle today/tomorrow -> Logistics tab */}
         <RouteNotice worker={currentWorker} onOpen={() => onTabChange?.('logistics')} />
+
+        {/* "Turn on notifications" (hidden once on, or dismissed) */}
+        <PushSettings worker={currentWorker} variant="banner" />
 
         {/* Pending Invites Banner - highest priority */}
         {pendingInvites.length > 0 && (

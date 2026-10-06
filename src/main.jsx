@@ -14,3 +14,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ToastProvider>
   </React.StrictMode>,
 )
+
+// Push-notification service worker (public/sw.js). It caches nothing, so
+// registering it can't change how the site loads.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

@@ -125,6 +125,14 @@ describe('sendRouteReminders', () => {
     expect(calls.paths).toEqual([]);
   });
 
+  it('also pushes to each crew member when push is wired in', async () => {
+    const { fetchImpl } = fakeFetch();
+    const pushed = [];
+    await sendRouteReminders({ now: AT_5PM, env: ENV, fetchImpl, pushImpl: async (ids, n) => { pushed.push([ids[0], n.title]); } });
+    expect(pushed).toHaveLength(2);
+    expect(pushed[0][1]).toMatch(/^Tomorrow: you're on the .* truck$/);
+  });
+
   it('emails each crew member once and logs it', async () => {
     const { fetchImpl, calls } = fakeFetch();
     const r = await sendRouteReminders({ now: AT_5PM, env: ENV, fetchImpl });

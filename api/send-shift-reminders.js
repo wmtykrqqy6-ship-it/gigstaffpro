@@ -9,6 +9,11 @@
 import { escapeHtml } from './_lib/escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 import { sendRouteReminders } from './_lib/routeReminders.js';
+import { createClient } from '@supabase/supabase-js';
+import { sendPushFromCron, shiftReminderNotification } from './_lib/push.js';
+
+// Push alongside the reminder emails (docs/PUSH_NOTIFICATIONS.md); no-op without push keys.
+const pushToWorkers = (workerIds, notification) => sendPushFromCron(createClient, workerIds, notification);
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
@@ -158,7 +163,7 @@ function buildReminderEmail({ worker, event, assignment, hoursUntil }) {
 // affect the shift reminders' own response.
 async function withRouteReminders(body) {
   try {
-    body.routes = await sendRouteReminders();
+    body.routes = await sendRouteReminders({ pushImpl: pushToWorkers });
   } catch (err) {
     body.routes = { error: err.message };
   }
@@ -288,6 +293,9 @@ export default async function handler(req, res) {
             });
             sentSet.add(sentKey); // prevent double-send in same run
             results.sent++;
+            // Same reminder as a push notification (once, with the email).
+            const pushed = await pushToWorkers([asg.worker_id], shiftReminderNotification(event, tier));
+            results.pushed = (results.pushed || 0) + (pushed?.sent || 0);
           } else {
             results.errors.push({ assignmentId: asg.id, tier, error: 'Email send failed' });
           }

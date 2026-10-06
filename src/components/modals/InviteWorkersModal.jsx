@@ -8,6 +8,7 @@ import { renderEmailShell } from '../../utils/emailShell.js';
 import { escapeHtml } from '../../utils/escapeHtml.js';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { sendAdminPush } from '../../utils/adminPush';
 import { paidHours } from '../../utils/payHelpers';
 
 const fmtDate = (d) => {
@@ -244,6 +245,10 @@ export default function InviteWorkersModal({ open, event, workers, assignments, 
         return;
       }
 
+      // Push notification to everyone invited who has notifications on --
+      // including workers without an email. Fire-and-forget alongside emails.
+      sendAdminPush({ kind: 'invite', workerIds: confirmSend.workerIds, eventId: event.id, positionLabel }, accessToken);
+
       const sendInviteEmailToWorker = async workerId => {
         const worker = workers.find(w => w.id === workerId);
         if (!worker?.email) return { outcome: 'skipped' };
@@ -413,6 +418,9 @@ ${invitePayHtml}
         window_hours: windowHours
       }).eq('id', inv.id);
       if (reInviteError) throw reInviteError;
+
+      // Push to their phone too (if they turned notifications on)
+      sendAdminPush({ kind: 'invite', workerIds: [inv.worker_id], eventId: event.id, positionLabel: getPositionLabel(inv.position_key) || inv.position_key });
 
       // Re-send email if worker has one
       const worker = workers.find(w => w.id === inv.worker_id);

@@ -5,6 +5,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 import { htmlToPlainText } from './_lib/emailShell.js';
+import { handleAdminPush } from './_lib/push.js';
 
 export const config = {
   api: {
@@ -41,6 +42,19 @@ export default async function handler(req, res) {
   }
 
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+  // Push notifications ride along on this admin-only function (the Vercel
+  // plan is at its function limit). Separate from the email rate limit
+  // below, so pushes never use up the email quota. See api/_lib/push.js.
+  if (req.body && typeof req.body === 'object' && req.body.action === 'push') {
+    try {
+      const result = await handleAdminPush(supabaseAdmin, req.body);
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('admin push failed:', err?.message || err);
+      return res.status(500).json({ ok: false, error: 'Could not send the notification.' });
+    }
+  }
 
   // Persistent, cross-instance rate limit — replaces the reverted in-memory
   // version. .single() both simplifies the response shape (one object
