@@ -22,3 +22,10 @@ export async function sendAdminPush(body, accessToken = null) {
     return { ok: false, error: 'Could not send the notification.' };
   }
 }
+
+// Which workers have notifications on: { [workerId]: { devices, lastSuccessAt } }.
+// Returns null if it couldn't be loaded (e.g. push not set up yet).
+export async function loadPushStatus() {
+  const r = await sendAdminPush({ kind: 'status' });
+  return r?.ok ? (r.workers || {}) : null;
+}

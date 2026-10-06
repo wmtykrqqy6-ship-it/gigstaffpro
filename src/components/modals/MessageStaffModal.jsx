@@ -5,6 +5,7 @@ import { renderEmailShell } from '../../utils/emailShell';
 import { escapeHtml } from '../../utils/escapeHtml';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { sendAdminPush, loadPushStatus } from '../../utils/adminPush';
 
 const RANK_LEVELS = [1, 2, 3, 4, 5];
 
@@ -39,7 +40,18 @@ export default function MessageStaffModal({
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState(null); // { sent, failed, total }
+  const [sendResult, setSendResult] = useState(null); // { sent, failed, total, pushed }
+  // Push notifications (docs/PUSH_NOTIFICATIONS.md): on by default; reaches
+  // workers with notifications on, including those with no email.
+  const [alsoPush, setAlsoPush] = useState(true);
+  const [pushStatus, setPushStatus] = useState(null); // { workerId: { devices } } | null
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadPushStatus().then(st => { if (!cancelled) setPushStatus(st); });
+    return () => { cancelled = true; };
+  }, [open]);
+  const hasPush = (w) => !!pushStatus?.[w.id]?.devices;
 
   // Reset per-open state so a previous send's targeting/content doesn't
   // linger into the next time this modal is opened, and load location data
@@ -116,7 +128,8 @@ export default function MessageStaffModal({
   };
 
   const getRecipients = () => {
-    let pool = workers.filter(w => w.is_active !== false && w.email);
+    // Reachable by email, or by push when that's on and they've enabled it.
+    let pool = workers.filter(w => w.is_active !== false && (w.email || (alsoPush && hasPush(w))));
 
     if (audienceType === 'event') {
       if (!selectedEventId) return [];
@@ -138,6 +151,8 @@ export default function MessageStaffModal({
   };
 
   const recipients = getRecipients();
+  const emailCount = recipients.filter(w => w.email).length;
+  const pushCount = alsoPush ? recipients.filter(hasPush).length : 0;
 
   const handleSend = async () => {
     if (!subject.trim() || !message.trim()) {
@@ -166,9 +181,17 @@ export default function MessageStaffModal({
     const bodyHtml = `<p style="white-space:pre-wrap;margin:0">${escapeHtml(message)}</p>`;
     const html = renderEmailShell({ subtitle: 'A message from your event admin', bodyHtml, headerEmoji: '📣' });
 
+    // Push first, in one request (fire-and-forget; email below is unaffected).
+    let pushed = 0;
+    if (alsoPush && pushCount > 0) {
+      const r = await sendAdminPush({ kind: 'message', workerIds: recipients.map(w => w.id), title: subject, message }, accessToken);
+      pushed = r?.sent || 0;
+    }
+
     let sent = 0;
     let failed = 0;
     for (const worker of recipients) {
+      if (!worker.email) continue; // push-only recipient
       try {
         const res = await fetch('/api/send-email', {
           method: 'POST',
@@ -178,14 +201,14 @@ export default function MessageStaffModal({
 
         if (res.status === 401) {
           setSending(false);
-          setSendResult({ sent, failed, total: recipients.length });
+          setSendResult({ sent, failed, total: emailCount, pushed });
           await onSessionExpired();
           return;
         }
         if (res.status === 429) {
           setSending(false);
-          setSendResult({ sent, failed, total: recipients.length });
-          notify(`Sending limit reached after ${sent} of ${recipients.length}. Wait a few minutes, then try again for the rest.`);
+          setSendResult({ sent, failed, total: emailCount, pushed });
+          notify(`Sending limit reached after ${sent} of ${emailCount} emails. Wait a few minutes, then try again for the rest.`);
           return;
         }
         if (res.ok) sent++; else failed++;
@@ -195,10 +218,11 @@ export default function MessageStaffModal({
     }
 
     setSending(false);
-    setSendResult({ sent, failed, total: recipients.length });
+    setSendResult({ sent, failed, total: emailCount, pushed });
+    const pushNote = alsoPush ? ` Push notification sent to ${pushed} device${pushed !== 1 ? 's' : ''}.` : '';
     notify(failed === 0
-      ? `✓ Sent to all ${sent} worker${sent !== 1 ? 's' : ''}.`
-      : `Sent to ${sent} of ${recipients.length}. ${failed} failed -- check their email addresses and try again.`);
+      ? `✓ Emailed all ${sent} worker${sent !== 1 ? 's' : ''}.${pushNote}`
+      : `Emailed ${sent} of ${emailCount}. ${failed} failed -- check their email addresses and try again.${pushNote}`);
   };
 
   return (
@@ -305,12 +329,19 @@ export default function MessageStaffModal({
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700">
               {audienceType === 'event' && !selectedEventId
                 ? 'Select an event to see who this will reach.'
-                : <>This will reach <strong>{recipients.length}</strong> worker{recipients.length !== 1 ? 's' : ''} by email.</>}
+                : <>
+                    This will reach <strong>{recipients.length}</strong> worker{recipients.length !== 1 ? 's' : ''}: <strong>{emailCount}</strong> by email
+                    {alsoPush && <>{pushStatus ? <>, <strong>{pushCount}</strong> on their phone</> : ' (checking who has notifications on…)'}</>}.
+                  </>}
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" checked={alsoPush} onChange={(e) => setAlsoPush(e.target.checked)} className="h-4 w-4" />
+                <span>📲 Also send as a push notification</span>
+              </label>
             </div>
 
             {sendResult && (
               <div className={`rounded-lg p-3 text-sm ${sendResult.failed > 0 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
-                Sent {sendResult.sent} of {sendResult.total}{sendResult.failed > 0 ? `, ${sendResult.failed} failed` : ''}.
+                Emailed {sendResult.sent} of {sendResult.total}{sendResult.failed > 0 ? `, ${sendResult.failed} failed` : ''}{alsoPush ? ` · push to ${sendResult.pushed || 0} device${sendResult.pushed === 1 ? '' : 's'}` : ''}.
               </div>
             )}
 

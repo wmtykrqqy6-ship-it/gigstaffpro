@@ -23,9 +23,12 @@ notifications to workers who turn them on. Emails keep going as before; push is 
 | Staff → **Test** | `StaffView.jsx` → same | Tells you if the worker hasn't turned push on |
 | Shift reminders | `api/send-shift-reminders.js` | Sent once, together with the reminder email (same tiers and preferences). Workers without an email get no reminder of either kind |
 | Day-before route reminder | `api/_lib/routeReminders.js` | Sent once with the route email |
+| Message Staff | `MessageStaffModal.jsx` → `api/send-email.js` (`kind: 'message'`) | Checkbox, on by default. Also reaches workers with no email |
 
-Ideas for later: standby promotion ("a spot opened up"), meeting point set, application approved,
-"Message Staff" as push.
+Staff shows a 🔔 **Notifications** chip on workers who have push on, and an "X of Y have notifications
+on" count (`kind: 'status'`), so you know who still needs a text.
+
+Ideas for later: standby promotion ("a spot opened up"), meeting point set, application approved.
 
 ## How it works
 

@@ -162,6 +162,20 @@ export const confirmationNotification = () => ({
   tag: 'push-on'
 });
 
+// Message Staff broadcast: subject as the title, the text as the body.
+// Each message gets its own tag so several don't replace each other.
+export function messageNotification(title, message) {
+  const text = typeof message === 'string' ? message.trim().replace(/\s+/g, ' ') : '';
+  if (!text) return null;
+  const t = typeof title === 'string' && title.trim() ? title.trim().slice(0, 80) : 'Message from your manager';
+  return {
+    title: `📣 ${t}`,
+    body: text.length > 300 ? `${text.slice(0, 297)}…` : text,
+    url: '/',
+    tag: `msg-${Date.now()}`
+  };
+}
+
 export const testNotification = () => ({
   title: 'GigStaffPro notifications are on 🎉',
   body: "This is a test from your manager. You'll get invites and shift reminders here.",
@@ -171,9 +185,25 @@ export const testNotification = () => ({
 
 // ---- admin-triggered pushes (via api/send-email.js, admin token required) ----
 
-// body: { action: 'push', kind: 'invite' | 'test', workerIds: [...], eventId?, positionLabel? }
+// body: { action: 'push', kind, ... }
+//   kind 'invite'  { workerIds, eventId, positionLabel? }
+//   kind 'test'    { workerIds }
+//   kind 'message' { workerIds, title, message }   -- Message Staff
+//   kind 'status'  {}  -> which workers have notifications on (Staff view)
 export async function handleAdminPush(supabase, body = {}, opts = {}) {
   const { kind, eventId } = body;
+  if (kind === 'status') {
+    const { data, error } = await supabase.from('push_subscriptions').select('worker_id, last_success_at');
+    if (error) throw error;
+    const byWorker = {};
+    for (const row of data || []) {
+      const w = byWorker[row.worker_id] || (byWorker[row.worker_id] = { devices: 0, lastSuccessAt: null });
+      w.devices++;
+      if (row.last_success_at && (!w.lastSuccessAt || row.last_success_at > w.lastSuccessAt)) w.lastSuccessAt = row.last_success_at;
+    }
+    return { status: 200, body: { ok: true, configured: pushConfigured(), workers: byWorker } };
+  }
+
   const workerIds = Array.isArray(body.workerIds) ? body.workerIds.filter(isId).slice(0, 200) : [];
   if (!workerIds.length) return bad('workerIds are required');
   const positionLabel = typeof body.positionLabel === 'string' ? body.positionLabel.slice(0, 60) : '';
@@ -181,6 +211,9 @@ export async function handleAdminPush(supabase, body = {}, opts = {}) {
   let notification;
   if (kind === 'test') {
     notification = testNotification();
+  } else if (kind === 'message') {
+    notification = messageNotification(body.title, body.message);
+    if (!notification) return bad('A message is required');
   } else if (kind === 'invite') {
     if (!isId(eventId)) return bad('eventId is required');
     const { data: event, error } = await supabase.from('events').select('id, name, date, time').eq('id', eventId).maybeSingle();

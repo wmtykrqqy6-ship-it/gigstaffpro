@@ -5,7 +5,7 @@ import { getHostLabel, getHostLabelPlural } from '../../utils/hostLabelHelper';
 import { getReliabilityTier } from '../../utils/reliabilityHelpers';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
-import { sendAdminPush } from '../../utils/adminPush';
+import { sendAdminPush, loadPushStatus } from '../../utils/adminPush';
 
 
 const formatPhone = (p) => {
@@ -32,6 +32,12 @@ export default function StaffView({
 }) {
   const notify = useToast();
   const [testingPush, setTestingPush] = useState(null); // worker id being sent a test push
+  // Who has push notifications on: { workerId: { devices, lastSuccessAt } }, null if unknown
+  const [pushStatus, setPushStatus] = useState(null);
+  const refreshPushStatus = () => loadPushStatus().then(setPushStatus);
+  useEffect(() => { refreshPushStatus(); }, []);
+  const pushOnCount = pushStatus ? workers.filter(w => w.is_active !== false && pushStatus[w.id]?.devices).length : null;
+  const activeCount = workers.filter(w => w.is_active !== false).length;
 
   // Staff -> "Test" sends a test push to every device the worker turned
   // notifications on for (docs/PUSH_NOTIFICATIONS.md).
@@ -41,7 +47,7 @@ export default function StaffView({
     setTestingPush(null);
     if (!r.ok) notify(r.error || 'Could not send the test notification.');
     else if (!r.configured) notify('Notifications aren’t set up on the server yet (push keys missing in Vercel).');
-    else if (r.sent > 0) notify(`Test notification sent to ${worker.name} (${r.sent} device${r.sent === 1 ? '' : 's'}).`);
+    else if (r.sent > 0) { notify(`Test notification sent to ${worker.name} (${r.sent} device${r.sent === 1 ? '' : 's'}).`); refreshPushStatus(); }
     else notify(`${worker.name} hasn’t turned on notifications on any device yet.`);
   };
   const [searchTerm, setSearchTerm] = useState('');
@@ -213,6 +219,11 @@ export default function StaffView({
           <p className="text-sm text-gray-600 mt-1">
             {sortedWorkers.length} {sortedWorkers.length === 1 ? 'worker' : 'workers'}
             {sortedWorkers.length !== workers.length && ` of ${workers.length} total`}
+            {pushOnCount != null && (
+              <span title="Workers who turned on push notifications in the app" className="ml-2 inline-flex items-center gap-1 text-red-900">
+                · <Bell size={13} /> {pushOnCount} of {activeCount} have notifications on
+              </span>
+            )}
           </p>
         </div>
         
@@ -495,6 +506,13 @@ export default function StaffView({
                           })()}
                           {/* Host badge */}
                           {worker.is_host && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#FAECE7',color:'#993C1D',display:'inline-flex',alignItems:'center',gap:'2px',whiteSpace:'nowrap'}}><Shield size={10}/>{getHostLabel()}</span>}
+                          {/* Push notifications on */}
+                          {pushStatus?.[worker.id]?.devices > 0 && (
+                            <span title={`Notifications on (${pushStatus[worker.id].devices} device${pushStatus[worker.id].devices === 1 ? '' : 's'})`}
+                              style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#FEF2F2',color:'#7f1d1d',display:'inline-flex',alignItems:'center',gap:'3px',whiteSpace:'nowrap'}}>
+                              <Bell size={10}/>Notifications
+                            </span>
+                          )}
                           {/* Inactive badge */}
                           {worker.is_active===false && <span style={{fontSize:'11px',fontWeight:'500',padding:'2px 7px',borderRadius:'6px',background:'#F3F4F6',color:'#4B5563',whiteSpace:'nowrap'}}>Inactive</span>}
                           {/* New badge */}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   validSubscription, handleSavePushSubscription, handleRemovePushSubscription, sendPushToWorkers,
-  inviteNotification, shiftReminderNotification, routeReminderNotification, testNotification, handleAdminPush
+  inviteNotification, shiftReminderNotification, routeReminderNotification, testNotification, handleAdminPush, messageNotification
 } from './push.js';
 
 const W1 = '11111111-1111-4111-8111-111111111111';
@@ -154,5 +154,47 @@ describe('handleAdminPush', () => {
     expect((await handleAdminPush(fakeSupabase(), { kind: 'test', workerIds: [] })).status).toBe(400);
     expect((await handleAdminPush(fakeSupabase(), { kind: 'spam', workerIds: [W1] })).status).toBe(400);
     expect((await handleAdminPush(fakeSupabase(), { kind: 'invite', workerIds: [W1] })).status).toBe(400);
+  });
+});
+
+describe('Message Staff push + status', () => {
+  const subs = [
+    { id: 's1', worker_id: W1, endpoint: 'https://push/1', p256dh: 'k', auth: 'a', last_success_at: '2026-10-05T10:00:00Z' },
+    { id: 's2', worker_id: W1, endpoint: 'https://push/2', p256dh: 'k', auth: 'a', last_success_at: null },
+    { id: 's3', worker_id: W2, endpoint: 'https://push/3', p256dh: 'k', auth: 'a', last_success_at: null }
+  ];
+  const withAll = () => {
+    const sb = fakeSupabase(subs);
+    const from = sb.from;
+    sb.from = (table) => {
+      const api = from(table);
+      const select = api.select;
+      api.select = (cols) => cols === 'worker_id, last_success_at' ? Promise.resolve({ data: subs, error: null }) : select(cols);
+      return api;
+    };
+    return sb;
+  };
+
+  it('messageNotification uses the subject and trims long text', () => {
+    const n = messageNotification('Parking change', 'Use the  north lot\ntonight.');
+    expect(n.title).toBe('📣 Parking change');
+    expect(n.body).toBe('Use the north lot tonight.');
+    expect(messageNotification('x', '   ')).toBeNull();
+    expect(messageNotification('', 'a'.repeat(400)).body).toHaveLength(298);
+  });
+
+  it('message push goes to the chosen workers', async () => {
+    const sent = [];
+    const r = await handleAdminPush(fakeSupabase(subs), { kind: 'message', workerIds: [W2], title: 'Hi', message: 'Team meeting' }, { send: async (s, p) => sent.push(JSON.parse(p).body) });
+    expect(r.body.sent).toBe(1);
+    expect(sent).toEqual(['Team meeting']);
+    expect((await handleAdminPush(fakeSupabase(subs), { kind: 'message', workerIds: [W2], message: '' })).status).toBe(400);
+  });
+
+  it('status lists who has notifications on and on how many devices', async () => {
+    const r = await handleAdminPush(withAll(), { kind: 'status' });
+    expect(r.status).toBe(200);
+    expect(r.body.workers[W1]).toEqual({ devices: 2, lastSuccessAt: '2026-10-05T10:00:00Z' });
+    expect(r.body.workers[W2].devices).toBe(1);
   });
 });
