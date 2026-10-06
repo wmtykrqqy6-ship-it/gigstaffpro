@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { workerFetch } from '../utils/workerApi';
 import { supabase } from '../supabaseClient';
 import { parseDateSafe, formatTime, parseTimeToMinutes, timeRangesOverlap } from '../utils/dateHelpers';
 import { getPositionLabel, getPositionKey, getPayRateKey, positionMatches, isAssignmentFilled } from '../utils/positionHelpers';
@@ -20,7 +21,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
     // so it follows them across devices). Hiding never changes staffing.
     const [hiddenIds, setHiddenIds] = useState(() => new Set());
     const [showHidden, setShowHidden] = useState(false);
-    const hiddenAction = (action, eventId) => fetch('/api/worker-actions', {
+    const hiddenAction = (action, eventId) => workerFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, workerId: currentWorker.id, eventId })
@@ -311,7 +312,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               // Apply with status 'standby' instead of blocking
               setApplying(true);
               try {
-                const res = await fetch('/api/worker-actions', {
+                const res = await workerFetch({
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ action: 'apply', eventId: event.id, workerId: currentWorker.id, position })
@@ -423,7 +424,7 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
 
       setApplying(true);
       try {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'apply', eventId: event.id, workerId: currentWorker.id, position })

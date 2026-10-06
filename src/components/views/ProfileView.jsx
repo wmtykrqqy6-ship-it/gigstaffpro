@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { workerFetch } from '../../utils/workerApi';
 import { Mail, Phone, User, Award, Calendar, Briefcase, MapPin, Shirt, Edit2, Save, X, Camera, Star, TrendingUp, TrendingDown, Minus, FileDown, Navigation } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getPositionLabel, isAssignmentFilled } from '../../utils/positionHelpers';
@@ -383,7 +384,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
         .getPublicUrl(filePath);
 
       // Update worker record with photo URL
-      const profileRes = await fetch('/api/worker-actions', {
+      const profileRes = await workerFetch({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateProfile', workerId: worker.id, updates: { photo_url: publicUrl } })
@@ -422,7 +423,7 @@ export default function ProfileView({ worker, onProfileUpdate, assignments = [],
           throw new Error('Please try again.');
         }
       } else {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

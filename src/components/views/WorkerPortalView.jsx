@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { workerFetch } from '../../utils/workerApi';
 import { Calendar, ChevronDown, Clock, MapPin, DollarSign, Star, XCircle, RefreshCw, Briefcase, CheckCircle, Mail, Phone, MessageSquare, X, Award, User, Users, ClipboardList, Send } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
@@ -288,7 +289,7 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'cancelAssignment', assignmentId: assignment.id, workerId: currentWorker.id })
@@ -305,7 +306,7 @@ export default function WorkerPortalView({  loggedInWorker,
 
     const checkIn = async (assignment) => {
       try {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'checkIn', assignmentId: assignment.id, workerId: currentWorker.id })
@@ -364,7 +365,7 @@ export default function WorkerPortalView({  loggedInWorker,
       }
 
       try {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'switchPosition', assignmentId: assignment.id, workerId: currentWorker.id, newPosition: newPositionKey })
@@ -968,7 +969,7 @@ export default function WorkerPortalView({  loggedInWorker,
                         onClick={async () => {
                           if (!(await confirm('Remove yourself from the standby list for this event?'))) return;
                           try {
-                            const res = await fetch('/api/worker-actions', {
+                            const res = await workerFetch({
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ action: 'leaveStandby', assignmentId: assignment.id, workerId: currentWorker.id })

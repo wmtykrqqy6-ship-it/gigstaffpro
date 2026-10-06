@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { workerFetch } from '../../utils/workerApi';
 import { Truck, MapPin, Navigation, CheckCircle, Circle, ChevronDown, ChevronRight, Minus, Plus, Users, Clock } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import MeetingPointCard from '../MeetingPointCard';
@@ -85,7 +86,7 @@ export default function CrewRoute({ worker, events = [], workers = [], assignmen
   const ctx = { loads: data.day.loads, allocations: data.day.allocations, equipmentByEvent };
 
   const post = async (body) => {
-    const res = await fetch('/api/worker-actions', {
+    const res = await workerFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, workerId: worker.id })

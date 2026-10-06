@@ -115,7 +115,7 @@ For anything beyond a trivial one-line fix:
 
 From `docs/CODEBASE_AUDIT.md` (re-verified 2026-10-01), in priority order:
 
-1. **Real worker sessions** — `api/worker-actions.js` trusts the client-supplied worker id; finish moving workers off legacy PINs and verify identity server-side.
+1. **Real worker sessions** — in progress, see `docs/WORKER_AUTH.md` (step 1 of 4 done 2026-10-05: tokens checked when sent; legacy PIN workers still trusted until enforcement).
 2. **Remove the hardcoded Supabase URL/anon key** from the 4 remaining files (and consider rotating the key).
 3. **Widen the safety net** — add a linter and a few browser smoke tests for the main flows.
 

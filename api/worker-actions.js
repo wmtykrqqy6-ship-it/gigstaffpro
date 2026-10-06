@@ -17,6 +17,7 @@ import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
 import { handleRouteCheck, handleRouteStopStatus } from './_lib/routeActions.js';
 import { handleHideEvent, handleUnhideEvent, handleListHiddenEvents } from './_lib/hiddenEvents.js';
 import { handleSetMeetingPoint } from './_lib/meetingPoint.js';
+import { bearerToken, resolveWorkerIdentity, decideWorkerAccess, workerAuthEnforced } from './_lib/verifyWorker.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -549,6 +550,23 @@ export default async function handler(req, res) {
       return res.status(429).json({ ok: false, error: 'Too many attempts. Please try again later.' });
     }
   }
+
+  // Worker identity (docs/WORKER_AUTH.md). A worker logged in with the
+  // newer 6-digit-PIN login sends their Supabase Auth token; if they do, the
+  // workerId must be theirs. Requests without a token (legacy 4-digit PIN)
+  // still work until WORKER_AUTH_ENFORCE=true is set (rollout step 4).
+  let identity;
+  try {
+    identity = await resolveWorkerIdentity(supabase, bearerToken(req));
+  } catch (err) {
+    console.error('worker-actions identity lookup failed:', err?.message || err);
+    identity = { kind: 'invalid' };
+  }
+  const access = decideWorkerAccess({ action, claimedWorkerId: params.workerId, identity, enforce: workerAuthEnforced() });
+  if (!access.allow) {
+    return res.status(access.status).json({ ok: false, error: access.error });
+  }
+  console.log(`worker-actions ${action}: ${access.mode}`); // rollout progress in Vercel logs
 
   try {
     let result;

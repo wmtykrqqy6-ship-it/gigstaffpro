@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { workerFetch } from '../utils/workerApi';
 import { MapPin, Crosshair } from 'lucide-react';
 import { useToast } from './ui/Toast';
 import { meetingPointOf, meetingPointWindowOpen } from '../utils/meetingPoint';
@@ -32,7 +33,7 @@ export default function MeetingPointCard({ event, worker, canSet = false, classN
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       try {
-        const res = await fetch('/api/worker-actions', {
+        const res = await workerFetch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'setMeetingPoint', workerId: worker.id, eventId: event.id, lat, lng, description: note })
