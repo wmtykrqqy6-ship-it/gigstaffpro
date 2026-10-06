@@ -39,6 +39,18 @@ on" count (`kind: 'status'`), so you know who still needs a text.
 
 Ideas for later: standby promotion ("a spot opened up"), meeting point set, application approved.
 
+## App name = the business's name (2026-10-06)
+
+Settings → System → **Business Name** (`settings.business_name`, `src/utils/businessName.js`, tested)
+names the installed app. It's shown under the home-screen icon, in the browser tab, and as
+"from <name>" on notifications. GigStaffPro is meant to become a SaaS, so each business sets its own;
+"GigStaffPro" stays the product name.
+
+The static `public/manifest.webmanifest` (GigStaffPro) is the fallback. At startup the page swaps in
+a manifest built from the business name (a `blob:` URL with absolute URLs) and sets the iPhone
+`apple-mobile-web-app-title`. A phone that already installed the app keeps the old name until the
+app is removed and added again.
+
 ## How it works
 
 - **`public/manifest.webmanifest`, `public/icons/*`, and the `index.html` tags** make the site

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, CheckCircle, XCircle, MapPin, Save, ToggleLeft, ToggleRight, Building2, Phone, Mail, User, ParkingCircle, Tag, Calendar, DollarSign, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { getHostLabel, setHostLabel } from '../../utils/hostLabelHelper';
+import { getBusinessName, setBusinessName, PRODUCT_NAME } from '../../utils/businessName';
 import { getPayRateKey } from '../../utils/positionHelpers';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -238,6 +239,10 @@ export default function SettingsView({
   const notify = useToast();
   const [activeTab, setActiveTab] = useState('venues');
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
+  const [businessNameValue, setBusinessNameValue] = useState(() => {
+    const n = getBusinessName();
+    return n === PRODUCT_NAME ? '' : n;
+  });
   const [hostLabelSaved, setHostLabelSaved] = useState(false);
 
   const handleSaveHostLabel = async () => {
@@ -1903,6 +1908,27 @@ export default function SettingsView({
             <p className="text-sm text-gray-500 mt-0.5">Configure app-wide preferences. Click Save All at the bottom when done.</p>
           </div>
 
+          {/* Business Name -- the installed app's name (SaaS-ready) */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Business Name</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Your company's name. Workers see it as the app's name: under the home-screen icon and as "from {businessNameValue.trim() || PRODUCT_NAME}" on notifications.
+                  Phones that already installed the app keep the old name until it's removed and added again.
+                </p>
+              </div>
+              <input
+                type="text"
+                value={businessNameValue}
+                onChange={(e) => setBusinessNameValue(e.target.value)}
+                maxLength={40}
+                placeholder={PRODUCT_NAME}
+                className="w-56 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm flex-shrink-0"
+              />
+            </div>
+          </div>
+
           {/* Team Leader Label */}
           <div className="px-6 py-5 border-b border-gray-100">
             <div className="flex items-start justify-between gap-6">
@@ -2071,6 +2097,7 @@ export default function SettingsView({
                 setSaving(true);
                 try {
                   await setHostLabel(hostLabelValue);
+                  await setBusinessName(businessNameValue);
                   await saveRankAccessSettings();
                   await saveTimeSettings();
                   const { data: existingPmt } = await supabase.from('settings').select('*').eq('setting_key', 'payment_tracking_enabled').single();

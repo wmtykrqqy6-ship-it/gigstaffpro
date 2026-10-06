@@ -4,6 +4,11 @@ import App from './App.jsx'
 import { ConfirmProvider } from './components/ui/ConfirmDialog.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import './index.css'
+import { applyAppBranding } from './utils/businessName'
+
+// Name the app after the business (cached from Settings -> System) before
+// anything renders; App refreshes it from the server at startup.
+applyAppBranding()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
