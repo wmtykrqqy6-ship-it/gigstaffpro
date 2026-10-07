@@ -150,7 +150,6 @@ export default function WorkerPortalView({  loggedInWorker,
     const confirm = useConfirm();
     const notify = useToast();
 
-    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [expandedRoster, setExpandedRoster] = useState(new Set());
 
@@ -648,6 +647,34 @@ export default function WorkerPortalView({  loggedInWorker,
           />
         ) : (
           <>
+        {currentTab !== 'myevents' && (<>
+        {/* Next shift at a glance -- the full schedule lives in My Events */}
+        {upcomingAssignments.length > 0 && (() => {
+          const next = upcomingAssignments[0];
+          const d = parseDateSafe(next.event.date);
+          const today = new Date();
+          const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+          const when = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          return (
+            <button
+              onClick={() => onTabChange?.('myevents')}
+              className="w-full text-left bg-white rounded-lg shadow p-4 flex items-center gap-3 hover:bg-gray-50"
+            >
+              <Calendar size={22} className="text-red-900 flex-shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Your next shift</span>
+                <span className="block font-semibold text-gray-900 truncate">{next.event.name}</span>
+                <span className="block text-sm text-gray-600">
+                  {when}{next.event.time ? ` · ${formatTime(next.event.time, timeFormat)}` : ''} · {getPositionLabel(next.position)}
+                </span>
+              </span>
+              <span className="text-sm font-medium text-red-900 flex-shrink-0 whitespace-nowrap">
+                My Events ({upcomingAssignments.length}) ›
+              </span>
+            </button>
+          );
+        })()}
+
         {/* One slim line if they're on a vehicle today/tomorrow -> Logistics tab */}
         <RouteNotice worker={currentWorker} onOpen={() => onTabChange?.('logistics')} />
 
@@ -997,36 +1024,27 @@ export default function WorkerPortalView({  loggedInWorker,
             </div>
           </div>
         )}
+        </>)}
 
-        {/* Upcoming Events */}
+        {currentTab === 'myevents' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">My Events</h2>
+            <p className="text-sm text-gray-600 mt-1">Your upcoming shifts: check in, switch positions, or cancel. Past events are below.</p>
+          </div>
+        )}
+
+        {/* Upcoming Events -- calendar at the bottom of the Dashboard, list in My Events */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-gray-900">Your Schedule</h3>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                  viewMode === 'calendar'
-                    ? 'bg-red-900 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Calendar
+            <h3 className="text-xl font-bold text-gray-900">{currentTab === 'myevents' ? 'Upcoming' : 'Your Schedule'}</h3>
+            {currentTab !== 'myevents' && upcomingAssignments.length > 0 && (
+              <button onClick={() => onTabChange?.('myevents')} className="text-sm font-medium text-red-900 hover:underline">
+                List view ›
               </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                  viewMode === 'list'
-                    ? 'bg-red-900 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                List
-              </button>
-            </div>
+            )}
           </div>
 
-          {viewMode === 'calendar' ? (
+          {currentTab !== 'myevents' ? (
             /* Calendar View */
             <div>
               {/* Month Navigation */}
@@ -1471,8 +1489,8 @@ export default function WorkerPortalView({  loggedInWorker,
           )}
         </div>
 
-        {/* Past Events */}
-        {pastAssignments.length > 0 && (
+        {/* Past Events (My Events tab) */}
+        {currentTab === 'myevents' && pastAssignments.length > 0 && (
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Past Events</h3>
             <div className="space-y-3">

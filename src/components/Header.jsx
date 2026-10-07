@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, LogOut, Menu, X, User, Calendar, History, MapPin, ChevronDown, Truck, Package } from 'lucide-react';
+import { Bell, LogOut, Menu, X, User, Calendar, CalendarCheck, History, MapPin, ChevronDown, Truck, Package } from 'lucide-react';
 
 export default function Header({
   userRole,
@@ -122,6 +122,13 @@ export default function Header({
                     >
                       <Calendar size={18} />
                       <span>Dashboard</span>
+                    </button>
+                    <button
+                      onClick={() => { onTabChange('myevents'); setShowMenu(false); }}
+                      className={`w-full text-left px-4 py-2 flex items-center space-x-2 transition-colors ${currentTab === 'myevents' ? 'bg-red-50 text-red-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <CalendarCheck size={18} />
+                      <span>My Events</span>
                     </button>
                     <button
                       onClick={() => { onTabChange('profile'); setShowMenu(false); }}

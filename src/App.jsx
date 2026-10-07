@@ -398,7 +398,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Event Tomorrow!',
               message: `${event.name} at ${formatTime(event.time, timeFormat)}`,
               timestamp: new Date().toISOString(),
-              action: () => setWorkerTab('dashboard') // their shift cards
+              action: () => setWorkerTab('myevents') // their shift cards
             });
           }
         }
@@ -426,7 +426,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Application Approved!',
               message: `You're confirmed for ${event.name}`,
               timestamp: assignment.updated_at,
-              action: () => setWorkerTab('dashboard')
+              action: () => setWorkerTab('myevents')
             });
           }
         }
@@ -1722,7 +1722,7 @@ setAppPositions(storedPositions);
         event={openMessage?.event_id ? events.find(e => e.id === openMessage.event_id) : null}
         timeFormat={timeFormat}
         onClose={() => setOpenMessage(null)}
-        onViewShifts={userRole === 'worker' ? () => { setOpenMessage(null); setWorkerTab('dashboard'); } : null}
+        onViewShifts={userRole === 'worker' ? () => { setOpenMessage(null); setWorkerTab('myevents'); } : null}
       />
       <NotificationsModal
   open={showNotifications}
