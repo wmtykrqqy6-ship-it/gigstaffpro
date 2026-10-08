@@ -152,6 +152,8 @@ export default function WorkerPortalView({  loggedInWorker,
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [expandedRoster, setExpandedRoster] = useState(new Set());
+    // My Events list: which shift cards are opened up (today's start open)
+    const [openShiftCards, setOpenShiftCards] = useState({}); // { assignmentId: true|false }
 
     // Other confirmed/approved workers on the same event, excluding the current worker.
     // Only surfaces once a worker's own spot is filled (isAssignmentFilled) — someone
@@ -1218,6 +1220,9 @@ export default function WorkerPortalView({  loggedInWorker,
                 const isToday = daysUntil === 0;
                 const isTomorrow = daysUntil === 1;
                 const canCancel = daysUntil >= 7;
+                // Compact by default; today's shift starts open (meeting point, parking...)
+                const isOpen = openShiftCards[assignment.id] ?? isToday;
+                const toggleOpen = () => setOpenShiftCards(prev => ({ ...prev, [assignment.id]: !isOpen }));
                 
                 return (
                   <div 
@@ -1245,9 +1250,12 @@ export default function WorkerPortalView({  loggedInWorker,
                         </div>
                         <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">{getPositionLabel(assignment.position)}</span>
                       </div>
+                      {paymentTrackingEnabled && assignment.total_pay > 0 && (
+                        <span className="text-base font-bold text-green-600 flex-shrink-0 ml-2">${assignment.total_pay.toFixed(2)}</span>
+                      )}
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-sm text-gray-700">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-1 md:gap-3 mt-2 text-sm text-gray-700">
                       <div className="flex items-center space-x-2">
                         <Calendar size={16} className="text-gray-500" />
                         <span>
@@ -1272,13 +1280,6 @@ export default function WorkerPortalView({  loggedInWorker,
                     </div>
 
                     <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-2">
-                      <a
-                        href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
-                      >
-                        <Calendar size={14} />
-                        <span>Add to Calendar</span>
-                      </a>
                       {assignment.checked_in_at ? (
                         <span className="text-green-700 text-sm font-medium inline-flex items-center space-x-1">
                           <CheckCircle size={14} />
@@ -1293,7 +1294,38 @@ export default function WorkerPortalView({  loggedInWorker,
                           <span>Check In</span>
                         </button>
                       ) : null}
+                      <button
+                        onClick={toggleOpen}
+                        className="ml-auto text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
+                        aria-expanded={isOpen}
+                      >
+                        {isOpen ? 'Hide details' : 'Details'}
+                        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
+
+                    {/* GPS check-in (shows itself only around shift time) */}
+                    <CheckInSection
+                      assignment={assignment}
+                      checkIns={checkIns}
+                      checkingIn={checkingIn}
+                      showManualCheckIn={showManualCheckIn}
+                      manualNotes={manualNotes}
+                      setManualNotes={setManualNotes}
+                      setShowManualCheckIn={setShowManualCheckIn}
+                      handleCheckIn={handleCheckIn}
+                      handleManualCheckIn={handleManualCheckIn}
+                      manualCheckInInfo={manualCheckInInfo}
+                    />
+
+                    {isOpen && (<>
+                    <a
+                      href={`/api/calendar-event?event_id=${assignment.event_id}&position=${encodeURIComponent(getPositionLabel(assignment.position))}`}
+                      className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center space-x-1"
+                    >
+                      <Calendar size={14} />
+                      <span>Add to Calendar</span>
+                    </a>
 
                     {assignment.event.address && (
                       <div className="mt-3 p-3 bg-white rounded border border-gray-200">
@@ -1385,20 +1417,6 @@ export default function WorkerPortalView({  loggedInWorker,
                       </div>
                     )}
 
-                    {/* Check-in Button */}
-                    <CheckInSection
-                      assignment={assignment}
-                      checkIns={checkIns}
-                      checkingIn={checkingIn}
-                      showManualCheckIn={showManualCheckIn}
-                      manualNotes={manualNotes}
-                      setManualNotes={setManualNotes}
-                      setShowManualCheckIn={setShowManualCheckIn}
-                      handleCheckIn={handleCheckIn}
-                      handleManualCheckIn={handleManualCheckIn}
-                      manualCheckInInfo={manualCheckInInfo}
-                    />
-
                     {/* Switch Position Section */}
                     {(() => {
                       // Get available positions for this event
@@ -1480,6 +1498,7 @@ export default function WorkerPortalView({  loggedInWorker,
                         {daysUntil} day{daysUntil !== 1 ? 's' : ''} away
                       </div>
                     </div>
+                    </>)}
                   </div>
                 );
               })}
