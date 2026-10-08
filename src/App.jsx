@@ -161,20 +161,33 @@ const GigStaffPro = () => {
     localStorage.setItem('gigstaffpro_active_location', locationId);
   };
 
-  // Browser back/forward button support
+  // Browser back/forward button support. Each admin view and each worker
+  // tab (Dashboard, My Events, Profile, Logistics...) is its own history
+  // entry, so Back returns to the previous screen instead of leaving the site.
   const navigate = (view) => {
-    window.history.pushState({ view }, '', window.location.pathname);
+    if (view === currentView) return;
+    window.history.pushState({ view }, '', window.location.pathname + window.location.search);
     sessionStorage.setItem('currentView', view);
     setCurrentView(view);
   };
 
+  const goWorkerTab = (tab) => {
+    if (tab === workerTab) return;
+    window.history.pushState({ workerTab: tab }, '', window.location.pathname + window.location.search);
+    setWorkerTab(tab);
+  };
+
   useEffect(() => {
     // Set initial history entry so back works from the first view
-    window.history.replaceState({ view: 'dashboard' }, '', window.location.pathname);
+    window.history.replaceState({ view: currentView, workerTab: 'dashboard' }, '', window.location.pathname + window.location.search);
 
     const handlePopState = (e) => {
       if (e.state?.view) {
         setCurrentView(e.state.view);
+        sessionStorage.setItem('currentView', e.state.view);
+      }
+      if (e.state?.workerTab) {
+        setWorkerTab(e.state.workerTab);
       }
     };
 
@@ -217,7 +230,7 @@ const GigStaffPro = () => {
       setShowNotifications(true);
       params.delete('inbox');
       const qs = params.toString();
-      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+      window.history.replaceState(window.history.state, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
     }
   }, [userRole, loggedInWorker?.id]);
 
@@ -269,7 +282,7 @@ const saveDismissedNotificationIds = (ids) => {
             title: 'New Application',
             message: `${worker.name} applied for ${event.name}`,
             timestamp: app.applied_at || app.created_at,
-            action: () => setCurrentView('applications')
+            action: () => navigate('applications')
           });
         }
       });
@@ -285,7 +298,7 @@ const saveDismissedNotificationIds = (ids) => {
             title: 'New Worker Signed Up',
             message: `${worker.name} created an account`,
             timestamp: worker.created_at,
-            action: () => setCurrentView('staff')
+            action: () => navigate('staff')
           });
         }
       });
@@ -303,7 +316,7 @@ const saveDismissedNotificationIds = (ids) => {
             title: 'Standby Worker Auto-Promoted',
             message: `${worker.name} was moved from standby to ${getPositionLabel(promo.position)} for ${event.name}`,
             timestamp: promo.promoted_at,
-            action: () => setCurrentView('events')
+            action: () => navigate('events')
           });
         }
       });
@@ -398,7 +411,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Event Tomorrow!',
               message: `${event.name} at ${formatTime(event.time, timeFormat)}`,
               timestamp: new Date().toISOString(),
-              action: () => setWorkerTab('myevents') // their shift cards
+              action: () => goWorkerTab('myevents') // their shift cards
             });
           }
         }
@@ -426,7 +439,7 @@ const saveDismissedNotificationIds = (ids) => {
               title: 'Application Approved!',
               message: `You're confirmed for ${event.name}`,
               timestamp: assignment.updated_at,
-              action: () => setWorkerTab('myevents')
+              action: () => goWorkerTab('myevents')
             });
           }
         }
@@ -1322,7 +1335,7 @@ setAppPositions(storedPositions);
           onReloadAssignments={loadAssignments}
           onReloadWorker={reloadLoggedInWorker}
           currentTab={workerTab}
-          onTabChange={setWorkerTab}
+          onTabChange={goWorkerTab}
           workerAuthMode={workerAuthMode}
         />
       );
@@ -1699,7 +1712,7 @@ setAppPositions(storedPositions);
   onLogout={handleLogout}
   onGoDashboard={() => navigate('dashboard')}
   currentTab={workerTab}
-  onTabChange={setWorkerTab}
+  onTabChange={goWorkerTab}
   showLogisticsTab={userRole === 'worker' && hasLogisticsRole(loggedInWorker, positions)}
   showWarehouseTab={userRole === 'worker' && isWarehouseWorker(loggedInWorker, positions)}
   locations={locations}
@@ -1722,7 +1735,7 @@ setAppPositions(storedPositions);
         event={openMessage?.event_id ? events.find(e => e.id === openMessage.event_id) : null}
         timeFormat={timeFormat}
         onClose={() => setOpenMessage(null)}
-        onViewShifts={userRole === 'worker' ? () => { setOpenMessage(null); setWorkerTab('myevents'); } : null}
+        onViewShifts={userRole === 'worker' ? () => { setOpenMessage(null); goWorkerTab('myevents'); } : null}
       />
       <NotificationsModal
   open={showNotifications}
