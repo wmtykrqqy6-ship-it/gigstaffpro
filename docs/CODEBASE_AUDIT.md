@@ -111,7 +111,8 @@
 3. ✅ Anon writes to `pay_rates`, `settings`, `travel_tiers`, `bonuses`, `events`, `assignments`, `workers`, `location_pay_rates` and all logistics tables require `is_admin()`. `workers.pin_hash` not readable; `rank`/`reliability` only admin-writable.
 4. ✅ Cron endpoints (`send-shift-reminders`, `send-availability-notifications`) require `x-cron-secret`. ❓ `api/calendar-event.js` has no auth check — it only builds `.ics` files for calendar links, so likely fine, but it also carries a hardcoded key.
 5. ✅ **Database backups** — nightly encrypted `pg_dump` via GitHub Actions (`backup-database.yml`, 90-day retention; see `docs/BACKUPS.md`). First run succeeded 2026-10-03. A test decrypt with the saved passphrase is still worth doing once.
-6. ✅ `.env` gitignored; holds only the browser Google Places key (confirm it's referrer-restricted in Google Cloud).
+6. ✅ `.env` gitignored; holds only the browser Google Places key (referrer-restricted to gigstaffpro.com / www, confirmed 2026-10-05).
+7. ⚠️ **Dependency vulnerabilities (`npm audit`).** 2026-10-13: `npm audit fix` (compatible updates only, lockfile only) brought **production dependencies to 0** (`ws` inside `@supabase/realtime-js` was the one) and the total from 21 to 13. The remaining 13 (2 critical, 6 high, 5 moderate) are all **dev/build tooling**: Vitest 2, Vite 5, Tailwind 3 and their helpers. They run only locally, in CI and during the Vercel build, not in the live app, and the critical ones are in Vitest's UI server and worker pool, which aren't used. Clearing them needs major upgrades (Vite 8, Vitest 5, Tailwind 4); plan that as its own project, since Tailwind 4 changes styling.
 
 ---
 
