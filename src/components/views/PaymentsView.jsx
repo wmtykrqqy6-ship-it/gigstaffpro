@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { DollarSign, CheckCircle, Clock, Download, AlertCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, Clock, Download, AlertCircle, Gift } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { getPositionLabel } from '../../utils/positionHelpers';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import ClientTipsModal from '../modals/ClientTipsModal';
+import { amountOwed, tipOf } from '../../utils/tipHelpers';
 
 export default function PaymentsView({
   assignments,
@@ -12,7 +14,8 @@ export default function PaymentsView({
   events,
   timeFormat,
   paymentTrackingEnabled,
-  onReloadAssignments
+  onReloadAssignments,
+  onReloadEvents
 }) {
     const confirm = useConfirm();
     const notify = useToast();
@@ -27,6 +30,9 @@ export default function PaymentsView({
     const [selectedAssignments, setSelectedAssignments] = useState([]);
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const [exportingCSV, setExportingCSV] = useState(false);
+    // Client Tips modal: null = closed, '' = open with no event chosen,
+    // an event id = open on that event.
+    const [tipsEventId, setTipsEventId] = useState(null);
 
     // Get all assignments with payment data
     const assignmentsWithDetails = assignments
@@ -96,11 +102,11 @@ export default function PaymentsView({
     // Calculate totals
     const totalOwed = filteredAssignments
       .filter(a => a.payment_status === 'pending')
-      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+      .reduce((sum, a) => sum + amountOwed(a), 0);
 
     const totalPaid = filteredAssignments
       .filter(a => a.payment_status === 'paid')
-      .reduce((sum, a) => sum + (a.total_pay || 0), 0);
+      .reduce((sum, a) => sum + amountOwed(a), 0);
 
     const markAsPaid = async (assignmentId) => {
       if (!(await confirm('Mark this payment as paid?'))) return;
@@ -243,7 +249,7 @@ export default function PaymentsView({
             };
           }
           grouped[eventId].assignments.push(assignment);
-          grouped[eventId].totalPay += assignment.total_pay || 0;
+          grouped[eventId].totalPay += amountOwed(assignment);
           if (assignment.payment_status === 'pending') grouped[eventId].pendingCount++;
           if (assignment.payment_status === 'paid') grouped[eventId].paidCount++;
         });
@@ -262,7 +268,7 @@ export default function PaymentsView({
             };
           }
           grouped[workerId].assignments.push(assignment);
-          grouped[workerId].totalPay += assignment.total_pay || 0;
+          grouped[workerId].totalPay += amountOwed(assignment);
           if (assignment.payment_status === 'pending') grouped[workerId].pendingCount++;
           if (assignment.payment_status === 'paid') grouped[workerId].paidCount++;
         });
@@ -293,6 +299,8 @@ export default function PaymentsView({
           'Lake Geneva Bonus': (assignment.lake_geneva_bonus || 0).toFixed(2),
           'Holiday Multiplier': assignment.holiday_multiplier || 1.0,
           'Total Pay': (assignment.total_pay || 0).toFixed(2),
+          'Tips': tipOf(assignment).toFixed(2),
+          'Total With Tips': amountOwed(assignment).toFixed(2),
           'Payment Status': assignment.payment_status || 'pending',
           'Paid Date': assignment.paid_at ? new Date(assignment.paid_at).toLocaleDateString('en-US') : ''
         }));
@@ -381,7 +389,7 @@ export default function PaymentsView({
             grouped[key] = { name: a.worker.name, events: new Set(), total: 0 };
           }
           grouped[key].events.add(a.event.name);
-          grouped[key].total += a.total_pay || 0;
+          grouped[key].total += amountOwed(a);
         });
 
       const rows = Object.values(grouped)
@@ -409,22 +417,26 @@ export default function PaymentsView({
         .forEach(a => {
           const key = a.worker_id;
           if (!grouped[key]) {
-            grouped[key] = { name: a.worker.name, events: new Set(), hours: 0 };
+            grouped[key] = { name: a.worker.name, events: new Set(), hours: 0, tips: 0 };
           }
           grouped[key].events.add(a.event.name);
           grouped[key].hours += a.hours || 0;
+          grouped[key].tips += tipOf(a);
         });
 
       // Deliberately no dollar amount here -- QuickBooks Payroll computes
       // an employee's actual check (withholding, taxes) from hours, not
       // this app. Showing a "total pay" number here would look like a
-      // final check amount when it isn't one.
+      // final check amount when it isn't one. Client tips are the exception:
+      // payroll needs them as their own dollar amount (tips are reported
+      // as tips, not hours), so they get a separate column.
       const rows = Object.values(grouped)
         .sort((a, b) => a.name.localeCompare(b.name))
         .map(g => ({
           'Worker Name': g.name,
           'Event(s)': [...g.events].join('; '),
-          'Hours': g.hours.toFixed(2)
+          'Hours': g.hours.toFixed(2),
+          'Tips': g.tips.toFixed(2)
         }));
 
       if (rows.length === 0) {
@@ -443,10 +455,18 @@ export default function PaymentsView({
           <h2 className="text-3xl font-bold text-gray-900">Payment Tracking</h2>
           <div className="flex flex-wrap gap-2">
             <button
+              onClick={() => setTipsEventId(filterEvent !== 'all' ? filterEvent : '')}
+              className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 font-medium flex items-center space-x-2"
+              title="Enter a tip the client added to an event and split it evenly among the staff"
+            >
+              <Gift size={18} />
+              <span>Client Tips</span>
+            </button>
+            <button
               onClick={exportContractorChecks}
               disabled={filteredAssignments.length === 0}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              title="One row per contractor, total pay summed across everything they worked in the current filter -- filter to one event first to match how checks get printed"
+              title="One row per contractor, total pay plus client tips summed across everything they worked in the current filter -- filter to one event first to match how checks get printed"
             >
               <Download size={18} />
               <span>Contractor Check Summary</span>
@@ -455,7 +475,7 @@ export default function PaymentsView({
               onClick={exportEmployeeHours}
               disabled={filteredAssignments.length === 0}
               className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              title="Hours only, for QuickBooks Payroll -- no dollar amount, since payroll calculates the actual check"
+              title="Hours and client tips for QuickBooks Payroll -- no pay amount, since payroll calculates the actual check"
             >
               <Download size={18} />
               <span>Employee Hours</span>
@@ -786,10 +806,11 @@ export default function PaymentsView({
                         {assignment.hours || 0} hrs
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-bold text-gray-900">${(assignment.total_pay || 0).toFixed(2)}</div>
-                        {assignment.total_pay > 0 && (
+                        <div className="text-sm font-bold text-gray-900">${amountOwed(assignment).toFixed(2)}</div>
+                        {(assignment.total_pay > 0 || tipOf(assignment) > 0) && (
                           <div className="text-xs text-gray-500">
                             Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                            {tipOf(assignment) > 0 && <> • <span className="text-green-700">Tips: ${tipOf(assignment).toFixed(2)}</span></>}
                           </div>
                         )}
                       </td>
@@ -858,6 +879,17 @@ export default function PaymentsView({
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-gray-900">${group.totalPay.toFixed(2)}</p>
+                      {groupBy === 'event' && (
+                        <button
+                          onClick={() => setTipsEventId(group.event.id)}
+                          className="text-xs text-red-900 hover:underline font-medium flex items-center gap-1 ml-auto"
+                        >
+                          <Gift size={12} />
+                          {Number(group.event.client_tip_total) > 0
+                            ? `Tips: $${Number(group.event.client_tip_total).toFixed(2)} (edit)`
+                            : 'Add client tips'}
+                        </button>
+                      )}
                       <div className="flex items-center space-x-2 text-sm mt-1">
                         {group.pendingCount > 0 && (
                           <span className="text-yellow-600">{group.pendingCount} pending</span>
@@ -899,11 +931,12 @@ export default function PaymentsView({
                         )}
                         <p className="text-xs text-gray-500 mt-1">
                           {assignment.hours || 0} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                          {tipOf(assignment) > 0 && <> • <span className="text-green-700">Tips: ${tipOf(assignment).toFixed(2)}</span></>}
                         </p>
                       </div>
                       <div className="text-right flex items-center space-x-4">
                         <div>
-                          <p className="text-lg font-bold text-gray-900">${(assignment.total_pay || 0).toFixed(2)}</p>
+                          <p className="text-lg font-bold text-gray-900">${amountOwed(assignment).toFixed(2)}</p>
                           {assignment.paid_at && (
                             <p className="text-xs text-gray-500">
                               Paid {new Date(assignment.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -937,6 +970,18 @@ export default function PaymentsView({
               </div>
             )}
           </div>
+        )}
+        {tipsEventId !== null && (
+          <ClientTipsModal
+            events={events}
+            assignments={assignments}
+            workers={workers}
+            initialEventId={tipsEventId}
+            onClose={() => setTipsEventId(null)}
+            onSaved={async () => {
+              await Promise.all([onReloadAssignments(), onReloadEvents && onReloadEvents()]);
+            }}
+          />
         )}
       </div>
     );

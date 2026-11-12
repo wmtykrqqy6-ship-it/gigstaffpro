@@ -31,3 +31,22 @@ Every place that turns hours into pay uses `paidHours()`, so these always agree:
 
 The admin can still type a different number of hours in the calculator for a single assignment.
 Assignments recorded before the setting was saved keep the pay they were recorded with.
+
+## Client tips (2026-11-12)
+
+Sometimes a client adds a tip to an event. Decided with Dylan: **split evenly per person.**
+
+- Payments → **Client Tips** (or "Add client tips" on an event when grouped By Event). Pick the event,
+  type the total the client gave, and it's split evenly among everyone who worked it (not standby,
+  pending or declined). Leftover pennies go to the first names, so the shares add up exactly.
+- Untick anyone who shouldn't share; no-shows from the post-event report start unticked. Any share
+  can be typed over, but the shares must add up to the total before it saves.
+- Stored per shift in `assignments.tip_amount`, kept **separate** from `total_pay`: the holiday
+  multiplier never applies to tips, and W-2 employees' tips are reported to QuickBooks Payroll as
+  tips. The client's total is kept on `events.client_tip_total`.
+- What a worker is owed for a shift = `total_pay + tip_amount` (`amountOwed()` in
+  `src/utils/tipHelpers.js`). Payments totals, the Contractor Check Summary, and the worker's own pay
+  display all use it. The Employee Hours export gets a Tips column. The full CSV gets Tips and
+  Total With Tips columns.
+- If someone's tip changes after their shift was marked paid, saving moves that shift back to
+  Pending so the tip isn't missed.

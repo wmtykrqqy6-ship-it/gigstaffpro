@@ -16,6 +16,7 @@ import MeetingPointCard from '../MeetingPointCard';
 import PushSettings from '../PushSettings';
 import { isHostPosition } from '../../utils/meetingPoint';
 import { paidHours } from '../../utils/payHelpers';
+import { amountOwed, tipOf } from '../../utils/tipHelpers';
 import { isWarehouseWorker } from '../../utils/logistics/dispatch';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -1250,8 +1251,8 @@ export default function WorkerPortalView({  loggedInWorker,
                         </div>
                         <span className="bg-red-900 text-white text-xs px-2 py-1 rounded font-medium">{getPositionLabel(assignment.position)}</span>
                       </div>
-                      {paymentTrackingEnabled && assignment.total_pay > 0 && (
-                        <span className="text-base font-bold text-green-600 flex-shrink-0 ml-2">${assignment.total_pay.toFixed(2)}</span>
+                      {paymentTrackingEnabled && amountOwed(assignment) > 0 && (
+                        <span className="text-base font-bold text-green-600 flex-shrink-0 ml-2">${amountOwed(assignment).toFixed(2)}</span>
                       )}
                     </div>
                     
@@ -1405,14 +1406,14 @@ export default function WorkerPortalView({  loggedInWorker,
                     })()}
 
                     {/* Pay & Travel Pay */}
-                    {paymentTrackingEnabled && assignment.total_pay > 0 && (
+                    {paymentTrackingEnabled && amountOwed(assignment) > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-200">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-gray-700">Your Pay:</span>
-                          <span className="text-lg font-bold text-green-600">${assignment.total_pay.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-green-600">${amountOwed(assignment).toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-gray-600 mt-1">
-                          {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                          {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}{tipOf(assignment) > 0 && ` • Tips: $${tipOf(assignment).toFixed(2)}`}
                         </div>
                       </div>
                     )}
@@ -1830,14 +1831,14 @@ export default function WorkerPortalView({  loggedInWorker,
                           </div>
                         </div>
 
-                        {paymentTrackingEnabled && assignment.total_pay > 0 && (
+                        {paymentTrackingEnabled && amountOwed(assignment) > 0 && (
                           <div className="mt-3 pt-3 border-t">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium text-gray-700">Your Pay:</span>
-                              <span className="text-lg font-bold text-green-600">${assignment.total_pay.toFixed(2)}</span>
+                              <span className="text-lg font-bold text-green-600">${amountOwed(assignment).toFixed(2)}</span>
                             </div>
                             <div className="text-xs text-gray-600 mt-1">
-                              {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}
+                              {assignment.hours} hrs • Base: ${(assignment.base_pay || 0).toFixed(2)} • Travel: ${(assignment.travel_pay || 0).toFixed(2)}{tipOf(assignment) > 0 && ` • Tips: $${tipOf(assignment).toFixed(2)}`}
                             </div>
                           </div>
                         )}
