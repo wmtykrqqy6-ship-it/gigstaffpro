@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   itemKey, apportion, loadOrderOf, splitEventAcrossLoads, mergeItems, groupItems,
-  stopItems, buildLoadSheet, checkTypeForStop, expectedReturns, returnReport, pickupUnlocked
+  stopItems, buildLoadSheet, checkTypeForStop, expectedReturns, returnReport, pickupUnlocked,
+  itemsLeftOnRun, unloadPlan, carryoverByLoad
 } from './fieldViews';
 
 // Grand Geneva's real pull sheet (231581508), as event_equipment rows.
@@ -232,5 +233,91 @@ describe('pickupUnlocked (crew route)', () => {
   it('never holds back an event without a start time', () => {
     expect(pickupUnlocked('2026-10-06', null)).toBe(true);
     expect(pickupUnlocked(null, '19:30')).toBe(true);
+  });
+});
+
+describe('left on the truck from its last route', () => {
+  const key = (name, parent) => itemKey(name, parent);
+  // Saturday: Black (rB) did Small Party + its share of Geneva, and picked Geneva up.
+  const sat = () => {
+    const d = day();
+    return {
+      runs: [{ id: 'rB', truck_id: 'tBlack', run_date: '2026-11-08' }, { id: 'rY', truck_id: 'tYellow', run_date: '2026-11-08' }],
+      loads: d.loads, allocations: d.allocations, stops: STOPS
+    };
+  };
+  const satEquipment = day().equipmentByEvent;
+
+  it('a pickup that has not been checked leaves the planned gear on the truck', () => {
+    const left = itemsLeftOnRun({ id: 'rB' }, sat(), satEquipment, []);
+    expect(summary(left)).toEqual([
+      '5 Blackjack Table', '5 ↳ Chip Trays', '5 ↳ Double Decks of Cards',
+      '2 10ft Craps Table', '6 ↳ Chip Trays', '2 ↳ Craps Chip', '2 ↳ Craps Stick and Dice'
+    ]);
+  });
+
+  it('uses the crew’s returned counts, and adds what was not delivered', () => {
+    const checks = [
+      { stop_id: 'pG', item_key: key('10ft Craps Table'), check_type: 'returned', quantity: 1 },
+      // Small Party only took 1 of its 2 tables: the other rode home.
+      { stop_id: 'dS', item_key: key('Blackjack Table'), check_type: 'delivered', quantity: 1 }
+    ];
+    const left = itemsLeftOnRun({ id: 'rB' }, sat(), satEquipment, checks);
+    expect(left.find(i => i.name === '10ft Craps Table').quantity).toBe(1);
+    expect(left.find(i => i.name === 'Blackjack Table' && !i.isAccessory).quantity).toBe(6);
+  });
+
+  it('a run with no pickups leaves nothing', () => {
+    expect(itemsLeftOnRun({ id: 'rY' }, sat(), satEquipment, [])).toEqual([]);
+  });
+
+  it('unloadPlan keeps what the next trip needs and takes off the rest', () => {
+    const left = [
+      { key: key('Blackjack Table'), name: 'Blackjack Table', quantity: 5, isAccessory: false },
+      { key: key('Chip Trays', 'Blackjack Table'), name: 'Chip Trays', parentName: 'Blackjack Table', quantity: 5, isAccessory: true },
+      { key: key('10ft Craps Table'), name: '10ft Craps Table', quantity: 2, isAccessory: false }
+    ];
+    const next = [
+      { key: key('Blackjack Table'), name: 'Blackjack Table', quantity: 2, isAccessory: false },
+      { key: key('Blackjack Table'), name: 'Blackjack Table', quantity: 1, isAccessory: false },
+      { key: key('Chip Trays', 'Blackjack Table'), name: 'Chip Trays', parentName: 'Blackjack Table', quantity: 8, isAccessory: true }
+    ];
+    const { takeOff, keepOn } = unloadPlan(left, next);
+    expect(summary(keepOn)).toEqual(['3 Blackjack Table', '5 ↳ Chip Trays']);
+    expect(summary(takeOff)).toEqual(['2 Blackjack Table', '2 10ft Craps Table']);
+  });
+
+  it('carryoverByLoad finds the truck’s latest earlier run and compares with trip 1', () => {
+    const history = {
+      plan: {
+        ...sat(),
+        // An older Black run that shouldn't be used.
+        runs: [...sat().runs, { id: 'rOld', truck_id: 'tBlack', run_date: '2026-11-01' }]
+      },
+      equipmentByEvent: satEquipment,
+      checks: []
+    };
+    // Tuesday: Black takes 3 blackjack tables to a new party; a personal car runs too.
+    const plan = {
+      runs: [
+        { id: 'rT', truck_id: 'tBlack', run_date: '2026-11-11' },
+        { id: 'rP', truck_id: 'tCar', run_date: '2026-11-11', is_personal: true }
+      ],
+      loads: [{ id: 'T1', run_id: 'rT', sequence: 1 }, { id: 'T2', run_id: 'rT', sequence: 2 }, { id: 'P1', run_id: 'rP', sequence: 1 }],
+      allocations: [{ load_id: 'T1', event_id: 'eN', size_class: 'blackjack', quantity: 3 }],
+      stops: []
+    };
+    const equipment = { eN: [{ line_no: 1, item_name: 'Blackjack Table', size_class: 'blackjack', quantity: 3 }] };
+    const out = carryoverByLoad(plan.runs, plan, equipment, history);
+    expect(Object.keys(out)).toEqual(['T1']);
+    expect(out.T1.fromRun.id).toBe('rB');
+    expect(summary(out.T1.keepOn)).toEqual(['3 Blackjack Table']);
+    expect(out.T1.takeOff.find(i => i.name === 'Blackjack Table').quantity).toBe(2);
+    expect(out.T1.takeOff.find(i => i.name === '10ft Craps Table').quantity).toBe(2);
+  });
+
+  it('no earlier run means nothing to take off', () => {
+    const plan = { runs: [{ id: 'rT', truck_id: 'tWhite', run_date: '2026-11-11' }], loads: [{ id: 'T1', run_id: 'rT', sequence: 1 }], allocations: [], stops: [] };
+    expect(carryoverByLoad(plan.runs, plan, {}, { plan: sat(), equipmentByEvent: satEquipment, checks: [] })).toEqual({});
   });
 });
