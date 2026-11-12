@@ -1473,6 +1473,7 @@ setAppPositions(storedPositions);
           timeFormat={timeFormat}
           paymentTrackingEnabled={paymentTrackingEnabled}
           onReloadAssignments={loadAssignments}
+          onReloadEvents={loadEvents}
         />
       );
     }
