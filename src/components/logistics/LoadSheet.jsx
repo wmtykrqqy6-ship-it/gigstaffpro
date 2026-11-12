@@ -5,6 +5,7 @@ import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { checkLoad, orderRunStops } from '../../utils/logistics/dispatch';
 import { buildLoadSheet, groupItems } from '../../utils/logistics/fieldViews';
 import { STATUS_STYLES, TruckSwatch } from './CapacityDisplay';
+import UnloadFirst from './UnloadFirst';
 
 // Warehouse load sheet(s): one page per trip. Rendered in a portal on
 // <body> so that, with body.printing-sheet set, print CSS in index.css hides
@@ -12,7 +13,9 @@ import { STATUS_STYLES, TruckSwatch } from './CapacityDisplay';
 //
 // sheets: [{ load, run, truck }]
 // ctx:    { loads, allocations, equipmentByEvent } for the day
-export default function LoadSheet({ open, onClose, date, sheets = [], ctx, stops = [], eventsById = {}, workersById = {}, timeFormat }) {
+// carryover: { [loadId]: { fromRun, takeOff, keepOn } } -- what's still on the
+//            truck from its last route (carryoverByLoad), shown before loading
+export default function LoadSheet({ open, onClose, date, sheets = [], ctx, stops = [], eventsById = {}, workersById = {}, timeFormat, carryover = {} }) {
   useEffect(() => {
     if (!open) return undefined;
     document.body.classList.add('printing-sheet');
@@ -70,6 +73,11 @@ export default function LoadSheet({ open, onClose, date, sheets = [], ctx, stops
               {cap.reasons.length > 0 && (
                 <ul className="mb-3 text-xs text-yellow-800">{cap.reasons.map(r => <li key={r}>⚠ {r}</li>)}</ul>
               )}
+
+              <UnloadFirst
+                carryover={carryover[load.id]}
+                renderLine={(item, { accessory }) => <CheckLine quantity={item.quantity} name={item.name} bold={!accessory} />}
+              />
 
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Load in this order — last stop goes in first</p>
 
