@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Package, Printer, ChevronDown, ChevronRight, Car, CheckCircle, Circle, RefreshCw } from 'lucide-react';
 import { parseDateSafe, formatTime } from '../../utils/dateHelpers';
 import { orderRunStops, runLabel, isWarehouseWorker, isPersonalTruck } from '../../utils/logistics/dispatch';
-import { buildLoadSheet, groupItems } from '../../utils/logistics/fieldViews';
+import { buildLoadSheet, groupItems, carryoverByLoad } from '../../utils/logistics/fieldViews';
 import { TruckSwatch } from './CapacityDisplay';
 import LoadSheet from './LoadSheet';
-import { loadDispatchRange, loadEventEquipment, loadTrucks, isMissingSchemaError } from './logisticsData';
+import UnloadFirst from './UnloadFirst';
+import { loadDispatchRange, loadEventEquipment, loadTrucks, loadChecks, loadTruckHistory, isMissingSchemaError } from './logisticsData';
 
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const DAYS_AHEAD = 7;
@@ -34,10 +35,35 @@ export default function WarehouseLoading({ worker, positions = [], events = [], 
       const rows = await loadEventEquipment(eventIds);
       const equipmentByEvent = {};
       for (const r of rows) (equipmentByEvent[r.event_id] ||= []).push(r);
-      setData({ plan, trucks, equipmentByEvent });
+      // What's still on each truck from its last route. A truck's previous
+      // route can be earlier this week (already in `plan`, with today's
+      // check-offs) or before it (loadTruckHistory). Best effort: if this
+      // fails the sheets still show, just without "Take off first".
+      let carryover = {};
+      try {
+        const truckIds = plan.runs.filter(r => !r.is_personal).map(r => r.truck_id);
+        const [before, weekChecks] = await Promise.all([
+          loadTruckHistory(truckIds, ymd(start)),
+          loadChecks(plan.stops.map(s => s.id)).catch(err => { if (isMissingSchemaError(err)) return []; throw err; })
+        ]);
+        const history = {
+          plan: {
+            runs: [...before.plan.runs, ...plan.runs],
+            loads: [...before.plan.loads, ...plan.loads],
+            allocations: [...before.plan.allocations, ...plan.allocations],
+            stops: [...before.plan.stops, ...plan.stops]
+          },
+          equipmentByEvent: { ...before.equipmentByEvent, ...equipmentByEvent },
+          checks: [...before.checks, ...weekChecks]
+        };
+        carryover = carryoverByLoad(plan.runs, plan, equipmentByEvent, history);
+      } catch (err) {
+        console.error('Previous truck routes failed to load:', err);
+      }
+      setData({ plan, trucks, equipmentByEvent, carryover });
     } catch (err) {
       if (!isMissingSchemaError(err)) console.error('Warehouse loading view failed:', err);
-      setData({ plan: { runs: [], loads: [], allocations: [], stops: [] }, trucks: [], equipmentByEvent: {} });
+      setData({ plan: { runs: [], loads: [], allocations: [], stops: [] }, trucks: [], equipmentByEvent: {}, carryover: {} });
     } finally {
       setLoading(false);
     }
@@ -50,7 +76,7 @@ export default function WarehouseLoading({ worker, positions = [], events = [], 
 
   if (!allowed || !data) return null;
 
-  const { plan, trucks, equipmentByEvent } = data;
+  const { plan, trucks, equipmentByEvent, carryover } = data;
   const trucksById = Object.fromEntries(trucks.map(t => [t.id, t]));
   const ctx = { loads: plan.loads, allocations: plan.allocations, equipmentByEvent };
 
@@ -133,6 +159,12 @@ export default function WarehouseLoading({ worker, positions = [], events = [], 
                       {crew && !run.is_personal && <span className="text-sm text-gray-500">· {crew}</span>}
                     </div>
                     {run.notes && <p className="text-xs text-gray-700 bg-yellow-50 rounded px-2 py-1 mb-1"><span className="font-semibold">Notes:</span> {run.notes}</p>}
+                    <UnloadFirst
+                      carryover={carryover[load.id]}
+                      renderLine={(item, { accessory, list }) => (
+                        <ItemLine k={tickKey(load.id, list, item.key)} item={item} ticked={ticked} onToggle={toggle} small={accessory} />
+                      )}
+                    />
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Load in this order — last stop goes in first</p>
 
                     {blocks.map(block => {
@@ -181,6 +213,7 @@ export default function WarehouseLoading({ worker, positions = [], events = [], 
         eventsById={eventsById}
         workersById={workersById}
         timeFormat={timeFormat}
+        carryover={carryover}
       />
     </div>
   );

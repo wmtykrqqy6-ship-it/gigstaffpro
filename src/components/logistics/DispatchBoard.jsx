@@ -16,11 +16,12 @@ import {
   sequenceChanges, moveStop, planAddEventToLoad, crewRoles, isDriver, isSetUp, eligibleForSpot,
   isPersonalTruck, spotFor, runLabel, teamIds, planMoveEvent, monthStatuses
 } from '../../utils/logistics/dispatch';
+import { carryoverByLoad } from '../../utils/logistics/fieldViews';
 import { STATUS_STYLES, TruckSwatch, ZoneBar } from './CapacityDisplay';
 import {
   loadDispatchDay, loadDispatchRange, loadEventEquipment, createRun, updateRun, deleteRun, addLoad, deleteLoad,
   setAllocation, insertAllocations, deleteAllocationsFor, insertStops, updateStop, deleteStops,
-  resequenceStops, isMissingSchemaError, DISPATCH_MIGRATION
+  resequenceStops, isMissingSchemaError, DISPATCH_MIGRATION, loadTruckHistory
 } from './logisticsData';
 
 const dateOnly = (d) => (d ? String(d).split('T')[0] : '');
@@ -109,6 +110,22 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
   }, [date, dayEventIds]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Each planned truck's previous route, for "Take off first" on trip 1.
+  const truckIdsKey = [...new Set(day.runs.filter(r => !r.is_personal).map(r => r.truck_id))].sort().join(',');
+  const [truckHistory, setTruckHistory] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setTruckHistory(null);
+    loadTruckHistory(truckIdsKey ? truckIdsKey.split(',') : [], date)
+      .then(h => { if (live) setTruckHistory(h); })
+      .catch(err => console.error('Previous truck routes failed to load:', err));
+    return () => { live = false; };
+  }, [truckIdsKey, date]);
+  const carryover = useMemo(
+    () => (truckHistory ? carryoverByLoad(day.runs, day, equipmentByEvent, truckHistory) : {}),
+    [truckHistory, day, equipmentByEvent]
+  );
 
   // The calendar follows the selected day into other months (prev/next day).
   useEffect(() => {
@@ -490,6 +507,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
               onMoveStop={(stopId, dir) => handleMoveStop(run, stopId, dir)}
               onAddEveningStop={(type, eventId) => handleAddEveningStop(run, type, eventId)}
               onOpenLoadSheet={(load) => setSheetLoadIds([load.id])}
+              carryover={carryover}
               moveTargets={moveTargets}
               onMoveEvent={handleMoveEvent}
               truckOptions={run.is_personal ? [] : unplannedTrucks}
@@ -509,6 +527,7 @@ export default function DispatchBoard({ events = [], trucks = [], workers = [], 
         eventsById={eventsById}
         workersById={workersById}
         timeFormat={timeFormat}
+        carryover={carryover}
       />
       </div>
     </div>
@@ -524,7 +543,7 @@ function RunCard({
   truck, run, date, day, dayEvents, eventsById, equipmentByEvent, workers, positions, workersById, assignments,
   conflicts, timeFormat, label, onDeleteRun, onUpdateRun, onAddTrip, onDeleteTrip, onAddEvent,
   onRemoveEvent, onSetAllocation, onUpdateStop, onDeleteStop, onMoveStop, onAddEveningStop, onOpenLoadSheet,
-  moveTargets = [], onMoveEvent, truckOptions = [], onChangeTruck
+  moveTargets = [], onMoveEvent, truckOptions = [], onChangeTruck, carryover = {}
 }) {
   const [notes, setNotes] = useState(run.notes || '');
   useEffect(() => setNotes(run.notes || ''), [run.notes]);
@@ -688,6 +707,18 @@ function RunCard({
                 )}
               </span>
             </div>
+
+            {carryover[load.id]?.takeOff.length > 0 && (
+              <button
+                onClick={() => onOpenLoadSheet(load)}
+                className="mx-4 mb-2 block text-left text-xs text-orange-900 bg-orange-50 border border-orange-200 rounded px-2 py-1 hover:bg-orange-100"
+                title="Open the load sheet"
+              >
+                <span className="font-semibold">Take off first</span> (left from{' '}
+                {parseDateSafe(carryover[load.id].fromRun.run_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}):{' '}
+                {carryover[load.id].takeOff.filter(i => !i.isAccessory).map(i => `${i.quantity}× ${i.name}`).join(', ') || 'accessories only'}
+              </button>
+            )}
 
             {cap.status !== 'green' && (
               <div className="px-4 pb-2">

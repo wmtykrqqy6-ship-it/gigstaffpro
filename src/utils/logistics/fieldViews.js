@@ -247,3 +247,91 @@ export function returnReport(pickupStop, ctx, { stops = [], checks = [], runDate
     missing: short.map(l => ({ ...l, short: l.expected - (l.returned || 0) }))
   };
 }
+
+// ---- Left on the truck from its last route --------------------------------
+// Nothing records the truck being emptied, so the assumption (Dylan,
+// 2026-11-12) is: whatever a truck brought back on its last route is still
+// on it when it's next loaded. That's everything picked up (the crew's
+// returned counts once checked, otherwise what should have come back) plus
+// anything that went out but wasn't delivered (a delivery checked off short).
+
+// Items still on a vehicle when `run` ends. `plan` is that run's whole day
+// ({ loads, allocations, stops }) -- a split event's per-truck share depends
+// on the other trucks too.
+export function itemsLeftOnRun(run, plan, equipmentByEvent = {}, checks = []) {
+  const ctx = { loads: plan.loads || [], allocations: plan.allocations || [], equipmentByEvent };
+  const stops = (plan.stops || []).filter(s => s.run_id === run.id);
+  const lists = [];
+  for (const stop of stops) {
+    if (stop.stop_type === 'pickup') {
+      const returned = new Map(checks
+        .filter(c => c.stop_id === stop.id && c.check_type === 'returned')
+        .map(c => [c.item_key, c.quantity]));
+      lists.push(expectedReturns(stop, ctx, stops, checks)
+        .map(item => (returned.has(item.key) ? { ...item, quantity: returned.get(item.key) } : item)));
+    } else if (stop.stop_type === 'deliver') {
+      const delivered = new Map(checks
+        .filter(c => c.stop_id === stop.id && c.check_type === 'delivered')
+        .map(c => [c.item_key, c.quantity]));
+      lists.push(stopItems(stop, ctx)
+        .filter(item => delivered.has(item.key) && delivered.get(item.key) < item.quantity)
+        .map(item => ({ ...item, quantity: item.quantity - delivered.get(item.key) })));
+    }
+  }
+  return mergeItems(lists).filter(item => item.quantity > 0);
+}
+
+// Compare what's on the truck with what the next trip needs: lines the trip
+// also needs can stay on; the rest has to come off before loading.
+//   leftOver:  items from itemsLeftOnRun
+//   nextItems: every item on the next trip's load sheet
+// Returns { takeOff: item[], keepOn: item[] }
+export function unloadPlan(leftOver = [], nextItems = []) {
+  const need = new Map(mergeItems([nextItems]).map(i => [i.key, i.quantity]));
+  const takeOff = [];
+  const keepOn = [];
+  for (const item of leftOver) {
+    const keep = Math.min(item.quantity, need.get(item.key) || 0);
+    if (keep) {
+      keepOn.push({ ...item, quantity: keep });
+      need.set(item.key, need.get(item.key) - keep);
+    }
+    if (item.quantity > keep) takeOff.push({ ...item, quantity: item.quantity - keep });
+  }
+  return { takeOff, keepOn };
+}
+
+// For each truck run in `runs`, find the same truck's latest earlier run in
+// `history` and work out what has to come off before its first trip is
+// loaded. Personal vehicles are skipped (different cars, emptied by their
+// owners). Reloads (trip 2+) aren't covered: pickups happen after the last
+// delivery trip.
+//   runs:    the runs being loaded (with their day's loads/allocations/stops in `plan`)
+//   history: { plan, equipmentByEvent, checks } covering earlier runs (may overlap `plan`)
+// Returns { [loadId]: { fromRun, takeOff, keepOn } } for trip-1 loads with something left on.
+export function carryoverByLoad(runs, plan, equipmentByEvent, history) {
+  const out = {};
+  const ctx = { loads: plan.loads, allocations: plan.allocations, equipmentByEvent };
+  for (const run of runs) {
+    if (run.is_personal || !run.truck_id) continue;
+    const prev = (history.plan.runs || [])
+      .filter(r => r.truck_id === run.truck_id && !r.is_personal && r.run_date < run.run_date)
+      .sort((a, b) => b.run_date.localeCompare(a.run_date))[0];
+    if (!prev) continue;
+    const dayRunIds = new Set(history.plan.runs.filter(r => r.run_date === prev.run_date).map(r => r.id));
+    const loads = history.plan.loads.filter(l => dayRunIds.has(l.run_id));
+    const loadIds = new Set(loads.map(l => l.id));
+    const prevDay = {
+      loads,
+      allocations: history.plan.allocations.filter(a => loadIds.has(a.load_id)),
+      stops: history.plan.stops.filter(s => dayRunIds.has(s.run_id))
+    };
+    const leftOver = itemsLeftOnRun(prev, prevDay, history.equipmentByEvent, history.checks);
+    if (!leftOver.length) continue;
+    const first = plan.loads.filter(l => l.run_id === run.id).sort((a, b) => a.sequence - b.sequence)[0];
+    if (!first) continue;
+    const nextItems = buildLoadSheet(first, ctx, plan.stops).flatMap(b => b.items);
+    out[first.id] = { fromRun: prev, ...unloadPlan(leftOver, nextItems) };
+  }
+  return out;
+}

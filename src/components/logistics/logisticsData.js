@@ -221,3 +221,38 @@ export async function saveReturnCheck(row) {
     { onConflict: 'stop_id,item_key,check_type' }
   ));
 }
+
+// What's still on each truck from its last route (see carryoverByLoad in
+// fieldViews.js): for every truck in `truckIds`, its latest run before
+// `beforeDate`, with that whole day's plan, the crew's check-offs and the
+// equipment lists needed to name the items.
+// Returns { plan, equipmentByEvent, checks }.
+export async function loadTruckHistory(truckIds, beforeDate) {
+  const empty = { plan: { runs: [], loads: [], allocations: [], stops: [] }, equipmentByEvent: {}, checks: [] };
+  const ids = [...new Set(truckIds.filter(Boolean))];
+  if (!ids.length || !beforeDate) return empty;
+  const latest = await Promise.all(ids.map(id => supabase
+    .from('daily_runs')
+    .select('run_date')
+    .eq('truck_id', id)
+    .lt('run_date', beforeDate)
+    .order('run_date', { ascending: false })
+    .limit(1)
+    .then(must)));
+  const dates = [...new Set(latest.flatMap(rows => (rows || []).map(r => r.run_date)))];
+  if (!dates.length) return empty;
+  const allRuns = must(await supabase.from('daily_runs').select('*').in('run_date', dates)) || [];
+  const plan = await loadRunDetails(allRuns);
+  const eventIds = [...new Set([...plan.allocations.map(a => a.event_id), ...plan.stops.map(s => s.event_id)].filter(Boolean))];
+  const [rows, checks] = await Promise.all([
+    loadEventEquipment(eventIds),
+    // Check-offs need the field-views migration; without it, go by the plan.
+    loadChecks(plan.stops.map(s => s.id)).catch(err => {
+      if (isMissingSchemaError(err)) return [];
+      throw err;
+    })
+  ]);
+  const equipmentByEvent = {};
+  for (const r of rows) (equipmentByEvent[r.event_id] ||= []).push(r);
+  return { plan, equipmentByEvent, checks };
+}

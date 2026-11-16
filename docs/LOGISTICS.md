@@ -179,6 +179,16 @@ the pull sheet exactly). Anything loaded beyond the pull sheet shows as "(extra 
 trip). Events are listed in load order, last delivery stop first, with every table and accessory and a
 checkbox, plus the delivery order and the truck's notes. Printing shows only the sheet.
 
+**Take off first (2026-11-12).** A truck's first trip of the day shows what is still on it from that
+truck's last route, so the warehouse knows what to unload before loading. Nothing records a truck being
+emptied, so the rule is: whatever the truck brought back on its last route is still on it. That's
+everything picked up (the crew's returned counts once checked, otherwise what should have come back) plus
+anything that went out but wasn't delivered (a delivery checked off short). Lines the new load also needs
+are listed as "Already on the truck — leave on"; the rest is "Take off first". Shown on the printed load
+sheet, the worker Warehouse tab, and as an orange line on trip 1 on the Dispatch board. Personal vehicles
+and reload trips are skipped. No migration (`carryoverByLoad` / `itemsLeftOnRun` / `unloadPlan` in
+`fieldViews.js`, tested; `loadTruckHistory` in `logisticsData.js`).
+
 **Worker portal: Logistics and Warehouse tabs (2026-10-03, split 2026-10-04).** GigStaffPro is a
 staffing tool first, so the worker Dashboard stays about shifts. Delivery work lives in two separate
 items in the worker ☰ menu, one per job:
