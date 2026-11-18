@@ -12,6 +12,7 @@ import { coordsFromMapsUrl, pinUrl } from '../../utils/meetingPoint';
 import QuarterHourInput from '../ui/QuarterHourInput';
 import { roundToQuarterHour } from '../../utils/dateHelpers';
 import { useToast } from '../ui/Toast';
+import { computeLocalPriorityUntil, localPriorityActive, localPriorityTimeLeft, nearestLocationId, LOCAL_PRIORITY_HOURS } from '../../utils/localPriority';
 
 // Shared by AddEventModal.jsx and EditEventModal.jsx (both now thin wrappers
 // around this) -- create vs. edit mode is determined entirely by whether
@@ -69,6 +70,17 @@ export default function EventFormModal({
   // clobbering a value the admin deliberately chose.
   const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
   const [locations, setLocations] = useState([]);
+  // Local crew first (create mode): new events open only to workers whose
+  // primary market is the event's for LOCAL_PRIORITY_HOURS. See
+  // docs/LOCAL_PRIORITY.md.
+  const [localFirst, setLocalFirst] = useState(true);
+  // Create mode: the market is auto-picked as the nearest one to the address
+  // until the admin chooses one themselves.
+  const [locationManuallySet, setLocationManuallySet] = useState(false);
+  const [autoPickedLocation, setAutoPickedLocation] = useState(false);
+  // Edit mode: set once the admin presses "Open to everyone now".
+  const [releasedNow, setReleasedNow] = useState(false);
+  const [releasing, setReleasing] = useState(false);
   const [venues, setVenues] = useState([]);
   const [clients, setClients] = useState([]);
   const [clientSuggestions, setClientSuggestions] = useState([]);
@@ -92,7 +104,7 @@ export default function EventFormModal({
     if (!open) return;
     supabase
       .from('locations')
-      .select('id, name, city, state')
+      .select('id, name, city, state, address')
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => {
@@ -182,7 +194,17 @@ export default function EventFormModal({
       meeting_point_lng: event.meeting_point_lng || null
     });
     setEndTimeManuallySet(false);
+    setReleasedNow(false);
   }, [event]);
+
+  // Create mode: start each new event with local-first on and the market
+  // free to auto-pick, even if the form was last closed with the X.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    setLocalFirst(true);
+    setLocationManuallySet(!!initialData?.location_id);
+    setAutoPickedLocation(false);
+  }, [open, isEdit, initialData]);
 
   // Set or clear the meeting-point pin. Moving it here also clears the
   // "Set by <worker>" line (when that optional column exists on the event).
@@ -285,6 +307,57 @@ export default function EventFormModal({
     setFormData(f => ({ ...f, end_time: rawValue }));
   };
 
+  // Create mode: pick the market nearest the event address (the event's
+  // "home warehouse"), unless the admin has chosen one. Debounced so typing
+  // an address doesn't fire a lookup per keystroke.
+  useEffect(() => {
+    if (!open || isEdit || locationManuallySet) return;
+    const address = (formData.address || '').trim();
+    const candidates = locations.filter(l => l.address);
+    if (address.length < 8 || locations.length < 2 || candidates.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const distances = await Promise.all(candidates.map(loc =>
+        fetch(`/api/get-distance?origin=${encodeURIComponent(loc.address)}&destination=${encodeURIComponent(address)}`)
+          .then(r => r.json())
+          .then(d => ({ id: loc.id, miles: d.miles }))
+          .catch(() => ({ id: loc.id, miles: null }))
+      ));
+      const nearest = nearestLocationId(distances);
+      if (!cancelled && nearest) {
+        setFormData(f => ({ ...f, location_id: nearest }));
+        setAutoPickedLocation(true);
+      }
+    }, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [open, isEdit, locationManuallySet, formData.address, locations]);
+
+  // Edit mode: end the local-first window now. Saved straight away (not on
+  // "Save"), then emails everyone else whose rank window is open.
+  const releaseLocalPriority = async () => {
+    if (!event?.id) return;
+    setReleasing(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ local_priority_until: new Date().toISOString() })
+        .eq('id', event.id);
+      if (error) throw error;
+      setReleasedNow(true);
+      fetch('/api/send-availability-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ catchup: true, event_id: event.id })
+      }).catch(() => {});
+      notify('Opened to everyone');
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      notify('Could not open the event: ' + err.message);
+    } finally {
+      setReleasing(false);
+    }
+  };
+
   // Auto-assign nearest warehouse by distance
   const assignNearestWarehouse = async (address) => {
     if (!address || warehouses.length === 0) return null;
@@ -363,6 +436,12 @@ export default function EventFormModal({
           .eq('id', event.id);
         if (error) throw error;
       } else {
+        // Local crew first: only when the event has a market to be local to,
+        // and not for invite-only events (hidden from self-booking anyway).
+        if (localFirst && saveData.location_id && !saveData.invite_only) {
+          const until = computeLocalPriorityUntil(saveData.date);
+          if (until) saveData.local_priority_until = until.toISOString();
+        }
         const { data: inserted, error } = await supabase.from('events').insert([saveData]).select('id').single();
         if (error) throw error;
         insertedId = inserted?.id || null;
@@ -415,6 +494,10 @@ export default function EventFormModal({
     setSaveVenueForm({ contact_name: '', phone: '', email: '', parking: '', notes: '' });
     setVenueSaved(false);
     setEndTimeManuallySet(false);
+    setLocalFirst(true);
+    setLocationManuallySet(false);
+    setAutoPickedLocation(false);
+    setReleasedNow(false);
     if (onSuccess) onSuccess();
     onClose();
   };
@@ -658,7 +741,11 @@ export default function EventFormModal({
                       <label className="block text-sm font-medium text-gray-700 mb-1">Market / Region</label>
                       <select
                         value={formData.location_id || ''}
-                        onChange={(e) => setFormData({...formData, location_id: e.target.value || null})}
+                        onChange={(e) => {
+                          setFormData({...formData, location_id: e.target.value || null});
+                          setLocationManuallySet(true);
+                          setAutoPickedLocation(false);
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       >
                         <option value="">-- Select a market --</option>
@@ -668,6 +755,9 @@ export default function EventFormModal({
                           </option>
                         ))}
                       </select>
+                      {!isEdit && autoPickedLocation && formData.location_id && (
+                        <p className="text-xs text-gray-500 mt-1">Picked the nearest market to the address. Change it if this event belongs to another warehouse.</p>
+                      )}
                     </div>
                   )}
 
@@ -905,6 +995,40 @@ export default function EventFormModal({
                       : 'Workers who apply go on a pending list until an admin approves them.'}
                 </p>
               </div>
+              {/* Local crew first -- see docs/LOCAL_PRIORITY.md */}
+              {!formData.invite_only && (!isEdit ? (
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <label className="flex items-start gap-2 text-sm font-medium text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={localFirst}
+                      onChange={(e) => setLocalFirst(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>Local crew first for {LOCAL_PRIORITY_HOURS} hours</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                    {formData.location_id
+                      ? `Only workers whose primary market is ${locations.find(l => l.id === formData.location_id)?.name || 'this market'} can see and sign up at first, then it opens to everyone (never later than the day before the event). You can still invite or assign anyone.`
+                      : 'Pick a market above for this to apply.'}
+                  </p>
+                </div>
+              ) : localPriorityActive(event) && !releasedNow ? (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Local crew first · {localPriorityTimeLeft(event)}</p>
+                    <p className="text-xs text-gray-600">Only workers whose primary market is this event's can see and sign up right now.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={releaseLocalPriority}
+                    disabled={releasing}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-800 hover:bg-gray-100 flex-shrink-0 disabled:opacity-50"
+                  >
+                    {releasing ? 'Opening…' : 'Open to everyone now'}
+                  </button>
+                </div>
+              ) : null)}
               {/* Flat Event Pay (optional) */}
               <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-sm font-medium text-gray-800 mb-1">Flat Event Pay (optional)</p>

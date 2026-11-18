@@ -104,6 +104,10 @@
 - ✅ `Navigation.jsx` missing `MapPin`/`ChevronDown` imports — fixed.
 - ✅ `PaymentCalculatorModal.jsx` Rules-of-Hooks violation — fixed (the no-payment path is a hook, not an early return).
 - ✅ `AssignWorkersModal.jsx` `worker.reliability.toFixed(1)` with no null guard — fixed 2026-10-01 (`?? 5.0`, matching the rest of the code); the reliability sort in the same list now treats a missing score as 5.0 too, so the order matches what's displayed. No live worker had a null score at the time, so it was latent.
+- ❌ Found 2026-11-18 (while adding Local crew first, `docs/LOCAL_PRIORITY.md`), not fixed:
+  - `api/worker-actions.js` `apply` doesn't check `invite_only` or the rank access window; only the worker UI hides those events. (The new local-first window *is* checked there.)
+  - The "catch-up" call to `send-availability-notifications` from the event form has no `x-cron-secret`, so it's refused while `CRON_SECRET` is set; new events wait for the next hourly run to email.
+  - `EventFormModal.jsx` is never passed `warehouses`, so every save writes `events.warehouse_id = null`. Unused elsewhere today.
 
 ### Security (ranked)
 1. ❌ **Worker actions trust the client `workerId`** (§5.2) — the main remaining gap.

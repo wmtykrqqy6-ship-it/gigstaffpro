@@ -7,8 +7,9 @@ import { Calendar, Clock, MapPin, Users, CheckCircle, Award, Navigation, EyeOff,
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import { paidHours } from '../utils/payHelpers';
+import { canSelfBookDuringWindow, localPriorityActive, localPriorityTimeLeft } from '../utils/localPriority';
 
-const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, minHoursRule = null, onReloadAssignments }) => {
+const AvailableEventsSection = ({ currentWorker, workers = [], events, assignments, rankAccessDays, timeFormat, paymentTrackingEnabled, eventPaymentSettings, payRates, travelTiers = [], bonuses = {}, locationPayRates = {}, locations = [], getEffectiveRate, minHoursRule = null, onReloadAssignments }) => {
     const confirm = useConfirm();
     const notify = useToast();
     const [applying, setApplying] = useState(false);
@@ -122,6 +123,13 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
       });
     }, [currentWorker?.home_location_id, events, locations]);
 
+    // Primary market for "Local crew first". The signed-in profile may not
+    // carry home_location_id on every login path, so fall back to the
+    // workers list.
+    const homeLocationId = currentWorker?.home_location_id
+      ?? workers.find(w => w.id === currentWorker?.id)?.home_location_id
+      ?? null;
+
     // Calculate which events the worker can see based on rank
     const getAvailableEvents = () => {
       const today = new Date();
@@ -162,6 +170,12 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
               return false;
           }
           
+          // Local crew first: during the window only workers whose primary
+          // market is the event's can see it (the server enforces this on apply).
+          if (!canSelfBookDuringWindow({ home_location_id: homeLocationId }, event)) {
+              return false;
+          }
+
           // Hide invite-only events unless worker is already assigned
           if (event.invite_only) {
             const isAssigned = assignments.some(a =>
@@ -511,6 +525,11 @@ const AvailableEventsSection = ({ currentWorker, events, assignments, rankAccess
                 <div className="flex justify-between items-start gap-2 mb-2">
                   <h4 className="font-bold text-gray-900">{event.name}</h4>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {localPriorityActive(event) && (
+                      <span className="bg-green-600 text-white text-xs px-2 py-1 rounded font-semibold" title="Open to your local crew first, then to everyone">
+                        Local first pick · {localPriorityTimeLeft(event)}
+                      </span>
+                    )}
                     {daysUntil <= 7 && (
                       <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded font-semibold">
                         Soon!
