@@ -6,6 +6,7 @@
 
 import { escapeHtml } from './_lib/escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
+import { availabilityAudience, isLocalWorker } from './_lib/localPriority.js';
 
 const SUPABASE_URL = 'https://ycsauzvkrbcynifkawuw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljc2F1enZrcmJjeW5pZmthd3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDQ4NTcsImV4cCI6MjA4NDI4MDg1N30.07H2LXdn2XKfpcrSmrp7_G0KXIJMH27fmJpCok10lrc';
@@ -51,7 +52,7 @@ async function sendEmail({ to, subject, html }) {
   return res.ok;
 }
 
-function buildAvailabilityEmail({ worker, event, rank, positions }) {
+function buildAvailabilityEmail({ worker, event, rank, positions, localFirst = false }) {
   const timeStr = event.time
     ? (event.end_time ? `${fmtTime(event.time)} – ${fmtTime(event.end_time)}` : fmtTime(event.time))
     : '';
@@ -81,6 +82,10 @@ function buildAvailabilityEmail({ worker, event, rank, positions }) {
       A new shift is available for <strong>${escapeHtml(event.name)}</strong>.
       Sign up in the staff portal before spots fill up.
     </p>
+    ${localFirst ? `
+    <p style="margin:0 0 20px;color:#374151;font-size:14px">
+      <strong>You get first pick.</strong> This event is open only to the local crew for now, then it opens to everyone.
+    </p>` : ''}
 
     <!-- Event details -->
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:16px">
@@ -147,7 +152,7 @@ export default async function handler(req, res) {
 
     // 2. Load upcoming confirmed events (not cancelled/archived/completed)
     const eventsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/events?select=id,name,date,time,end_time,venue,address,dress_code,notes,positions,location_id&status=in.(confirmed,needs-staff)`,
+      `${SUPABASE_URL}/rest/v1/events?select=id,name,date,time,end_time,venue,address,dress_code,notes,positions,location_id,local_priority_until&status=in.(confirmed,needs-staff)`,
       { headers: sbHeaders() }
     );
     const events = await eventsRes.json();
@@ -164,7 +169,7 @@ export default async function handler(req, res) {
 
     // 4. Load all workers with their rank, email, and location memberships
     const workersRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/workers?select=id,name,email,rank`,
+      `${SUPABASE_URL}/rest/v1/workers?select=id,name,email,rank,home_location_id`,
       { headers: sbHeaders() }
     );
     const workers = await workersRes.json();
@@ -214,6 +219,12 @@ export default async function handler(req, res) {
         ? locationWorkerMap[event.location_id] || new Set()
         : new Set(Object.keys(workerMap)); // no location = all workers
 
+      // Local crew first: while the window is active only workers whose
+      // primary market is this event's are emailed. For a day after it ends
+      // (or right after an admin opens it early, which fires catchup mode),
+      // everyone else whose rank window is already open gets emailed.
+      const audience = availabilityAudience(event, now);
+
       for (let rank = 1; rank <= 5; rank++) {
         results.checked++;
 
@@ -226,6 +237,10 @@ export default async function handler(req, res) {
         } else {
           // Normal hourly cron: only notify on the day the window opens (within 24h window)
           shouldNotify = daysUntil <= unlockDays && daysUntil >= (unlockDays - 1);
+          // Window just ended: catch up everyone whose rank window opened
+          // while the event was local-only. Already-emailed workers are
+          // skipped by sentSet below.
+          if (audience.justReleased) shouldNotify = daysUntil <= unlockDays;
         }
 
         if (!shouldNotify) { results.skipped++; continue; }
@@ -234,7 +249,8 @@ export default async function handler(req, res) {
         const rankWorkers = (workers || []).filter(w =>
           (w.rank || 5) === rank &&
           w.email &&
-          eligibleWorkerIds.has(String(w.id))
+          eligibleWorkerIds.has(String(w.id)) &&
+          (!audience.localOnly || isLocalWorker(w, event))
         );
 
         if (!rankWorkers.length) { results.skipped++; continue; }
@@ -249,6 +265,7 @@ export default async function handler(req, res) {
             event,
             rank,
             positions: event.positions || [],
+            localFirst: audience.localOnly,
           });
 
           try {

@@ -19,6 +19,7 @@ import { handleHideEvent, handleUnhideEvent, handleListHiddenEvents } from './_l
 import { handleSetMeetingPoint } from './_lib/meetingPoint.js';
 import { bearerToken, resolveWorkerIdentity, decideWorkerAccess, workerAuthEnforced } from './_lib/verifyWorker.js';
 import { handlePushConfig, handleSavePushSubscription, handleRemovePushSubscription, handleListMessages } from './_lib/push.js';
+import { localPriorityBlock } from './_lib/localPriority.js';
 
 // Neither 'signup' nor 'updateProfile' requires any session at all (no real
 // worker session token exists yet, per the file header above), so each is
@@ -82,8 +83,8 @@ async function handleApply(supabase, { eventId, workerId, position }) {
   }
 
   const [{ data: event, error: eventError }, { data: worker, error: workerError }, { data: allAssignments, error: assignmentsError }] = await Promise.all([
-    supabase.from('events').select('id, name, date, time, end_time, positions, staffing_mode').eq('id', eventId).maybeSingle(),
-    supabase.from('workers').select('id, skills, is_active').eq('id', workerId).maybeSingle(),
+    supabase.from('events').select('id, name, date, time, end_time, positions, staffing_mode, location_id, local_priority_until').eq('id', eventId).maybeSingle(),
+    supabase.from('workers').select('id, skills, is_active, home_location_id').eq('id', workerId).maybeSingle(),
     supabase.from('assignments').select('id, event_id, worker_id, position, status, created_at').or(`event_id.eq.${eventId},worker_id.eq.${workerId}`),
   ]);
   if (eventError) throw eventError;
@@ -92,6 +93,12 @@ async function handleApply(supabase, { eventId, workerId, position }) {
 
   if (!event) return { status: 404, body: { ok: false, error: 'Event not found' } };
   if (!worker || worker.is_active === false) return { status: 404, body: { ok: false, error: 'Worker not found' } };
+
+  // Local crew first: during the window only workers whose primary market is
+  // the event's market can sign up (standby included). Admin invites and
+  // direct assigns don't come through here, so they're unaffected.
+  const localBlock = localPriorityBlock(worker, event);
+  if (localBlock) return localBlock;
 
   const positionKey = toKey(position);
   const workerSkills = Array.isArray(worker.skills) ? worker.skills : [];

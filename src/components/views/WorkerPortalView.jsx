@@ -890,6 +890,7 @@ export default function WorkerPortalView({  loggedInWorker,
         {/* Available Events - Events worker can apply to */}
         <AvailableEventsSection 
           currentWorker={currentWorker} 
+          workers={workers}
           events={events}
           assignments={assignments}
           rankAccessDays={rankAccessDays}

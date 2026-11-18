@@ -33,6 +33,7 @@ Stack:
 - `docs/PUSH_NOTIFICATIONS.md` — installable app (PWA) and push notifications: triggers, service worker rules (push only, no caching), keys.
 - `docs/WORKER_AUTH.md` — worker login / real-sessions rollout plan and status.
 - `docs/LOGISTICS.md` — the Delivery Logistics feature: business rules (truck capacity, crew roles, staffing per table), data model, and decisions made with Dylan.
+- `docs/LOCAL_PRIORITY.md` — "Local crew first": new events open only to workers whose primary market is the event's for 48 hours, then to everyone.
 - Additional files will be added under `docs/` over time for product requirements and business rules — check that directory for relevant context before large changes.
 - This file governs *how* to work in the repo; the audit governs *what state the code is currently in*.
 - If the two ever seem to disagree on a fact about the code, re-verify against the actual source rather than trusting either document blindly — both can go stale.
