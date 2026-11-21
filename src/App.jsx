@@ -53,6 +53,7 @@ import AddWorkerModal from './components/modals/AddWorkerModal';
 import InviteWorkersModal from './components/modals/InviteWorkersModal';
 import { useConfirm } from './components/ui/ConfirmDialog';
 import { useToast } from './components/ui/Toast';
+import { loadEventClientDetails, mergeClientDetails } from './utils/eventClientDetails';
 
 const GigStaffPro = () => {
   const confirm = useConfirm();
@@ -1093,10 +1094,15 @@ setAppPositions(storedPositions);
         .order('date', { ascending: true });
       
       if (error) throw error;
+
+      // Client name/contact are admin-only (event_client_details); workers
+      // never load them.
+      const clientDetails = userRole === 'admin' ? await loadEventClientDetails(supabase) : [];
+      const eventRows = mergeClientDetails(data || [], clientDetails);
       
       // Migrate event positions from old format to new format
       const eventsNeedingMigration = [];
-      const migratedEvents = (data || []).map(event => {
+      const migratedEvents = eventRows.map(event => {
         if (!event.positions || event.positions.length === 0) return event;
         
         // Check if positions need migration

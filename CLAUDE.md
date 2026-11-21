@@ -45,6 +45,7 @@ Stack:
 - Authentication:
   - Admin: Supabase Auth (email/password) + `get_authenticated_admin_profile()`. Backend admin routes verify the bearer token via `api/_lib/verifyAdmin.js`; RLS write policies use `public.is_admin()`.
   - Worker: migrated workers use Supabase Auth (phone-derived email + 6-digit PIN); legacy workers use phone + 4-digit PIN, checked server-side in `api/worker-pin-login.js` (salted PBKDF2). Worker writes go through `api/worker-actions.js` with the service role and currently trust the client-supplied worker id — a known gap (see the audit).
+- Client details are admin-only: `events` rows are public-read, so client name/contact live in `event_client_details` (admins only, RLS) and a trigger moves anything written to `events.client` / `client_contact` there. Admin screens read them with `src/utils/eventClientDetails.js`. Never put new client or customer data on a public-read table.
 - Schema and RLS are tracked as SQL migrations in `supabase/migrations/`, applied by Dylan in the Supabase SQL editor (see §6).
 - `api/*.js` are independent Vercel functions (shared helpers in `api/_lib/`). Server code that writes data uses `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from the environment. Four files still hardcode the Supabase URL/anon key as a fallback: `src/supabaseClient.js`, `api/calendar-event.js`, `api/send-availability-notifications.js`, `api/send-shift-reminders.js`.
 - That hardcoded-key issue is a known finding — do not silently "fix" it as a side effect of unrelated work; treat it as its own scoped task (see §7).
