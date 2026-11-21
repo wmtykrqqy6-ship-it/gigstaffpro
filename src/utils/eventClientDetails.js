@@ -1,3 +1,5 @@
+import { logClientAccess } from './clientAccessLog';
+
 // Client name + contact are admin-only. Since migration
 // 20261121120000_make_client_details_admin_only.sql they live in
 // event_client_details (admins only), and events.client / client_contact are
@@ -5,9 +7,11 @@
 // values into event_client_details, so save code doesn't change.
 //
 // Admin screens that show client details load them with
-// loadEventClientDetails() and merge them onto the events.
+// loadEventClientDetails() and merge them onto the events. Each load is
+// recorded in the client access log (see clientAccessLog.js); `where`
+// names the screen.
 
-export async function loadEventClientDetails(supabase) {
+export async function loadEventClientDetails(supabase, where = 'app') {
   const { data, error } = await supabase
     .from('event_client_details')
     .select('event_id, client, client_contact');
@@ -17,7 +21,17 @@ export async function loadEventClientDetails(supabase) {
     console.warn('Could not load client details:', error.message);
     return [];
   }
-  return data || [];
+  const rows = data || [];
+  if (rows.length > 0) {
+    // Not awaited: logging must not slow the screen down.
+    logClientAccess(supabase, {
+      action: 'view',
+      recordType: 'event_client_details',
+      recordIds: rows.map(r => r.event_id),
+      where
+    });
+  }
+  return rows;
 }
 
 // Put each event's client details back on it. An event with no details row

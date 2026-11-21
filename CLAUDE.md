@@ -33,6 +33,7 @@ Stack:
 - `docs/PUSH_NOTIFICATIONS.md` — installable app (PWA) and push notifications: triggers, service worker rules (push only, no caching), keys.
 - `docs/WORKER_AUTH.md` — worker login / real-sessions rollout plan and status.
 - `docs/LOGISTICS.md` — the Delivery Logistics feature: business rules (truck capacity, crew roles, staffing per table), data model, and decisions made with Dylan.
+- `docs/CLIENT_SECURITY.md` — who can see client data (admins and sales managers), 2-step sign-in for admins, the client access log, and how to add a sales manager.
 - `docs/LOCAL_PRIORITY.md` — "Local crew first": new events open only to workers whose primary market is the event's for 48 hours, then to everyone.
 - Additional files will be added under `docs/` over time for product requirements and business rules — check that directory for relevant context before large changes.
 - This file governs *how* to work in the repo; the audit governs *what state the code is currently in*.
@@ -43,9 +44,9 @@ Stack:
 - `src/App.jsx` is the root component and owns most application state, loading and mutating data via direct Supabase calls (no service/repository layer).
 - `src/supabaseClient.js` holds the single Supabase client, using the anon key.
 - Authentication:
-  - Admin: Supabase Auth (email/password) + `get_authenticated_admin_profile()`. Backend admin routes verify the bearer token via `api/_lib/verifyAdmin.js`; RLS write policies use `public.is_admin()`.
+  - Admin: Supabase Auth (email/password + 2-step authenticator code, `aal2`) + `get_authenticated_admin_profile()`. Sales managers are admins with `admin_users.role = 'sales_manager'` (see `docs/CLIENT_SECURITY.md`). Backend admin routes verify the bearer token via `api/_lib/verifyAdmin.js`; RLS write policies use `public.is_admin()`.
   - Worker: migrated workers use Supabase Auth (phone-derived email + 6-digit PIN); legacy workers use phone + 4-digit PIN, checked server-side in `api/worker-pin-login.js` (salted PBKDF2). Worker writes go through `api/worker-actions.js` with the service role and currently trust the client-supplied worker id — a known gap (see the audit).
-- Client details are admin-only: `events` rows are public-read, so client name/contact live in `event_client_details` (admins only, RLS) and a trigger moves anything written to `events.client` / `client_contact` there. Admin screens read them with `src/utils/eventClientDetails.js`. Never put new client or customer data on a public-read table.
+- Client details are admin-only: `events` rows are public-read, so client name/contact live in `event_client_details` (admins only, RLS) and a trigger moves anything written to `events.client` / `client_contact` there. Admin screens read them with `src/utils/eventClientDetails.js`. Never put new client or customer data on a public-read table, and log any new view or export of client records with `src/utils/clientAccessLog.js`.
 - Schema and RLS are tracked as SQL migrations in `supabase/migrations/`, applied by Dylan in the Supabase SQL editor (see §6).
 - `api/*.js` are independent Vercel functions (shared helpers in `api/_lib/`). Server code that writes data uses `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from the environment. Four files still hardcode the Supabase URL/anon key as a fallback: `src/supabaseClient.js`, `api/calendar-event.js`, `api/send-availability-notifications.js`, `api/send-shift-reminders.js`.
 - That hardcoded-key issue is a known finding — do not silently "fix" it as a side effect of unrelated work; treat it as its own scoped task (see §7).

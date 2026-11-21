@@ -54,11 +54,16 @@ import InviteWorkersModal from './components/modals/InviteWorkersModal';
 import { useConfirm } from './components/ui/ConfirmDialog';
 import { useToast } from './components/ui/Toast';
 import { loadEventClientDetails, mergeClientDetails } from './utils/eventClientDetails';
+import AdminTwoStep from './components/AdminTwoStep';
+import { sessionHasTwoStep } from './utils/adminTwoStep';
 
 const GigStaffPro = () => {
   const confirm = useConfirm();
   const notify = useToast();
   const [userRole, setUserRole] = useState(null); // null = not logged in, 'admin' or 'worker'
+  // A saved admin session that hasn't passed 2-step sign-in yet: the
+  // dashboard waits for the code (src/components/AdminTwoStep.jsx).
+  const [adminTwoStepPending, setAdminTwoStepPending] = useState(false);
   const [currentView, setCurrentView] = useState(() => sessionStorage.getItem('currentView') || 'dashboard');
   const [workers, setWorkers] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1097,7 +1102,7 @@ setAppPositions(storedPositions);
 
       // Client name/contact are admin-only (event_client_details); workers
       // never load them.
-      const clientDetails = userRole === 'admin' ? await loadEventClientDetails(supabase) : [];
+      const clientDetails = userRole === 'admin' ? await loadEventClientDetails(supabase, 'events') : [];
       const eventRows = mergeClientDetails(data || [], clientDetails);
       
       // Migrate event positions from old format to new format
@@ -1602,8 +1607,12 @@ setAppPositions(storedPositions);
             .single();
 
           if (!profileError && adminProfile) {
-            setUserRole('admin');
-            setIsAuthenticated(true);
+            if (await sessionHasTwoStep(supabase)) {
+              setUserRole('admin');
+              setIsAuthenticated(true);
+            } else {
+              setAdminTwoStepPending(true);
+            }
             return;
           }
         } catch (profileCatchError) {
@@ -1687,6 +1696,25 @@ setAppPositions(storedPositions);
     };
     checkSession();
   }, []);
+
+  if (adminTwoStepPending && !isAuthenticated) {
+    return (
+      <AdminTwoStep
+        onDone={() => {
+          setAdminTwoStepPending(false);
+          setUserRole('admin');
+          setIsAuthenticated(true);
+        }}
+        onCancel={async () => {
+          try { await supabase.auth.signOut(); } catch { /* cleared below */ }
+          setAdminTwoStepPending(false);
+          sessionStorage.removeItem('userRole');
+          sessionStorage.removeItem('userId');
+          sessionStorage.removeItem('currentView');
+        }}
+      />
+    );
+  }
 
   // Show login screen if not authenticated
   if (!isAuthenticated) {
