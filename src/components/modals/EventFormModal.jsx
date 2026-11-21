@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { findClientByName, newClientFromEvent } from '../../utils/clientMatch';
+import { dropUnchangedClientFields } from '../../utils/eventClientDetails';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -430,9 +431,10 @@ export default function EventFormModal({
 
       let insertedId = null;
       if (isEdit) {
+        // Only send client details the admin changed (see eventClientDetails.js).
         const { error } = await supabase
           .from('events')
-          .update(saveData)
+          .update(dropUnchangedClientFields(saveData, event))
           .eq('id', event.id);
         if (error) throw error;
       } else {

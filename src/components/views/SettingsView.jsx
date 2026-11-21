@@ -9,6 +9,7 @@ import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
 import { clientMatchesSearch, planMissingClients, newClientFromEvent } from '../../utils/clientMatch';
+import { loadEventClientDetails, mergeClientDetails } from '../../utils/eventClientDetails';
 import { parseClientLine } from '../../utils/logistics/pullSheetParser';
 
 
@@ -440,14 +441,17 @@ export default function SettingsView({
   useEffect(() => {
     if (loadingClients) return;
     let cancelled = false;
-    supabase
-      .from('events')
-      .select('id, client, client_contact, client_id')
-      .is('client_id', null)
-      .then(({ data, error }) => {
-        if (cancelled || error) return;
-        setMissingClients(planMissingClients(data || [], clients, parseClientLine));
-      });
+    (async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, client, client_contact, client_id')
+        .is('client_id', null);
+      if (cancelled || error) return;
+      // Client name/contact are kept in the admin-only event_client_details.
+      const details = await loadEventClientDetails(supabase);
+      if (cancelled) return;
+      setMissingClients(planMissingClients(mergeClientDetails(data || [], details), clients, parseClientLine));
+    })();
     return () => { cancelled = true; };
   }, [clients, loadingClients]);
 
