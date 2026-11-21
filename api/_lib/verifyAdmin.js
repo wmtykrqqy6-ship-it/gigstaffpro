@@ -4,6 +4,28 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// The session's assurance level from the token's payload: 'aal2' once the
+// admin has entered their 2-step code, 'aal1' with only the password.
+// Only read after getUser(token) has accepted the token, so the payload is
+// genuine. Returns null for anything unreadable.
+export function tokenAssuranceLevel(token) {
+  try {
+    const payload = String(token).split('.')[1];
+    if (!payload) return null;
+    const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const aal = JSON.parse(json)?.aal;
+    return typeof aal === 'string' ? aal : null;
+  } catch {
+    return null;
+  }
+}
+
+// 2-step sign-in is required for admin routes. ADMIN_2STEP_OFF=true in the
+// Vercel settings turns the check off, for an emergency only.
+export function twoStepRequired(env = process.env) {
+  return env.ADMIN_2STEP_OFF !== 'true';
+}
+
 export async function verifyAdminRequest(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -28,6 +50,10 @@ export async function verifyAdminRequest(req) {
   const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
   if (userError || !userData?.user) {
     return { ok: false, status: 401, error: 'Invalid or expired session' };
+  }
+
+  if (twoStepRequired() && tokenAssuranceLevel(token) !== 'aal2') {
+    return { ok: false, status: 403, error: '2-step sign-in required' };
   }
 
   const { data: link, error: linkError } = await supabaseAdmin

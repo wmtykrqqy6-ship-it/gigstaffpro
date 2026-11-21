@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { hashPin } from '../utils/authHelpers';
 import { normalizeUsPhoneToE164, deriveSyntheticWorkerEmail } from '../utils/workerAuth';
 import { UI } from '../constants';
+import AdminTwoStep from './AdminTwoStep';
 
 export default function LoginScreen({ onLogin, authMessage }) {
   const [mode, setMode] = useState('select'); // 'select', 'worker', 'admin', 'signup'
@@ -21,6 +22,8 @@ export default function LoginScreen({ onLogin, authMessage }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Admin who passed the password step and still needs the 2-step code.
+  const [pendingAdminProfile, setPendingAdminProfile] = useState(null);
 
   // Signup form state
   const [signupName, setSignupName] = useState('');
@@ -274,7 +277,9 @@ export default function LoginScreen({ onLogin, authMessage }) {
           return;
         }
 
-        onLogin('admin', adminProfile);
+        // Password is right; the dashboard opens after the 2-step code
+        // (src/components/AdminTwoStep.jsx).
+        setPendingAdminProfile(adminProfile);
         setLoading(false);
         return;
       } catch (profileCatchError) {
@@ -577,6 +582,22 @@ export default function LoginScreen({ onLogin, authMessage }) {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // ============================================
+  // ADMIN 2-STEP SIGN-IN
+  // ============================================
+  if (mode === 'admin' && pendingAdminProfile) {
+    return (
+      <AdminTwoStep
+        onDone={() => onLogin('admin', pendingAdminProfile)}
+        onCancel={async () => {
+          try { await supabase.auth.signOut(); } catch { /* cleared below */ }
+          setPendingAdminProfile(null);
+          setPassword('');
+        }}
+      />
     );
   }
 

@@ -10,6 +10,8 @@ import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
 import { clientMatchesSearch, planMissingClients, newClientFromEvent } from '../../utils/clientMatch';
 import { loadEventClientDetails, mergeClientDetails } from '../../utils/eventClientDetails';
+import { logClientAccess } from '../../utils/clientAccessLog';
+import ClientAccessLogCard from '../settings/ClientAccessLogCard';
 import { parseClientLine } from '../../utils/logistics/pullSheetParser';
 
 
@@ -448,7 +450,7 @@ export default function SettingsView({
         .is('client_id', null);
       if (cancelled || error) return;
       // Client name/contact are kept in the admin-only event_client_details.
-      const details = await loadEventClientDetails(supabase);
+      const details = await loadEventClientDetails(supabase, 'settings_missing_clients');
       if (cancelled) return;
       setMissingClients(planMissingClients(mergeClientDetails(data || [], details), clients, parseClientLine));
     })();
@@ -617,6 +619,14 @@ export default function SettingsView({
         .order('name');
       if (error) throw error;
       setClients(data || []);
+      if (data?.length) {
+        logClientAccess(supabase, {
+          action: 'view',
+          recordType: 'clients',
+          recordIds: data.map(c => c.id),
+          where: 'settings_clients'
+        });
+      }
     } catch (err) {
       console.error('Error loading clients:', err.message);
     } finally {
@@ -1165,6 +1175,7 @@ export default function SettingsView({
           { id: 'positions', label: '🎰 Positions' },
           { id: 'payrates', label: '💰 Pay Rates' },
           { id: 'general', label: '⚙️ System' },
+          { id: 'accesslog', label: '🔒 Access log' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -2133,6 +2144,8 @@ export default function SettingsView({
       {/* ── POSITIONS TAB ── */}
 
       {/* ── PAY RATES TAB ── */}
+      {activeTab === 'accesslog' && <ClientAccessLogCard />}
+
       {activeTab === 'payrates' && (
         <div className="space-y-6">
 

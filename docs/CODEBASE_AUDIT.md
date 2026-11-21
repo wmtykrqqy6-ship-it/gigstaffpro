@@ -68,6 +68,7 @@
 - Email/password via `supabase.auth.signInWithPassword`, then `get_authenticated_admin_profile()`; dashboard access only after both succeed. Sessions restore only from a live Supabase session.
 - Backend admin routes verify the bearer token with `api/_lib/verifyAdmin.js` (`send-email`, `admin-set-worker-pin`, `admin-worker-migration-status`, `promote-standby`).
 - Database-level admin check: `public.is_admin()` (admin_auth_links ↔ `auth.uid()`), used by RLS write policies.
+- 🔄 **2-step sign-in** (CRM Phase 0, 2026-11-22): admins and sales managers need an authenticator-app code after the password. The app and `verifyAdmin.js` require an `aal2` session; `is_admin()` requires it once `20261122130000_require_two_step_for_admins.sql` is run (after everyone has enrolled). Sales managers are admins with `admin_users.role = 'sales_manager'`. See `docs/CLIENT_SECURITY.md`.
 
 ### 5.2 Workers — ⚠️ two systems, mid-migration
 - **Migrated**: Supabase Auth with a synthetic phone-derived email + 6-digit PIN (`worker_auth_links`).
@@ -114,6 +115,7 @@
 2. ⚠️ **Hardcoded anon key** in 4 files (§4).
 3. ✅ Anon writes to `pay_rates`, `settings`, `travel_tiers`, `bonuses`, `events`, `assignments`, `workers`, `location_pay_rates` and all logistics tables require `is_admin()`. `workers.pin_hash` not readable; `rank`/`reliability` only admin-writable.
    - 🔄 **Client details were readable by anyone** (found 2026-11-20): `events` is public-read (`events_public_read`) and the app loads every event with `select('*')`, so `events.client` / `client_contact` reached every worker and anyone with the anon key. Fix written 2026-11-21 (`20261121120000_make_client_details_admin_only.sql`): details move to the admin-only `event_client_details` table, a trigger keeps them off `events`, and `clients` becomes admin-only. Admin screens merge them back with `src/utils/eventClientDetails.js`. Resolved once the migration has been run. Not covered: event names that include the client's name (the Goodshuffle import strips it when it can).
+   - 🔄 **Rest of CRM Phase 0** (written 2026-11-22, `20261122120000_add_sales_managers_and_client_access_log.sql`): `venues` becomes admin-only, and `client_access_log` records who viewed, exported, added, changed or deleted client records (changes by trigger, views/exports by the app). Plus 2-step sign-in (§5.1). Rules: `docs/CLIENT_SECURITY.md`.
 4. ✅ Cron endpoints (`send-shift-reminders`, `send-availability-notifications`) require `x-cron-secret`. ❓ `api/calendar-event.js` has no auth check — it only builds `.ics` files for calendar links, so likely fine, but it also carries a hardcoded key.
 5. ✅ **Database backups** — nightly encrypted `pg_dump` via GitHub Actions (`backup-database.yml`, 90-day retention; see `docs/BACKUPS.md`). First run succeeded 2026-10-03. A test decrypt with the saved passphrase is still worth doing once.
 6. ✅ `.env` gitignored; holds only the browser Google Places key (referrer-restricted to gigstaffpro.com / www, confirmed 2026-10-05).
