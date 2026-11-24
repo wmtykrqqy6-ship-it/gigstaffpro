@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ArrowLeft, Edit, Trash2, Phone, Mail, MapPin, Calendar, Plus, Star, Save, MessageSquare, User
+  ArrowLeft, Edit, Trash2, Phone, Mail, MapPin, Calendar, Plus, Star, Save, MessageSquare, User, FileText
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -14,6 +14,9 @@ import {
   emptyContactForm, contactFormFrom, validateContact, contactPayloadFromForm, sortContacts,
   splitClientEvents, eventStaffCount, sortActivity, isMissingSchemaError, formatEventDate
 } from '../../utils/clientRecords';
+import { isSignedProject } from '../../utils/goodshuffleImport';
+
+const money = (v) => (v === null || v === undefined ? '' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
 
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
 const NEEDS_SQL = 'Contacts and history turn on once the new Clients SQL file has been run in Supabase.';
@@ -73,6 +76,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
   const [events, setEvents] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [gsProjects, setGsProjects] = useState([]);
   const [needsSql, setNeedsSql] = useState(false);
 
   const [contactForm, setContactForm] = useState(null); // null = closed
@@ -118,6 +122,21 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
     setActivity(data || []);
   };
 
+  // Goodshuffle history (imported). Quietly empty before that SQL is run.
+  const loadGsProjects = async () => {
+    const { data, error } = await supabase
+      .from('goodshuffle_projects')
+      .select('id, project_id, status, name, event_date, venue, total, sales_lead')
+      .eq('client_id', clientId)
+      .order('event_date', { ascending: false, nullsFirst: false });
+    if (error) {
+      if (!isMissingSchemaError(error)) console.error('Error loading Goodshuffle projects:', error.message);
+      setGsProjects([]);
+      return;
+    }
+    setGsProjects(data || []);
+  };
+
   useEffect(() => {
     setForm(clientFormFrom(client));
     setEditing(false);
@@ -125,6 +144,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
     loadEvents();
     loadContacts();
     loadActivity();
+    loadGsProjects();
     // One view entry per client opened (the key includes the id, so
     // opening different clients is logged separately).
     logClientAccess(supabase, {
@@ -391,6 +411,30 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
               </div>
             )}
           </Card>
+
+          {gsProjects.length > 0 && (
+            <Card title="Goodshuffle history" icon={FileText} count={gsProjects.length}>
+              <div className="space-y-2">
+                {gsProjects.map(p => (
+                  <div key={p.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{p.name || `Project #${p.project_id}`}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {formatEventDate(p.event_date)}
+                        {p.venue && ` · ${p.venue}`}
+                        {` · #${p.project_id}`}
+                        {p.sales_lead && ` · ${p.sales_lead}`}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${isSignedProject(p) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{p.status || '—'}</span>
+                      {p.total !== null && p.total !== undefined && <p className="text-xs text-gray-500 mt-1">{money(p.total)}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         <Card title="History" icon={MessageSquare} count={activity.length}>

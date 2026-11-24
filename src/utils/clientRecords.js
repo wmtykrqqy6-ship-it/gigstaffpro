@@ -225,3 +225,18 @@ export async function saveClientRecord(supabase, form, existingId = null) {
   if (error) throw error;
   return { id: data?.id ?? existingId, crmFieldsSaved: true };
 }
+
+// Supabase returns at most 1,000 rows per request, and the client list
+// passes that after the Goodshuffle import. Reads every page.
+// `makeQuery` returns a fresh query with a stable order, e.g.
+// () => supabase.from('clients').select('*').order('name').order('id').
+export async function fetchAllRows(makeQuery, pageSize = 1000) {
+  let all = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: all, error: null };
+}

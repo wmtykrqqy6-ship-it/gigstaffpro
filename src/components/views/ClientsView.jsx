@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, User, Phone, Mail, Calendar, ChevronRight } from 'lucide-react';
+import { Plus, Search, User, Phone, Mail, Calendar, ChevronRight, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import ClientForm from '../clients/ClientForm';
 import ClientDetail from '../clients/ClientDetail';
+import GoodshuffleImport from '../clients/GoodshuffleImport';
 import { clientMatchesSearch, planMissingClients, newClientFromEvent } from '../../utils/clientMatch';
 import { loadEventClientDetails, mergeClientDetails } from '../../utils/eventClientDetails';
 import { logClientAccess } from '../../utils/clientAccessLog';
 import { parseClientLine } from '../../utils/logistics/pullSheetParser';
 import {
   CLIENT_TYPES, clientTypeLabel, emptyClientForm, saveClientRecord,
-  summarizeClientEvents, formatEventDate
+  summarizeClientEvents, formatEventDate, fetchAllRows
 } from '../../utils/clientRecords';
 
 // Clients tab (CRM Phase 1, step 1). Admins and sales managers only: the
@@ -29,6 +30,7 @@ export default function ClientsView({ timeFormat }) {
   const [typeFilter, setTypeFilter] = useState('all');
   const [showInactive, setShowInactive] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyClientForm());
@@ -39,7 +41,7 @@ export default function ClientsView({ timeFormat }) {
 
   const loadClients = async () => {
     try {
-      const { data, error } = await supabase.from('clients').select('*').order('name');
+      const { data, error } = await fetchAllRows(() => supabase.from('clients').select('*').order('name').order('id'));
       if (error) throw error;
       setClients(data || []);
       setLoadError(null);
@@ -62,10 +64,11 @@ export default function ClientsView({ timeFormat }) {
   // Event counts and dates for the list (event rows only carry client_id;
   // names and contacts stay in the admin-only tables).
   const loadClientEvents = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await fetchAllRows(() => supabase
       .from('events')
       .select('id, client_id, date')
-      .not('client_id', 'is', null);
+      .not('client_id', 'is', null)
+      .order('id'));
     if (error) {
       console.error('Error loading client events:', error.message);
       return;
@@ -194,6 +197,13 @@ export default function ClientsView({ timeFormat }) {
             </button>
           )}
           <button
+            onClick={() => setShowImport(true)}
+            className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-2 text-sm"
+          >
+            <Upload size={16} />
+            <span>Import from Goodshuffle</span>
+          </button>
+          <button
             onClick={() => { setForm(emptyClientForm()); setShowAdd(true); }}
             className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 flex items-center space-x-2 text-sm"
           >
@@ -202,6 +212,14 @@ export default function ClientsView({ timeFormat }) {
           </button>
         </div>
       </div>
+
+      {showImport && (
+        <GoodshuffleImport
+          clients={clients}
+          onClose={() => setShowImport(false)}
+          onImported={async () => { await Promise.all([loadClients(), loadClientEvents()]); }}
+        />
+      )}
 
       {showAdd && (
         <ClientForm
