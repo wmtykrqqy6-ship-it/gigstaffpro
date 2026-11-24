@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseQuoteRequest, parseEventDate, handleQuoteRequest, allowedOrigins, leadEmailHtml } from './quoteRequest.js';
+import { parseQuoteRequest, parseEventDate, handleQuoteRequest, allowedOrigins, leadEmailHtml, adminEmailFrom } from './quoteRequest.js';
 
 const NOW = 1_800_000_000_000;
 const good = {
@@ -145,5 +145,34 @@ describe('handleQuoteRequest', () => {
 describe('allowedOrigins', () => {
   it('adds extra origins from the environment', () => {
     expect(allowedOrigins({ QUOTE_FORM_ORIGINS: 'https://staging.example.com' })).toContain('https://staging.example.com');
+  });
+});
+
+describe('adminEmailFrom', () => {
+  it('reads the address however the setting is stored', () => {
+    expect(adminEmailFrom('boss@example.com')).toBe('boss@example.com');
+    expect(adminEmailFrom('"boss@example.com"')).toBe('boss@example.com');
+    expect(adminEmailFrom({ email: 'boss@example.com' })).toBe('boss@example.com');
+    expect(adminEmailFrom(['boss@example.com'])).toBe('boss@example.com');
+    expect(adminEmailFrom('')).toBe(null);
+    expect(adminEmailFrom('a@b.com,c@d.com')).toBe(null);
+  });
+});
+
+describe('handleQuoteRequest email errors', () => {
+  it('keeps the lead and logs when Resend says no', async () => {
+    const sb = fakeSupabase();
+    const res = fakeRes();
+    const errors = [];
+    const orig = console.error; console.error = (m) => errors.push(String(m));
+    try {
+      await handleQuoteRequest(req(good), res, {
+        supabase: sb, env: { RESEND_API_KEY: 'k' }, now: () => NOW, isRateLimited: () => false,
+        fetchImpl: vi.fn(async () => ({ ok: false, status: 403, text: async () => 'domain not verified' }))
+      });
+    } finally { console.error = orig; }
+    expect(res.statusCode).toBe(200);
+    expect(sb.inserted).toHaveLength(1);
+    expect(errors.join(' ')).toContain('Resend 403');
   });
 });
