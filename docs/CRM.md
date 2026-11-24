@@ -118,17 +118,20 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
 
 - Off until an admin turns it on at the top of the Leads tab
   (`settings.lead_followup_enabled`). The tab shows the exact email.
-- Moving a lead to **Quoted** starts a 7-day clock (`leads.quoted_at`). If
-  the lead is still Quoted 7 days later, it gets one "Still planning your
-  casino party?" email (`api/_lib/leadFollowups.js`). Replies go to
-  sales@vegasonwheels.com. Moving it to Booked or Lost stops it.
+- The 7 days count from the **last contact**: the later of moving the lead
+  to Quoted (`leads.quoted_at`) and the last "We talked" press
+  (`leads.last_contact_at`). Dylan doesn't want it to go out while they are
+  still working with the client (2026-11-24). Then the lead gets one "Still
+  planning your casino party?" email (`api/_lib/leadFollowups.js`). Replies
+  go to sales@vegasonwheels.com. "We talked" also allows one more follow-up
+  later. "Don't send auto email" (`followup_paused`) or Booked/Lost stops it.
+  When the Messages inbox lands, emails with the client should update
+  `last_contact_at` too.
 - Runs on the hourly shift-reminder cron, between 9 AM and 6 PM business
-  time. Only leads quoted in the last 14 days, so turning it on never emails
-  old quotes. Skips leads with no email or whose event date has passed.
+  time. Only leads whose last contact was in the last 14 days, so turning it on
+  never emails old quotes. Skips leads with no email or whose event date has passed.
 - A lead is claimed (`followup_sent_at`) before sending, so it is never
   emailed twice; a refused send is undone and retried next hour.
-- Until the Messages inbox exists, "no reply" means "still Quoted": move a
-  lead out of Quoted when they answer.
 - Migration `20261124150000_add_lead_followups.sql`.
 - Hosting note: vegasonwheels.com runs on GoDaddy WordPress, whose firewall
   refuses page saves containing `<script>` or `<iframe>`. The form markup is

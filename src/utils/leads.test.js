@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countByStage, sortLeads, stagePatch, clientFromLead, leadFromForm, stageLabel, followupStatus } from './leads';
+import { countByStage, sortLeads, stagePatch, clientFromLead, leadFromForm, stageLabel, followupStatus, contactPatch } from './leads';
 
 describe('leads', () => {
   it('counts by stage', () => {
@@ -44,5 +44,9 @@ describe('leads', () => {
     expect(followupStatus({ ...quoted, followup_sent_at: '2026-12-08T15:00:00Z' }, true, now)).toContain('sent');
     expect(followupStatus({ ...quoted, quoted_at: '2026-11-20T12:00:00Z' }, true, now)).toContain('soon');
     expect(followupStatus({ ...quoted, stage: 'new' }, true, now)).toBe(null);
+    expect(followupStatus({ ...quoted, followup_paused: true }, true, now)).toContain('off');
+    // talked yesterday: due 7 days from then, not from quoted
+    expect(followupStatus({ ...quoted, quoted_at: '2026-11-20T12:00:00Z', last_contact_at: '2026-12-04T12:00:00Z' }, true, now)).toContain('Dec 11');
+    expect(contactPatch(now)).toMatchObject({ last_contact_at: now.toISOString(), followup_sent_at: null });
   });
 });

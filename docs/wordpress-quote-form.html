@@ -1,7 +1,10 @@
 <!--
   Vegas on Wheels quote request form (CRM Phase 1, step 3; docs/CRM.md).
 
-  Paste this whole block into a "Custom HTML" block on
+  On the live site the form sits inside a copy of the Contact Us page's
+  Divi layout (page "Quote Test"), and the script part runs from a WPCode
+  JavaScript snippet because GoDaddy's firewall refuses page saves with a
+  <script> tag (docs/CRM.md). Otherwise: paste this whole block into a "Custom HTML" block on
   https://vegasonwheels.com/contact-us/ in place of the old form. Visitors
   stay on vegasonwheels.com; the answers go to GigStaffPro
   (https://www.gigstaffpro.com/api/quote-request), which saves a lead and
@@ -12,6 +15,13 @@
 -->
 <form id="vow-quote" novalidate>
   <style>
+    /* Page with this form: no sidebar, light background (Divi) */
+    body:has(#vow-quote),body:has(#vow-quote) #main-content{background:#fff !important}
+    body:has(#vow-quote) #sidebar{display:none !important}
+    body:has(#vow-quote) #main-content .container:before{display:none !important}
+    body:has(#vow-quote) #left-area{width:100% !important;max-width:720px;float:none !important;margin:0 auto;padding-right:0 !important}
+    body:has(#vow-quote) #left-area h1,body:has(#vow-quote) .entry-title{color:#1f2937 !important}
+    #vow-quote{margin:0 auto;border:1px solid #e5e7eb}
     #vow-quote{max-width:640px;font-family:inherit;background:#fff;color:#1f2937;padding:24px;border-radius:10px;box-sizing:border-box}
     #vow-quote label,#vow-quote legend{color:#1f2937}
     #vow-quote input,#vow-quote textarea{color:#111827;background:#fff}

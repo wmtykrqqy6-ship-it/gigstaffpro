@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { dueLeads, buildFollowupEmail, firstName, fmtLeadDate, sendLeadFollowups } from './leadFollowups.js';
+import { dueLeads, buildFollowupEmail, firstName, fmtLeadDate, sendLeadFollowups, lastContactTime } from './leadFollowups.js';
 
 const NOW = new Date('2026-12-10T16:00:00Z');
 const daysAgo = (n) => new Date(NOW.getTime() - n * 86400000).toISOString();
@@ -17,9 +17,17 @@ describe('dueLeads', () => {
       lead({ id: 'sent', followup_sent_at: daysAgo(1) }),
       lead({ id: 'booked', stage: 'booked' }),
       lead({ id: 'noemail', email: null }),
-      lead({ id: 'past', event_date: '2026-12-01' })
+      lead({ id: 'past', event_date: '2026-12-01' }),
+      lead({ id: 'talked', last_contact_at: daysAgo(3) }),
+      lead({ id: 'paused', followup_paused: true }),
+      lead({ id: 'talkedLongAgo', quoted_at: daysAgo(30), last_contact_at: daysAgo(9) })
     ];
-    expect(dueLeads(leads, NOW, '2026-12-10').map(l => l.id)).toEqual(['L1']);
+    expect(dueLeads(leads, NOW, '2026-12-10').map(l => l.id)).toEqual(['L1', 'talkedLongAgo']);
+  });
+
+  it('counts from the later of quoted and last contact', () => {
+    expect(lastContactTime({ quoted_at: daysAgo(9), last_contact_at: daysAgo(2) })).toBe(new Date(daysAgo(2)).getTime());
+    expect(lastContactTime({})).toBe(null);
   });
 });
 

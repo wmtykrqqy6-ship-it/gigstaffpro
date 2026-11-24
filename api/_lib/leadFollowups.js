@@ -6,9 +6,12 @@
 // 12-function limit. Does nothing unless the admin turned it on in the Leads
 // tab (settings.lead_followup_enabled = 'true').
 //
-// A lead gets one follow-up when it has been in "Quoted" for 7 days. Only
-// leads quoted within the last 14 days are considered, so turning this on
-// never emails a pile of old quotes. Each lead is claimed (followup_sent_at
+// A quoted lead gets a follow-up 7 days after the last contact: the later of
+// when it was moved to Quoted and when someone last pressed "We talked"
+// (Dylan, 2026-11-24: no email while we're still working with the client).
+// Only leads whose last contact was within 14 days are considered, so turning
+// this on never emails a pile of old quotes. "Don't send" on a lead
+// (followup_paused) skips it for good. Each lead is claimed (followup_sent_at
 // set) before the email goes out, so a lead is never emailed twice; if the
 // send fails the claim is undone and the next hour tries again.
 
@@ -31,13 +34,21 @@ export function fmtLeadDate(d) {
   return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
+// When the 7-day clock started: the later of quoted_at and last_contact_at.
+export function lastContactTime(lead) {
+  const times = [lead?.quoted_at, lead?.last_contact_at].filter(Boolean).map(d => new Date(d).getTime()).filter(n => !Number.isNaN(n));
+  return times.length ? Math.max(...times) : null;
+}
+
 // Which leads are due right now. `today` is YYYY-MM-DD (business time).
 export function dueLeads(leads, now = new Date(), today = null) {
   const t = now.getTime();
   return (leads || []).filter(l => {
-    if (!l || l.stage !== 'quoted' || l.followup_sent_at || !l.quoted_at) return false;
+    if (!l || l.stage !== 'quoted' || l.followup_sent_at || l.followup_paused) return false;
     if (!l.email || !EMAIL_REGEX.test(String(l.email))) return false;
-    const age = t - new Date(l.quoted_at).getTime();
+    const start = lastContactTime(l);
+    if (start === null) return false;
+    const age = t - start;
     if (!(age >= FOLLOWUP_AFTER_DAYS * DAY_MS && age < FOLLOWUP_WINDOW_DAYS * DAY_MS)) return false;
     if (today && l.event_date && l.event_date < today) return false; // event already happened
     return true;
@@ -89,7 +100,7 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
   const replyTo = EMAIL_REGEX.test(byKey.lead_email || '') ? byKey.lead_email : DEFAULT_LEAD_EMAIL;
 
   const since = new Date(now.getTime() - FOLLOWUP_WINDOW_DAYS * DAY_MS).toISOString();
-  const leads = await get(`leads?select=id,name,email,stage,event_date,quoted_at,followup_sent_at&stage=eq.quoted&followup_sent_at=is.null&quoted_at=gte.${encodeURIComponent(since)}&limit=100`);
+  const leads = await get(`leads?select=id,name,email,stage,event_date,quoted_at,last_contact_at,followup_sent_at,followup_paused&stage=eq.quoted&followup_sent_at=is.null&followup_paused=is.false&or=(quoted_at.gte.${encodeURIComponent(since)},last_contact_at.gte.${encodeURIComponent(since)})&limit=200`);
   const due = dueLeads(leads, now, today);
   results.due = due.length;
 
