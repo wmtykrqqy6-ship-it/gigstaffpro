@@ -185,7 +185,7 @@ export default function LeadsView() {
               <p>We wanted to check in on the quote we sent for your event on (date). Are you still planning your casino party?</p>
               <p>If you have questions, want to change anything, or are ready to book, just reply to this email or call us at (262) 549-3559. Dates fill up, so let us know soon and we'll hold yours.</p>
               <p>Thanks,<br />Vegas on Wheels</p>
-              <p className="text-xs text-gray-500">Replies go to the admin email in Settings. Goes out between 9 AM and 6 PM, once per lead, only for leads moved to Quoted in the last 2 weeks. Moving a lead to Booked or Lost stops it.</p>
+              <p className="text-xs text-gray-500">Replies go to sales@vegasonwheels.com. Goes out between 9 AM and 6 PM, once per lead, only for leads moved to Quoted in the last 2 weeks. Moving a lead to Booked or Lost stops it.</p>
             </div>
           )}
         </div>

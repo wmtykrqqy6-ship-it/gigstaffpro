@@ -3,7 +3,7 @@
 // The quote form on vegasonwheels.com posts here (browser fetch, so the
 // visitor stays on the Vegas on Wheels site). This checks the form, saves a
 // lead in public.leads with the service key (the table itself is admin-only),
-// links it to an existing client with the same email, and emails the admin.
+// links it to an existing client with the same email, and emails sales@vegasonwheels.com.
 //
 // Lives in _lib and is called from api/send-email.js through the
 // /api/quote-request rewrite in vercel.json, because the Vercel plan is at
@@ -13,6 +13,10 @@
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { escapeHtml } from './escapeHtml.js';
 import { createRateLimiter, getClientIp } from './rateLimit.js';
+
+// Where new quote requests are emailed (Dylan, 2026-11-24). A settings row
+// 'lead_email' overrides it without a code change.
+export const DEFAULT_LEAD_EMAIL = 'sales@vegasonwheels.com';
 
 export const DEFAULT_ORIGINS = ['https://vegasonwheels.com', 'https://www.vegasonwheels.com'];
 
@@ -180,10 +184,10 @@ export async function handleQuoteRequest(req, res, deps) {
   try {
     const apiKey = env.RESEND_API_KEY;
     const { data: setting } = await supabase
-      .from('settings').select('setting_value').eq('setting_key', 'admin_email').maybeSingle();
-    const to = adminEmailFrom(setting?.setting_value);
+      .from('settings').select('setting_value').eq('setting_key', 'lead_email').maybeSingle();
+    const to = adminEmailFrom(setting?.setting_value) || DEFAULT_LEAD_EMAIL;
     if (!apiKey || !to) {
-      console.error(`quote request email skipped: ${!apiKey ? 'RESEND_API_KEY missing' : 'admin_email setting missing or not an email'}`);
+      console.error(`quote request email skipped: ${!apiKey ? 'RESEND_API_KEY missing' : 'no recipient'}`);
     } else {
       const html = leadEmailHtml(lead);
       const fetchImpl = deps.fetchImpl || fetch;

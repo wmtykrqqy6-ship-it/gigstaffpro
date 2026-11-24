@@ -17,6 +17,7 @@ import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 
 export const FOLLOWUP_AFTER_DAYS = 7;
 export const FOLLOWUP_WINDOW_DAYS = 14;
+export const DEFAULT_LEAD_EMAIL = 'sales@vegasonwheels.com'; // same as quoteRequest.js
 export const BUSINESS_PHONE = '(262) 549-3559';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -82,10 +83,10 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
     return r.json();
   };
 
-  const settings = await get('settings?select=setting_key,setting_value&setting_key=in.(lead_followup_enabled,admin_email)');
+  const settings = await get('settings?select=setting_key,setting_value&setting_key=in.(lead_followup_enabled,lead_email)');
   const byKey = Object.fromEntries((settings || []).map(s => [s.setting_key, settingValue(s.setting_value)]));
   if (byKey.lead_followup_enabled !== 'true') return { ...results, message: 'Lead follow-ups are off' };
-  const replyTo = EMAIL_REGEX.test(byKey.admin_email || '') ? byKey.admin_email : null;
+  const replyTo = EMAIL_REGEX.test(byKey.lead_email || '') ? byKey.lead_email : DEFAULT_LEAD_EMAIL;
 
   const since = new Date(now.getTime() - FOLLOWUP_WINDOW_DAYS * DAY_MS).toISOString();
   const leads = await get(`leads?select=id,name,email,stage,event_date,quoted_at,followup_sent_at&stage=eq.quoted&followup_sent_at=is.null&quoted_at=gte.${encodeURIComponent(since)}&limit=100`);

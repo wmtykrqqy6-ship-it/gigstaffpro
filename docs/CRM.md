@@ -105,8 +105,8 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
   `QUOTE_FORM_ORIGINS`), drops bots (hidden honeypot field, sent in under 3
   seconds), limits 5 per IP per hour, ignores the same email again within 10
   minutes, saves the lead with the service key, links it to a client with
-  the same email, and emails the `admin_email` setting (reply-to is the
-  visitor).
+  the same email, and emails sales@vegasonwheels.com (a `lead_email`
+  settings row overrides it; reply-to is the visitor).
 - **Leads tab** (`src/components/views/LeadsView.jsx`): New, Quoted, Booked,
   Lost, with counts. Change a lead's stage; Lost asks why (price, date not
   available, went with someone else, no reply, event cancelled, other).
@@ -120,8 +120,8 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
   (`settings.lead_followup_enabled`). The tab shows the exact email.
 - Moving a lead to **Quoted** starts a 7-day clock (`leads.quoted_at`). If
   the lead is still Quoted 7 days later, it gets one "Still planning your
-  casino party?" email (`api/_lib/leadFollowups.js`). Replies go to the
-  `admin_email` setting. Moving it to Booked or Lost stops it.
+  casino party?" email (`api/_lib/leadFollowups.js`). Replies go to
+  sales@vegasonwheels.com. Moving it to Booked or Lost stops it.
 - Runs on the hourly shift-reminder cron, between 9 AM and 6 PM business
   time. Only leads quoted in the last 14 days, so turning it on never emails
   old quotes. Skips leads with no email or whose event date has passed.

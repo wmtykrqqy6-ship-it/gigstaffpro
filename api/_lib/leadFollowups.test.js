@@ -43,7 +43,7 @@ function fakeFetch({ enabled = 'true', leads = [lead()], resendOk = true } = {})
   const calls = [];
   const fn = vi.fn(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
-    if (url.includes('/settings?')) return { ok: true, json: async () => [{ setting_key: 'lead_followup_enabled', setting_value: enabled }, { setting_key: 'admin_email', setting_value: 'boss@example.com' }] };
+    if (url.includes('/settings?')) return { ok: true, json: async () => [{ setting_key: 'lead_followup_enabled', setting_value: enabled }, { setting_key: 'lead_email', setting_value: 'boss@example.com' }] };
     if (url.includes('/leads?select=')) return { ok: true, json: async () => leads };
     if (url.includes('/leads?id=')) return { ok: true, json: async () => [{ id: 'L1' }] };
     if (url.includes('resend')) return { ok: resendOk, status: resendOk ? 200 : 422 };
