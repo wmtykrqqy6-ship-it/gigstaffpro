@@ -113,6 +113,17 @@ export function leadEmailHtml(lead, appUrl = 'https://www.gigstaffpro.com') {
   return renderEmailShell({ subtitle: 'New quote request', bodyHtml: body, headerEmoji: '📝' });
 }
 
+// settings.setting_value may be a plain string, a JSON string with quotes,
+// or a JSON object/array holding the address. Returns one email or null.
+export function adminEmailFrom(value) {
+  let v = value;
+  if (v && typeof v === 'object') {
+    v = Array.isArray(v) ? v[0] : (v.email ?? v.value ?? v.address ?? '');
+  }
+  const s = String(v ?? '').trim().replace(/^"+|"+$/g, '').trim();
+  return EMAIL_REGEX.test(s) && !/[\r\n,;]/.test(s) ? s : null;
+}
+
 const limiter = createRateLimiter(5, 60 * 60 * 1000); // 5 per IP per hour
 
 function setCors(req, res, origins) {
@@ -170,11 +181,13 @@ export async function handleQuoteRequest(req, res, deps) {
     const apiKey = env.RESEND_API_KEY;
     const { data: setting } = await supabase
       .from('settings').select('setting_value').eq('setting_key', 'admin_email').maybeSingle();
-    const to = String(setting?.setting_value ?? '').replace(/^"|"$/g, '').trim();
-    if (apiKey && EMAIL_REGEX.test(to)) {
+    const to = adminEmailFrom(setting?.setting_value);
+    if (!apiKey || !to) {
+      console.error(`quote request email skipped: ${!apiKey ? 'RESEND_API_KEY missing' : 'admin_email setting missing or not an email'}`);
+    } else {
       const html = leadEmailHtml(lead);
       const fetchImpl = deps.fetchImpl || fetch;
-      await fetchImpl('https://api.resend.com/emails', {
+      const sent = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -186,6 +199,11 @@ export async function handleQuoteRequest(req, res, deps) {
           text: htmlToPlainText(html)
         })
       });
+      // fetch doesn't throw on a 4xx/5xx, so check what Resend said.
+      if (sent && sent.ok === false) {
+        const detail = typeof sent.text === 'function' ? await sent.text().catch(() => '') : '';
+        console.error(`quote request email failed: Resend ${sent.status} ${String(detail).slice(0, 300)}`);
+      }
     }
   } catch (err) {
     console.error('quote request email failed:', err?.message || err);
