@@ -25,6 +25,11 @@ describe('dueLeads', () => {
     expect(dueLeads(leads, NOW, '2026-12-10').map(l => l.id)).toEqual(['L1', 'talkedLongAgo']);
   });
 
+  it('uses the number of days the admin picked', () => {
+    expect(dueLeads([lead({ quoted_at: daysAgo(4) })], NOW, '2026-12-10', 3)).toHaveLength(1);
+    expect(dueLeads([lead({ quoted_at: daysAgo(8) })], NOW, '2026-12-10', 10)).toHaveLength(0);
+  });
+
   it('counts from the later of quoted and last contact', () => {
     expect(lastContactTime({ quoted_at: daysAgo(9), last_contact_at: daysAgo(2) })).toBe(new Date(daysAgo(2)).getTime());
     expect(lastContactTime({})).toBe(null);
@@ -51,7 +56,7 @@ function fakeFetch({ enabled = 'true', leads = [lead()], resendOk = true } = {})
   const calls = [];
   const fn = vi.fn(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
-    if (url.includes('/settings?')) return { ok: true, json: async () => [{ setting_key: 'lead_followup_enabled', setting_value: enabled }, { setting_key: 'lead_email', setting_value: 'boss@example.com' }] };
+    if (url.includes('/settings?')) return { ok: true, json: async () => [{ setting_key: 'client_emails', setting_value: JSON.stringify({ followup: { on: enabled === 'true', days: 7 } }) }, { setting_key: 'lead_email', setting_value: 'boss@example.com' }] };
     if (url.includes('/leads?select=')) return { ok: true, json: async () => leads };
     if (url.includes('/leads?id=')) return { ok: true, json: async () => [{ id: 'L1' }] };
     if (url.includes('resend')) return { ok: resendOk, status: resendOk ? 200 : 422 };

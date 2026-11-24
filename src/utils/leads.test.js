@@ -34,6 +34,7 @@ describe('leads', () => {
     const now = new Date('2026-12-01T12:00:00Z');
     expect(stagePatch('quoted', null, now)).toMatchObject({ quoted_at: now.toISOString(), followup_sent_at: null });
     expect(stagePatch('booked', null, now).quoted_at).toBe(undefined);
+    expect(stagePatch('booked', null, now).booked_at).toBe(now.toISOString());
   });
 
   it('describes the follow-up on a lead card', () => {
@@ -47,6 +48,7 @@ describe('leads', () => {
     expect(followupStatus({ ...quoted, followup_paused: true }, true, now)).toContain('off');
     // talked yesterday: due 7 days from then, not from quoted
     expect(followupStatus({ ...quoted, quoted_at: '2026-11-20T12:00:00Z', last_contact_at: '2026-12-04T12:00:00Z' }, true, now)).toContain('Dec 11');
+    expect(followupStatus({ ...quoted, quoted_at: '2026-12-03T12:00:00Z' }, true, now, 1)).toContain('soon');
     expect(contactPatch(now)).toMatchObject({ last_contact_at: now.toISOString(), followup_sent_at: null });
   });
 });
