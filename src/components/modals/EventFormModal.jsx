@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { findClientByName, newClientFromEvent } from '../../utils/clientMatch';
 import { dropUnchangedClientFields } from '../../utils/eventClientDetails';
 import { logClientAccess } from '../../utils/clientAccessLog';
+import { fetchAllRows } from '../../utils/clientRecords';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -125,11 +126,14 @@ export default function EventFormModal({
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setVenues(data || []));
-    supabase
+    // All pages: the list passes Supabase's 1,000-row limit after the
+    // Goodshuffle import.
+    fetchAllRows(() => supabase
       .from('clients')
       .select('id, name, company, phone, email')
       .eq('is_active', true)
       .order('name')
+      .order('id'))
       .then(({ data }) => {
         setClients(data || []);
         if (data?.length) {
@@ -399,7 +403,7 @@ export default function EventFormModal({
     const name = String(formData.client || '').trim();
     if (!name) return null;
     try {
-      const { data: all, error: listError } = await supabase.from('clients').select('id, name');
+      const { data: all, error: listError } = await fetchAllRows(() => supabase.from('clients').select('id, name').order('id'));
       if (listError) throw listError;
       const existing = findClientByName(all || [], name);
       if (existing) return existing.id;
