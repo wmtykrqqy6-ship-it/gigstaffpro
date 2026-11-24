@@ -42,6 +42,7 @@ import PaymentsView from './components/views/PaymentsView';
 import ScheduleView from './components/views/ScheduleView';
 import LogisticsView from './components/views/LogisticsView';
 import ClientsView from './components/views/ClientsView';
+import LeadsView from './components/views/LeadsView';
 import WorkerPortalView from './components/views/WorkerPortalView';
 import PullSheetImportLauncher from './components/logistics/PullSheetImportLauncher';
 import { hasLogisticsRole, isWarehouseWorker } from './utils/logistics/dispatch';
@@ -1456,6 +1457,9 @@ setAppPositions(storedPositions);
     }
     if (currentView === 'clients') {
       return <ClientsView timeFormat={timeFormat} />;
+    }
+    if (currentView === 'leads') {
+      return <LeadsView />;
     }
     if (currentView === 'applications') {
       return (

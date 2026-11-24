@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 import { htmlToPlainText } from './_lib/emailShell.js';
 import { handleAdminPush } from './_lib/push.js';
+import { handleQuoteRequest } from './_lib/quoteRequest.js';
 
 export const config = {
   api: {
@@ -25,6 +26,16 @@ const MAX_SUBJECT_LENGTH = 300;
 const MAX_HTML_LENGTH = 200000;
 
 export default async function handler(req, res) {
+  // Public website quote form (/api/quote-request, rewritten here in
+  // vercel.json; the Vercel plan is at its function limit). The only path
+  // in this file without the admin check. See api/_lib/quoteRequest.js.
+  if (req.query?.route === 'quote-request') {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return res.status(500).json({ ok: false, error: 'Not configured' });
+    return handleQuoteRequest(req, res, { supabase: createClient(url, key) });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

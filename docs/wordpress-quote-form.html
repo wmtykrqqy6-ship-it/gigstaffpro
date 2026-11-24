@@ -1,0 +1,118 @@
+<!--
+  Vegas on Wheels quote request form (CRM Phase 1, step 3; docs/CRM.md).
+
+  Paste this whole block into a "Custom HTML" block on
+  https://vegasonwheels.com/contact-us/ in place of the old form. Visitors
+  stay on vegasonwheels.com; the answers go to GigStaffPro
+  (https://www.gigstaffpro.com/api/quote-request), which saves a lead and
+  emails the admin address from GigStaffPro Settings.
+
+  No keys or passwords are in here. The server only accepts it from
+  vegasonwheels.com (and www.).
+-->
+<form id="vow-quote" novalidate>
+  <style>
+    #vow-quote{max-width:640px;font-family:inherit}
+    #vow-quote .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    #vow-quote label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+    #vow-quote input[type=text],#vow-quote input[type=email],#vow-quote input[type=tel],#vow-quote input[type=date],#vow-quote input[type=number],#vow-quote textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:16px}
+    #vow-quote fieldset{border:0;padding:0;margin:12px 0 0}
+    #vow-quote legend{font-weight:600;font-size:14px;margin-bottom:4px}
+    #vow-quote .checks label{display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:4px 16px 4px 0}
+    #vow-quote button{margin-top:16px;background:#7c0a02;color:#fff;border:0;border-radius:6px;padding:12px 24px;font-size:16px;font-weight:700;cursor:pointer}
+    #vow-quote button[disabled]{opacity:.6;cursor:default}
+    #vow-quote .hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+    #vow-quote .msg{margin-top:12px;font-weight:600}
+    #vow-quote .msg.err{color:#b91c1c}
+    #vow-quote .msg.ok{color:#15803d}
+    @media (max-width:600px){#vow-quote .row{grid-template-columns:1fr}}
+  </style>
+
+  <div class="row">
+    <div><label for="vq-name">Name *</label><input id="vq-name" name="name" type="text" autocomplete="name" required></div>
+    <div><label for="vq-email">Email *</label><input id="vq-email" name="email" type="email" autocomplete="email" required></div>
+  </div>
+  <div class="row">
+    <div><label for="vq-phone">Phone *</label><input id="vq-phone" name="phone" type="tel" autocomplete="tel" required></div>
+    <div><label for="vq-company">Company/Organization</label><input id="vq-company" name="company" type="text" autocomplete="organization"></div>
+  </div>
+  <label for="vq-location">Event location</label><input id="vq-location" name="event_location" type="text">
+  <div class="row">
+    <div><label for="vq-date">Event date</label><input id="vq-date" name="event_date" type="date"></div>
+    <div><label for="vq-time">Start time</label><input id="vq-time" name="start_time" type="text" placeholder="e.g. 7:00 PM"></div>
+  </div>
+  <label for="vq-guests">Number of guests</label><input id="vq-guests" name="guest_count" type="number" min="0" inputmode="numeric">
+
+  <fieldset class="checks"><legend>Game requests</legend>
+    <label><input type="checkbox" name="games" value="Blackjack">Blackjack</label>
+    <label><input type="checkbox" name="games" value="Craps">Craps</label>
+    <label><input type="checkbox" name="games" value="Roulette">Roulette</label>
+    <label><input type="checkbox" name="games" value="Texas Hold'em">Texas Hold'em</label>
+    <label><input type="checkbox" name="games" value="Casino War">Casino War</label>
+    <label><input type="checkbox" name="games" value="Money Wheel">Money Wheel</label>
+    <label><input type="checkbox" name="games" value="Other casino games">Other casino games</label>
+  </fieldset>
+
+  <fieldset class="checks"><legend>Additional services</legend>
+    <label><input type="checkbox" name="services" value="Decorations">Decorations</label>
+    <label><input type="checkbox" name="services" value="DJ">DJ</label>
+    <label><input type="checkbox" name="services" value="Photobooth">Photobooth</label>
+    <label><input type="checkbox" name="services" value="Magician">Magician</label>
+    <label><input type="checkbox" name="services" value="Live music">Live music (band, cocktail music, string band)</label>
+    <label><input type="checkbox" name="services" value="Other">Other (please describe below)</label>
+  </fieldset>
+
+  <label for="vq-message">How can Vegas on Wheels help you today?</label>
+  <textarea id="vq-message" name="message" rows="4"></textarea>
+
+  <div class="hp" aria-hidden="true"><label for="vq-website">Website</label><input id="vq-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+
+  <button type="submit">Get My Free Quote</button>
+  <div class="msg" role="status" aria-live="polite"></div>
+
+  <script>
+  (function () {
+    var form = document.getElementById('vow-quote');
+    if (!form) return;
+    var startedAt = Date.now();
+    var msg = form.querySelector('.msg');
+    var btn = form.querySelector('button[type=submit]');
+    function show(text, ok) { msg.textContent = text; msg.className = 'msg ' + (ok ? 'ok' : 'err'); }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var f = form.elements;
+      if (!f.name.value.trim() || !f.email.value.trim() || !f.phone.value.trim()) {
+        show('Please fill in your name, email and phone.', false);
+        return;
+      }
+      var checked = function (n) {
+        return Array.prototype.slice.call(form.querySelectorAll('input[name="' + n + '"]:checked')).map(function (c) { return c.value; });
+      };
+      var data = {
+        name: f.name.value, email: f.email.value, phone: f.phone.value, company: f.company.value,
+        event_location: f.event_location.value, event_date: f.event_date.value, start_time: f.start_time.value,
+        guest_count: f.guest_count.value, games: checked('games'), services: checked('services'),
+        message: f.message.value, website: f.website.value, started_at: startedAt, page_url: location.href
+      };
+      btn.disabled = true;
+      show('Sending…', true);
+      fetch('https://www.gigstaffpro.com/api/quote-request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+      }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok && b.ok, b: b }; }); })
+        .then(function (r) {
+          if (r.ok) {
+            form.reset();
+            show('Thank you! We received your request and will send your quote within one business day.', true);
+          } else {
+            btn.disabled = false;
+            show((r.b && r.b.error) || 'Something went wrong. Please call (262) 549-3559 or email sales@vegasonwheels.com.', false);
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          show('Something went wrong. Please call (262) 549-3559 or email sales@vegasonwheels.com.', false);
+        });
+    });
+  })();
+  </script>
+</form>

@@ -14,5 +14,8 @@
         { "key": "Cache-Control", "value": "no-cache" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/quote-request", "destination": "/api/send-email?route=quote-request" }
   ]
 }
