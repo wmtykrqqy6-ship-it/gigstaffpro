@@ -116,23 +116,47 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
 
 ## Automatic lead follow-up (step 4)
 
-- Off until an admin turns it on at the top of the Leads tab
-  (`settings.lead_followup_enabled`). The tab shows the exact email.
-- The 7 days count from the **last contact**: the later of moving the lead
+- Off until an admin turns it on in the Leads tab's **Automatic emails**
+  panel, which also sets the number of days (default 7). Stored with the
+  other automatic emails in settings `client_emails`
+  (`api/_lib/clientEmailSettings.js`, copied to `src/utils/`).
+- The days count from the **last contact**: the later of moving the lead
   to Quoted (`leads.quoted_at`) and the last "We talked" press
   (`leads.last_contact_at`). Dylan doesn't want it to go out while they are
   still working with the client (2026-11-24). Then the lead gets one "Still
   planning your casino party?" email (`api/_lib/leadFollowups.js`). Replies
   go to sales@vegasonwheels.com. "We talked" also allows one more follow-up
-  later. "Don't send auto email" (`followup_paused`) or Booked/Lost stops it.
+  later. "Don't send auto emails" (`followup_paused`) or Booked/Lost stops it.
   When the Messages inbox lands, emails with the client should update
   `last_contact_at` too.
 - Runs on the hourly shift-reminder cron, between 9 AM and 6 PM business
-  time. Only leads whose last contact was in the last 14 days, so turning it on
+  time. Only leads whose clock ran out in the last week, so turning it on
   never emails old quotes. Skips leads with no email or whose event date has passed.
 - A lead is claimed (`followup_sent_at`) before sending, so it is never
   emailed twice; a refused send is undone and retried next hour.
 - Migration `20261124150000_add_lead_followups.sql`.
+
+## Automatic emails to booked clients
+
+Wording approved by Dylan 2026-11-24 (Claude Doc "Post-booking client
+emails"); code in `api/_lib/bookedLeadEmails.js`, same cron and hours.
+
+| Email | Default timing | Settable |
+| --- | --- | --- |
+| Booking thank-you | the day a lead is marked Booked (`leads.booked_at`) | on/off |
+| Upsell ideas | 21 days before the event | on/off, days before |
+| Get-ready checklist | 7 days before the event | on/off, days before |
+| Review and tip | the Monday after the event | on/off, days after (empty = Monday after) |
+
+- All off until turned on in the Leads tab. One email of each kind per lead,
+  tracked in `lead_emails_sent` (claimed before sending, removed if the send
+  fails). A missed day still sends within 3 days.
+- Only leads in Booked with an email and event date; "Don't send auto
+  emails" or Lost stops them. The upsell is skipped when the client booked
+  after its date.
+- The review email includes the Google review and tip links only when they
+  are filled in on the panel (no online tip page exists yet).
+- Migration `20261124160000_add_booked_lead_emails.sql`.
 - Hosting note: vegasonwheels.com runs on GoDaddy WordPress, whose firewall
   refuses page saves containing `<script>` or `<iframe>`. The form markup is
   a Custom HTML block on the page; the script is a WPCode Lite JavaScript

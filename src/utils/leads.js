@@ -39,7 +39,8 @@ export function stagePatch(stage, lostReason = null, now = new Date()) {
     stage,
     lost_reason: stage === 'lost' ? (String(lostReason || '').trim() || 'Other') : null,
     updated_at: ts,
-    ...(stage === 'quoted' ? { quoted_at: ts, followup_sent_at: null } : {})
+    ...(stage === 'quoted' ? { quoted_at: ts, followup_sent_at: null } : {}),
+    ...(stage === 'booked' ? { booked_at: ts } : {})
   };
 }
 
@@ -54,18 +55,18 @@ export function lastContactTime(lead) {
   return times.length ? Math.max(...times) : null;
 }
 
-export const FOLLOWUP_AFTER_DAYS = 7; // same as api/_lib/leadFollowups.js
+export const FOLLOWUP_AFTER_DAYS = 7; // default, same as api/_lib/leadFollowups.js
 
 // One line about the automatic follow-up for a lead card, or null.
-export function followupStatus(lead, enabled, now = new Date()) {
+export function followupStatus(lead, enabled, now = new Date(), days = FOLLOWUP_AFTER_DAYS) {
   if (!lead || lead.stage !== 'quoted') return null;
   const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   if (lead.followup_sent_at) return `Follow-up email sent ${fmt(lead.followup_sent_at)}`;
-  if (lead.followup_paused) return 'Automatic follow-up off for this lead';
+  if (lead.followup_paused) return 'Automatic emails off for this lead';
   if (!lead.email) return 'No email, so no automatic follow-up';
   const start = lastContactTime(lead);
   if (!enabled || start === null) return null;
-  const due = new Date(start + FOLLOWUP_AFTER_DAYS * 86400000);
+  const due = new Date(start + days * 86400000);
   return due <= now ? 'Follow-up email going out soon' : `Follow-up email ${fmt(due)} if they haven't booked`;
 }
 

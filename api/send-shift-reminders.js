@@ -10,6 +10,7 @@ import { escapeHtml } from './_lib/escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 import { sendRouteReminders } from './_lib/routeReminders.js';
 import { sendLeadFollowups } from './_lib/leadFollowups.js';
+import { sendBookedLeadEmails } from './_lib/bookedLeadEmails.js';
 import { businessNow } from './_lib/routeActions.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushFromCron, shiftReminderNotification } from './_lib/push.js';
@@ -178,6 +179,16 @@ async function withRouteReminders(body) {
       : { message: 'Lead follow-ups only go out 9 AM to 6 PM' };
   } catch (err) {
     body.leadFollowups = { error: err.message };
+  }
+  // Emails to booked clients: thank-you, upsell, get-ready, review + tip
+  // (api/_lib/bookedLeadEmails.js), same hours.
+  try {
+    const bn = businessNow();
+    body.clientEmails = bn.hour >= 9 && bn.hour < 18
+      ? await sendBookedLeadEmails({ today: bn.date })
+      : { message: 'Client emails only go out 9 AM to 6 PM' };
+  } catch (err) {
+    body.clientEmails = { error: err.message };
   }
   return body;
 }

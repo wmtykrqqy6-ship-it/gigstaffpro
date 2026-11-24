@@ -4,22 +4,24 @@
 // Runs on the hourly shift-reminder cron (api/send-shift-reminders.js), the
 // same way the route reminders do, because the Vercel plan is at its
 // 12-function limit. Does nothing unless the admin turned it on in the Leads
-// tab (settings.lead_followup_enabled = 'true').
+// tab (settings 'client_emails', api/_lib/clientEmailSettings.js), which also
+// sets how many days (default 7).
 //
 // A quoted lead gets a follow-up 7 days after the last contact: the later of
 // when it was moved to Quoted and when someone last pressed "We talked"
 // (Dylan, 2026-11-24: no email while we're still working with the client).
-// Only leads whose last contact was within 14 days are considered, so turning
-// this on never emails a pile of old quotes. "Don't send" on a lead
+// Only leads whose clock ran out within the last week are considered, so
+// turning this on never emails a pile of old quotes. "Don't send" on a lead
 // (followup_paused) skips it for good. Each lead is claimed (followup_sent_at
 // set) before the email goes out, so a lead is never emailed twice; if the
 // send fails the claim is undone and the next hour tries again.
 
 import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
+import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from './clientEmailSettings.js';
 
-export const FOLLOWUP_AFTER_DAYS = 7;
-export const FOLLOWUP_WINDOW_DAYS = 14;
+export const FOLLOWUP_AFTER_DAYS = 7;  // default; admins change it in the Leads tab
+export const FOLLOWUP_GRACE_DAYS = 7; // only leads whose clock ran out in the last week
 export const DEFAULT_LEAD_EMAIL = 'sales@vegasonwheels.com'; // same as quoteRequest.js
 export const BUSINESS_PHONE = '(262) 549-3559';
 
@@ -41,7 +43,7 @@ export function lastContactTime(lead) {
 }
 
 // Which leads are due right now. `today` is YYYY-MM-DD (business time).
-export function dueLeads(leads, now = new Date(), today = null) {
+export function dueLeads(leads, now = new Date(), today = null, days = FOLLOWUP_AFTER_DAYS) {
   const t = now.getTime();
   return (leads || []).filter(l => {
     if (!l || l.stage !== 'quoted' || l.followup_sent_at || l.followup_paused) return false;
@@ -49,7 +51,7 @@ export function dueLeads(leads, now = new Date(), today = null) {
     const start = lastContactTime(l);
     if (start === null) return false;
     const age = t - start;
-    if (!(age >= FOLLOWUP_AFTER_DAYS * DAY_MS && age < FOLLOWUP_WINDOW_DAYS * DAY_MS)) return false;
+    if (!(age >= days * DAY_MS && age < (days + FOLLOWUP_GRACE_DAYS) * DAY_MS)) return false;
     if (today && l.event_date && l.event_date < today) return false; // event already happened
     return true;
   });
@@ -94,14 +96,16 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
     return r.json();
   };
 
-  const settings = await get('settings?select=setting_key,setting_value&setting_key=in.(lead_followup_enabled,lead_email)');
-  const byKey = Object.fromEntries((settings || []).map(s => [s.setting_key, settingValue(s.setting_value)]));
-  if (byKey.lead_followup_enabled !== 'true') return { ...results, message: 'Lead follow-ups are off' };
+  const settings = await get(`settings?select=setting_key,setting_value&setting_key=in.(${CLIENT_EMAILS_KEY},lead_email)`);
+  const raw = Object.fromEntries((settings || []).map(s => [s.setting_key, s.setting_value]));
+  const { followup } = normalizeClientEmailSettings(raw[CLIENT_EMAILS_KEY]);
+  if (!followup.on) return { ...results, message: 'Lead follow-ups are off' };
+  const byKey = { lead_email: settingValue(raw.lead_email) };
   const replyTo = EMAIL_REGEX.test(byKey.lead_email || '') ? byKey.lead_email : DEFAULT_LEAD_EMAIL;
 
-  const since = new Date(now.getTime() - FOLLOWUP_WINDOW_DAYS * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - (followup.days + FOLLOWUP_GRACE_DAYS) * DAY_MS).toISOString();
   const leads = await get(`leads?select=id,name,email,stage,event_date,quoted_at,last_contact_at,followup_sent_at,followup_paused&stage=eq.quoted&followup_sent_at=is.null&followup_paused=is.false&or=(quoted_at.gte.${encodeURIComponent(since)},last_contact_at.gte.${encodeURIComponent(since)})&limit=200`);
-  const due = dueLeads(leads, now, today);
+  const due = dueLeads(leads, now, today, followup.days);
   results.due = due.length;
 
   for (const lead of due) {

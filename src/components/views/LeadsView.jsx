@@ -8,8 +8,7 @@ import {
   LEAD_STAGES, LOST_REASONS, stageLabel, countByStage, sortLeads, stagePatch,
   clientFromLead, emptyLeadForm, leadFromForm, followupStatus, contactPatch
 } from '../../utils/leads';
-
-const FOLLOWUP_KEY = 'lead_followup_enabled';
+import AutoEmailsPanel from '../leads/AutoEmailsPanel';
 
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
 
@@ -26,8 +25,9 @@ export default function LeadsView() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyLeadForm());
   const [saving, setSaving] = useState(false);
-  const [followupOn, setFollowupOn] = useState(false);
-  const [showFollowupInfo, setShowFollowupInfo] = useState(false);
+  const [emailSettings, setEmailSettings] = useState(null);
+  const followupOn = !!emailSettings?.followup.on;
+  const followupDays = emailSettings?.followup.days;
 
   const load = async () => {
     const { data, error } = await fetchAllRows(() => supabase.from('leads').select('*').order('created_at', { ascending: false }).order('id'));
@@ -49,27 +49,7 @@ export default function LeadsView() {
     }
   };
 
-  const loadFollowupSetting = async () => {
-    const { data } = await supabase.from('settings').select('setting_value').eq('setting_key', FOLLOWUP_KEY).maybeSingle();
-    setFollowupOn(String(data?.setting_value ?? '').replace(/"/g, '') === 'true');
-  };
-
-  useEffect(() => { load(); loadFollowupSetting(); }, []);
-
-  const toggleFollowup = async () => {
-    const next = !followupOn;
-    try {
-      const { data: existing } = await supabase.from('settings').select('setting_key').eq('setting_key', FOLLOWUP_KEY).maybeSingle();
-      const { error } = existing
-        ? await supabase.from('settings').update({ setting_value: String(next), updated_at: new Date().toISOString() }).eq('setting_key', FOLLOWUP_KEY)
-        : await supabase.from('settings').insert([{ setting_key: FOLLOWUP_KEY, setting_value: String(next) }]);
-      if (error) throw error;
-      setFollowupOn(next);
-      notify(next ? 'Automatic follow-up emails are on' : 'Automatic follow-up emails are off');
-    } catch (err) {
-      notify('Could not save: ' + err.message);
-    }
-  };
+  useEffect(() => { load(); }, []);
 
   const counts = useMemo(() => countByStage(leads), [leads]);
   const visible = useMemo(() => sortLeads(leads.filter(l => l.stage === stage)), [leads, stage]);
@@ -78,8 +58,8 @@ export default function LeadsView() {
     const patch = stagePatch(next, reason);
     let { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
     if (error && isMissingSchemaError(error)) {
-      // Follow-up SQL (20261124150000) not run yet: save the stage without the clock.
-      const { quoted_at, followup_sent_at, ...rest } = patch;
+      // Email SQL (20261124150000 / 160000) not run yet: save the stage without the dates.
+      const { quoted_at, followup_sent_at, booked_at, ...rest } = patch;
       ({ error } = await supabase.from('leads').update(rest).eq('id', lead.id));
     }
     if (error) { notify('Could not update the lead: ' + error.message); return; }
@@ -174,33 +154,7 @@ export default function LeadsView() {
         </div>
       )}
 
-      {!needsSql && (
-        <div className="bg-white rounded-lg shadow p-4 text-sm">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center space-x-2 text-gray-800">
-              <Clock size={16} className="text-red-900" />
-              <span><strong>Automatic follow-up:</strong> email a quoted lead if 7 days pass with no contact. Press "We talked" on a lead to restart the 7 days.</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button onClick={() => setShowFollowupInfo(s => !s)} className="text-red-900 hover:underline">{showFollowupInfo ? 'Hide email' : 'See the email'}</button>
-              <button onClick={toggleFollowup}
-                className={`px-3 py-1.5 rounded-full font-medium ${followupOn ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                {followupOn ? 'On' : 'Off'}
-              </button>
-            </div>
-          </div>
-          {showFollowupInfo && (
-            <div className="mt-3 border-t pt-3 text-gray-700 space-y-2">
-              <p className="text-xs text-gray-500">Subject: Still planning your casino party?</p>
-              <p>Hi (first name),</p>
-              <p>We wanted to check in on the quote we sent for your event on (date). Are you still planning your casino party?</p>
-              <p>If you have questions, want to change anything, or are ready to book, just reply to this email or call us at (262) 549-3559. Dates fill up, so let us know soon and we'll hold yours.</p>
-              <p>Thanks,<br />Vegas on Wheels</p>
-              <p className="text-xs text-gray-500">Replies go to sales@vegasonwheels.com. Goes out between 9 AM and 6 PM, 7 days after the lead was quoted or after the last "We talked", whichever is later. Never for a lead set to "Don't send auto email", or once it's Booked or Lost.</p>
-            </div>
-          )}
-        </div>
-      )}
+      {!needsSql && <AutoEmailsPanel onChange={setEmailSettings} />}
 
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {LEAD_STAGES.map(s => (
@@ -251,7 +205,7 @@ export default function LeadsView() {
                     )}
                     {lead.message && <p className="text-sm text-gray-600 mt-2 whitespace-pre-line">{lead.message}</p>}
                     {lead.stage === 'lost' && lead.lost_reason && <p className="text-xs text-gray-500 mt-2">Lost: {lead.lost_reason}</p>}
-                    {followupStatus(lead, followupOn) && <p className="text-xs text-gray-500 mt-2 flex items-center space-x-1"><Clock size={12} /><span>{followupStatus(lead, followupOn)}</span></p>}
+                    {followupStatus(lead, followupOn, new Date(), followupDays) && <p className="text-xs text-gray-500 mt-2 flex items-center space-x-1"><Clock size={12} /><span>{followupStatus(lead, followupOn, new Date(), followupDays)}</span></p>}
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     <select value={lead.stage}
@@ -260,12 +214,12 @@ export default function LeadsView() {
                       {LEAD_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
                     {lead.stage === 'quoted' && (
-                      <>
-                        <button onClick={() => updateLead(lead, contactPatch(), 'Got it. The 7 days start over today.')}
-                          className="text-xs text-red-900 hover:underline">We talked</button>
-                        <button onClick={() => updateLead(lead, { followup_paused: !lead.followup_paused, updated_at: new Date().toISOString() })}
-                          className="text-xs text-gray-600 hover:underline">{lead.followup_paused ? 'Allow auto email' : "Don't send auto email"}</button>
-                      </>
+                      <button onClick={() => updateLead(lead, contactPatch(), 'Got it. The follow-up clock starts over today.')}
+                        className="text-xs text-red-900 hover:underline">We talked</button>
+                    )}
+                    {(lead.stage === 'quoted' || lead.stage === 'booked') && (
+                      <button onClick={() => updateLead(lead, { followup_paused: !lead.followup_paused, updated_at: new Date().toISOString() })}
+                        className="text-xs text-gray-600 hover:underline">{lead.followup_paused ? 'Allow auto emails' : "Don't send auto emails"}</button>
                     )}
                     {(lead.client_id === null || lead.client_id === undefined) && (
                       <button onClick={() => addAsClient(lead)} className="text-xs text-red-900 hover:underline flex items-center space-x-1">
