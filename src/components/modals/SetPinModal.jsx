@@ -333,7 +333,7 @@ export default function SetPinModal({
         `Their login info:\n` +
         `Phone: ${worker.phone}\n` +
         `PIN: ${newPin}\n\n` +
-        `They can now log in at gigstaffpro.vercel.app`
+        `They can now log in at gigstaffpro.com`
       );
 
       setNewPin('');
@@ -495,7 +495,7 @@ export default function SetPinModal({
               <ul className="text-xs text-yellow-800 mt-2 space-y-1">
                 <li>• Phone: {worker.phone}</li>
                 <li>• PIN: {newPin || '(enter above)'}</li>
-                <li>• URL: gigstaffpro.vercel.app</li>
+                <li>• URL: gigstaffpro.com</li>
               </ul>
             </div>
           )}
