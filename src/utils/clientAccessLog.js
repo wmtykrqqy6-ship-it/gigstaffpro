@@ -20,7 +20,8 @@ export function shouldLogView(key, now = Date.now(), seen = lastLogged) {
   return true;
 }
 
-// recordType: 'clients' | 'event_client_details'
+// recordType: 'clients' | 'event_client_details' (views/exports; changes
+// to client_contacts and client_activity are logged by the database)
 // where: which screen, e.g. 'settings_clients' (stored in details)
 // Never throws: a logging failure (or the migration not run yet) must not
 // break the screen.
@@ -55,7 +56,9 @@ const ACTION_WORDS = {
 
 const RECORD_WORDS = {
   clients: 'saved client',
-  event_client_details: 'event client details'
+  event_client_details: 'event client details',
+  client_contacts: 'client contact',
+  client_activity: 'client history entry'
 };
 
 // One readable line for Settings -> Access log, e.g.

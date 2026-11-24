@@ -12,8 +12,8 @@ data goes in"), decided with Dylan 2026-11-21.
 - Workers never see client details. Client name and contact live in
   `event_client_details` (admin-only), not on the public `events` row
   (migration `20261121120000_make_client_details_admin_only.sql`).
-- Admin-only tables (RLS `is_admin()`): `clients`, `event_client_details`,
-  `venues`, `client_access_log`.
+- Admin-only tables (RLS `is_admin()`): `clients`, `client_contacts`,
+  `client_activity`, `event_client_details`, `venues`, `client_access_log`.
 - The role is stored on `admin_users.role`: `admin` or `sales_manager`.
   `public.my_staff_role()` returns the signed-in person's role. Today the
   two roles have the same access; the role is a label in the log.
@@ -78,8 +78,9 @@ once) and their user in Authentication → Users.
 `public.client_access_log`: who viewed, exported, added, changed or deleted
 a client record, and when. Shown in Settings → Access log (latest 200).
 
-- **Adds, changes, deletes** of `clients` and `event_client_details` are
-  logged by database triggers, however the change was made. Updates list the
+- **Adds, changes, deletes** of `clients`, `client_contacts`,
+  `client_activity` and `event_client_details` are logged by database
+  triggers, however the change was made. Updates list the
   changed field names, not the values, so the log isn't a second copy of
   contact details. The client's name is kept as the entry's label.
 - **Views and exports** are logged by the app through
