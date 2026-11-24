@@ -249,6 +249,32 @@ export default function EventFormModal({
     setShowClientSuggestions(false);
   };
 
+  // Create mode: pick the market nearest the event address (the event's
+  // "home warehouse"), unless the admin has chosen one. Debounced so typing
+  // an address doesn't fire a lookup per keystroke.
+  // Must stay above the early return below: hooks run on every render.
+  useEffect(() => {
+    if (!open || isEdit || locationManuallySet) return;
+    const address = (formData.address || '').trim();
+    const candidates = locations.filter(l => l.address);
+    if (address.length < 8 || locations.length < 2 || candidates.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const distances = await Promise.all(candidates.map(loc =>
+        fetch(`/api/get-distance?origin=${encodeURIComponent(loc.address)}&destination=${encodeURIComponent(address)}`)
+          .then(r => r.json())
+          .then(d => ({ id: loc.id, miles: d.miles }))
+          .catch(() => ({ id: loc.id, miles: null }))
+      ));
+      const nearest = nearestLocationId(distances);
+      if (!cancelled && nearest) {
+        setFormData(f => ({ ...f, location_id: nearest }));
+        setAutoPickedLocation(true);
+      }
+    }, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [open, isEdit, locationManuallySet, formData.address, locations]);
+
   if (!open || (isEdit && !event)) return null;
 
   // Crew roles (Set Up Driver, Set Up, Warehouse) are staffed on the
@@ -307,31 +333,6 @@ export default function EventFormModal({
     setEndTimeManuallySet(true);
     setFormData(f => ({ ...f, end_time: rawValue }));
   };
-
-  // Create mode: pick the market nearest the event address (the event's
-  // "home warehouse"), unless the admin has chosen one. Debounced so typing
-  // an address doesn't fire a lookup per keystroke.
-  useEffect(() => {
-    if (!open || isEdit || locationManuallySet) return;
-    const address = (formData.address || '').trim();
-    const candidates = locations.filter(l => l.address);
-    if (address.length < 8 || locations.length < 2 || candidates.length === 0) return;
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      const distances = await Promise.all(candidates.map(loc =>
-        fetch(`/api/get-distance?origin=${encodeURIComponent(loc.address)}&destination=${encodeURIComponent(address)}`)
-          .then(r => r.json())
-          .then(d => ({ id: loc.id, miles: d.miles }))
-          .catch(() => ({ id: loc.id, miles: null }))
-      ));
-      const nearest = nearestLocationId(distances);
-      if (!cancelled && nearest) {
-        setFormData(f => ({ ...f, location_id: nearest }));
-        setAutoPickedLocation(true);
-      }
-    }, 800);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [open, isEdit, locationManuallySet, formData.address, locations]);
 
   // Edit mode: end the local-first window now. Saved straight away (not on
   // "Save"), then emails everyone else whose rank window is open.
