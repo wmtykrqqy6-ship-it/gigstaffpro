@@ -14,7 +14,7 @@ import {
   emptyContactForm, contactFormFrom, validateContact, contactPayloadFromForm, sortContacts,
   splitClientEvents, eventStaffCount, sortActivity, isMissingSchemaError, formatEventDate
 } from '../../utils/clientRecords';
-import { isSignedProject } from '../../utils/goodshuffleImport';
+import { splitGoodshuffleProjects } from '../../utils/goodshuffleImport';
 
 const money = (v) => (v === null || v === undefined ? '' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
 
@@ -47,11 +47,13 @@ function EventRow({ ev, timeFormat }) {
           {formatEventDate(ev.date)}
           {ev.time && ` · ${formatTime(ev.time, timeFormat)}`}
           {ev.venue && ` · ${ev.venue}`}
+          {ev.fromGoodshuffle && ` · #${ev.project_id}`}
         </p>
       </div>
       <div className="text-right flex-shrink-0 ml-3">
         {ev.status && (
           <span className={`text-xs px-2 py-0.5 rounded-full ${
+            ev.fromGoodshuffle ? 'bg-amber-50 text-amber-700' :
             ev.status === 'confirmed' ? 'bg-green-100 text-green-700' :
             ev.status === 'completed' ? 'bg-blue-100 text-blue-700' :
             ev.status === 'cancelled' ? 'bg-red-100 text-red-700' :
@@ -59,6 +61,7 @@ function EventRow({ ev, timeFormat }) {
           }`}>{ev.status}</span>
         )}
         {staff > 0 && <p className="text-xs text-gray-400 mt-1">{staff} staff</p>}
+        {ev.fromGoodshuffle && ev.total !== null && ev.total !== undefined && <p className="text-xs text-gray-500 mt-1">{money(ev.total)}</p>}
       </div>
     </div>
   );
@@ -92,7 +95,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
   const loadEvents = async () => {
     const { data, error } = await supabase
       .from('events')
-      .select('id, name, date, time, venue, status, positions')
+      .select('id, name, date, time, venue, status, positions, goodshuffle_invoice')
       .eq('client_id', clientId);
     if (error) { console.error('Error loading client events:', error.message); return; }
     setEvents(data || []);
@@ -252,7 +255,10 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
     await loadActivity();
   };
 
-  const { upcoming, past } = splitClientEvents(events);
+  // Signed Goodshuffle projects count as events; unsigned ones are quotes.
+  const { asEvents: gsEvents, quotes: gsQuotes } = splitGoodshuffleProjects(gsProjects, events);
+  const allEvents = [...events, ...gsEvents];
+  const { upcoming, past } = splitClientEvents(allEvents);
   const sortedContacts = sortContacts(contacts);
 
   return (
@@ -362,7 +368,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
             )}
             {sortedContacts.length === 0 && !contactForm ? (
               <p className="text-sm text-gray-400">
-                {needsSql ? 'Not available yet.' : 'No contacts yet. The client’s own phone and email are shown above.'}
+                {needsSql ? 'Not available yet.' : 'No other people yet. Add anyone else you deal with here, like an assistant or a planner booking for this client.'}
               </p>
             ) : (
               <div className="space-y-2">
@@ -391,8 +397,8 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
             )}
           </Card>
 
-          <Card title="Events" icon={Calendar} count={events.length}>
-            {events.length === 0 ? (
+          <Card title="Events" icon={Calendar} count={allEvents.length}>
+            {allEvents.length === 0 ? (
               <p className="text-sm text-gray-400">No events linked to this client yet. Picking this client in the event form links the event.</p>
             ) : (
               <div className="space-y-4">
@@ -412,10 +418,11 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
             )}
           </Card>
 
-          {gsProjects.length > 0 && (
-            <Card title="Goodshuffle history" icon={FileText} count={gsProjects.length}>
+          {gsQuotes.length > 0 && (
+            <Card title="Quotes from Goodshuffle" icon={FileText} count={gsQuotes.length}>
+              <p className="text-xs text-gray-500 mb-2">Quotes that were never signed. Signed ones are listed under Events.</p>
               <div className="space-y-2">
-                {gsProjects.map(p => (
+                {gsQuotes.map(p => (
                   <div key={p.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 flex items-start justify-between">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900">{p.name || `Project #${p.project_id}`}</p>
@@ -427,7 +434,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${isSignedProject(p) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{p.status || '—'}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{p.status || '—'}</span>
                       {p.total !== null && p.total !== undefined && <p className="text-xs text-gray-500 mt-1">{money(p.total)}</p>}
                     </div>
                   </div>
