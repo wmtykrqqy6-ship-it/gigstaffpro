@@ -3,6 +3,7 @@ import { X, Upload } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { findClientByName, newClientFromEvent } from '../../utils/clientMatch';
 import { dropUnchangedClientFields } from '../../utils/eventClientDetails';
+import { logClientAccess } from '../../utils/clientAccessLog';
 import { getPositionKey } from '../../utils/positionHelpers';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES, STATUS } from '../../constants';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -129,7 +130,17 @@ export default function EventFormModal({
       .select('id, name, company, phone, email')
       .eq('is_active', true)
       .order('name')
-      .then(({ data }) => setClients(data || []));
+      .then(({ data }) => {
+        setClients(data || []);
+        if (data?.length) {
+          logClientAccess(supabase, {
+            action: 'view',
+            recordType: 'clients',
+            recordIds: data.map(c => c.id),
+            where: 'event_form'
+          });
+        }
+      });
   }, [open, isEdit]);
 
   // Create mode only: apply prefill values when the modal opens with them.

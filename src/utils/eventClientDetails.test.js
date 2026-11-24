@@ -60,7 +60,8 @@ describe('dropUnchangedClientFields', () => {
 
 describe('loadEventClientDetails', () => {
   const fakeSupabase = (result) => ({
-    from: vi.fn(() => ({ select: vi.fn(() => Promise.resolve(result)) }))
+    from: vi.fn(() => ({ select: vi.fn(() => Promise.resolve(result)) })),
+    rpc: vi.fn(async () => ({ error: null }))
   });
 
   it('returns the rows', async () => {
@@ -68,6 +69,18 @@ describe('loadEventClientDetails', () => {
     const sb = fakeSupabase({ data: rows, error: null });
     expect(await loadEventClientDetails(sb)).toEqual(rows);
     expect(sb.from).toHaveBeenCalledWith('event_client_details');
+  });
+
+  it('records the view in the access log', async () => {
+    const rows = [{ event_id: 'e1', client: 'Smith', client_contact: null }];
+    const sb = fakeSupabase({ data: rows, error: null });
+    await loadEventClientDetails(sb, 'test_screen');
+    expect(sb.rpc).toHaveBeenCalledWith('log_client_access', {
+      p_action: 'view',
+      p_record_type: 'event_client_details',
+      p_record_ids: ['e1'],
+      p_details: { where: 'test_screen' }
+    });
   });
 
   it('returns [] when the table is missing or access is refused', async () => {
