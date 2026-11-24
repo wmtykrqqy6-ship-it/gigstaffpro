@@ -114,6 +114,27 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
   for phone inquiries.
 - Migration `20261124140000_add_leads.sql`: admin-only `public.leads`.
 
+## Automatic lead follow-up (step 4)
+
+- Off until an admin turns it on at the top of the Leads tab
+  (`settings.lead_followup_enabled`). The tab shows the exact email.
+- Moving a lead to **Quoted** starts a 7-day clock (`leads.quoted_at`). If
+  the lead is still Quoted 7 days later, it gets one "Still planning your
+  casino party?" email (`api/_lib/leadFollowups.js`). Replies go to the
+  `admin_email` setting. Moving it to Booked or Lost stops it.
+- Runs on the hourly shift-reminder cron, between 9 AM and 6 PM business
+  time. Only leads quoted in the last 14 days, so turning it on never emails
+  old quotes. Skips leads with no email or whose event date has passed.
+- A lead is claimed (`followup_sent_at`) before sending, so it is never
+  emailed twice; a refused send is undone and retried next hour.
+- Until the Messages inbox exists, "no reply" means "still Quoted": move a
+  lead out of Quoted when they answer.
+- Migration `20261124150000_add_lead_followups.sql`.
+- Hosting note: vegasonwheels.com runs on GoDaddy WordPress, whose firewall
+  refuses page saves containing `<script>` or `<iframe>`. The form markup is
+  a Custom HTML block on the page; the script is a WPCode Lite JavaScript
+  snippet (site-wide footer, does nothing on pages without the form).
+
 Not built yet (from the plan): a planner linked to several clients
 ("booked through"), and merging duplicate clients (worth doing with the
 Goodshuffle import).

@@ -9,6 +9,8 @@
 import { escapeHtml } from './_lib/escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 import { sendRouteReminders } from './_lib/routeReminders.js';
+import { sendLeadFollowups } from './_lib/leadFollowups.js';
+import { businessNow } from './_lib/routeActions.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushFromCron, shiftReminderNotification } from './_lib/push.js';
 
@@ -166,6 +168,16 @@ async function withRouteReminders(body) {
     body.routes = await sendRouteReminders({ pushImpl: pushToWorkers });
   } catch (err) {
     body.routes = { error: err.message };
+  }
+  // "Still interested?" emails to quoted leads (api/_lib/leadFollowups.js),
+  // only between 9 AM and 6 PM business time so clients don't get them at night.
+  try {
+    const bn = businessNow();
+    body.leadFollowups = bn.hour >= 9 && bn.hour < 18
+      ? await sendLeadFollowups({ today: bn.date })
+      : { message: 'Lead follow-ups only go out 9 AM to 6 PM' };
+  } catch (err) {
+    body.leadFollowups = { error: err.message };
   }
   return body;
 }

@@ -31,13 +31,29 @@ export const sortLeads = (leads = []) =>
   [...leads].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 
 // Changing stage: lost needs a reason; any other stage clears it.
-export function stagePatch(stage, lostReason = null) {
+// Moving to Quoted starts the 7-day follow-up clock (docs/CRM.md).
+export function stagePatch(stage, lostReason = null, now = new Date()) {
   if (!LEAD_STAGES.some(s => s.id === stage)) throw new Error('Unknown stage');
+  const ts = now.toISOString();
   return {
     stage,
     lost_reason: stage === 'lost' ? (String(lostReason || '').trim() || 'Other') : null,
-    updated_at: new Date().toISOString()
+    updated_at: ts,
+    ...(stage === 'quoted' ? { quoted_at: ts, followup_sent_at: null } : {})
   };
+}
+
+export const FOLLOWUP_AFTER_DAYS = 7; // same as api/_lib/leadFollowups.js
+
+// One line about the automatic follow-up for a lead card, or null.
+export function followupStatus(lead, enabled, now = new Date()) {
+  if (!lead || lead.stage !== 'quoted') return null;
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (lead.followup_sent_at) return `Follow-up email sent ${fmt(lead.followup_sent_at)}`;
+  if (!lead.email) return 'No email, so no automatic follow-up';
+  if (!enabled || !lead.quoted_at) return null;
+  const due = new Date(new Date(lead.quoted_at).getTime() + FOLLOWUP_AFTER_DAYS * 86400000);
+  return due <= now ? 'Follow-up email going out soon' : `Follow-up email ${fmt(due)} if they haven't booked`;
 }
 
 // New client from a lead ("Add as client").
