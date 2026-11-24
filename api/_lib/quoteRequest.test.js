@@ -97,7 +97,7 @@ describe('handleQuoteRequest', () => {
     expect(res.headers['Access-Control-Allow-Origin']).toBe('https://www.vegasonwheels.com');
     expect(sb.inserted[0]).toMatchObject({ email: 'pat@example.com', client_id: 42 });
     const sent = JSON.parse(d.fetchImpl.mock.calls[0][1].body);
-    expect(sent.to).toEqual(['boss@example.com']);
+    expect(sent.to).toEqual(['boss@example.com']); // lead_email setting wins
     expect(sent.reply_to).toBe('pat@example.com');
   });
 
@@ -174,5 +174,14 @@ describe('handleQuoteRequest email errors', () => {
     expect(res.statusCode).toBe(200);
     expect(sb.inserted).toHaveLength(1);
     expect(errors.join(' ')).toContain('Resend 403');
+  });
+});
+
+describe('quote email recipient', () => {
+  it('goes to sales@vegasonwheels.com when no lead_email is set', async () => {
+    const sb = fakeSupabase({ adminEmail: null });
+    const f = vi.fn(async () => ({ ok: true }));
+    await handleQuoteRequest(req(good), fakeRes(), { supabase: sb, env: { RESEND_API_KEY: 'k' }, now: () => NOW, isRateLimited: () => false, fetchImpl: f });
+    expect(JSON.parse(f.mock.calls[0][1].body).to).toEqual(['sales@vegasonwheels.com']);
   });
 });
