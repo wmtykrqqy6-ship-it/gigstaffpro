@@ -22,7 +22,8 @@
 -- 1. New table public.event_client_details (one row per event), readable
 --    and writable only by admins (is_admin()). anon gets no access at all.
 -- 2. Copies every event's client + client_contact into it.
--- 3. Clears events.client and events.client_contact (the columns stay, so
+-- 3. Allows NULL in events.client / client_contact (client was NOT NULL),
+--    then clears them (the columns stay, so
 --    nothing that names them breaks; they are just always NULL from now on).
 -- 4. A trigger on events: whenever an insert/update puts a value in
 --    events.client or events.client_contact, the value is saved to
@@ -99,6 +100,11 @@ ON CONFLICT (event_id) DO UPDATE
 --    doesn't write NULLs into the new table). Other triggers on events,
 --    including any Supabase database webhooks, are paused for this one
 --    statement so clearing the fields can't set off notifications. -------
+
+-- events.client is NOT NULL on the live table (found when this first ran,
+-- 2026-11-23), so allow NULL on both fields first.
+ALTER TABLE public.events ALTER COLUMN client DROP NOT NULL;
+ALTER TABLE public.events ALTER COLUMN client_contact DROP NOT NULL;
 
 ALTER TABLE public.events DISABLE TRIGGER USER;
 
