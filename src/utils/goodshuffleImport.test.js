@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   readImportFile, groupProjectsIntoClients, planGoodshuffleImport,
-  clientRowFromGroup, fillMissingClientFields, projectRow, chunk, isSignedProject
+  clientRowFromGroup, fillMissingClientFields, projectRow, chunk, isSignedProject,
+  splitGoodshuffleProjects
 } from './goodshuffleImport';
 import { fetchAllRows } from './clientRecords';
 
@@ -125,5 +126,19 @@ describe('fetchAllRows', () => {
     const { data, error } = await fetchAllRows(() => ({ range: async () => ({ data: null, error: { message: 'no' } }) }));
     expect(data).toBeNull();
     expect(error.message).toBe('no');
+  });
+});
+
+describe('splitGoodshuffleProjects', () => {
+  it('lists signed projects as events unless an event already has that number', () => {
+    const { asEvents, quotes } = splitGoodshuffleProjects([
+      P(1, { status: 'Contract Signed', event_date: '2027-01-29', name: 'A', total: 100 }),
+      P(2, { status: 'Contract Signed', event_date: '2026-01-30' }),
+      P(3, { status: 'Quote Sent' }),
+      P(4, { status: 'Unsigned Changes' })
+    ], [{ id: 9, goodshuffle_invoice: '2' }]);
+    expect(asEvents.map(e => e.project_id)).toEqual(['1', '4']);
+    expect(asEvents[0]).toMatchObject({ id: 'gs-1', date: '2027-01-29', name: 'A', total: 100, fromGoodshuffle: true });
+    expect(quotes.map(q => q.project_id)).toEqual(['3']);
   });
 });

@@ -77,7 +77,11 @@ logic in `src/utils/goodshuffleImport.js`).
   `goodshuffle_projects` (upsert by project number, so running it again is
   safe); and events from pull sheets whose `goodshuffle_invoice` matches a
   project and that have no client yet get linked.
-- The client page shows a **Goodshuffle history** card.
+- On the client page, signed Goodshuffle projects (Contract Signed,
+  Unsigned Changes) are listed under **Events** with a "booked in
+  Goodshuffle" label, unless a GigStaffPro event already has that project
+  number. Quotes that were never signed get their own **Quotes from
+  Goodshuffle** card.
 - Migration `20261124130000_add_goodshuffle_projects.sql`: the
   `goodshuffle_projects` table (admin-only) and `clients.source`.
 - Client lists are read in pages (`fetchAllRows`), since Supabase returns at

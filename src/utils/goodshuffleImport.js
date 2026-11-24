@@ -199,3 +199,32 @@ export function chunk(list, size) {
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
 }
+
+// Client page: signed Goodshuffle projects are events, so they go in the
+// Events card (as rows shaped like events, marked fromGoodshuffle) unless a
+// GigStaffPro event already exists for the same project number. Quotes that
+// were never signed stay in their own card.
+export function splitGoodshuffleProjects(projects = [], events = []) {
+  const haveEvent = new Set(events.map(ev => String(ev?.goodshuffle_invoice || '')).filter(Boolean));
+  const asEvents = [];
+  const quotes = [];
+  for (const p of projects) {
+    if (!p) continue;
+    if (isSignedProject(p)) {
+      if (haveEvent.has(String(p.project_id))) continue;
+      asEvents.push({
+        id: `gs-${p.project_id}`,
+        name: p.name,
+        date: p.event_date,
+        venue: p.venue,
+        status: 'booked in Goodshuffle',
+        total: p.total,
+        project_id: p.project_id,
+        fromGoodshuffle: true
+      });
+    } else {
+      quotes.push(p);
+    }
+  }
+  return { asEvents, quotes };
+}
