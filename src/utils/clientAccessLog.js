@@ -59,7 +59,8 @@ const RECORD_WORDS = {
   event_client_details: 'event client details',
   client_contacts: 'client contact',
   client_activity: 'client history entry',
-  goodshuffle_projects: 'Goodshuffle project'
+  goodshuffle_projects: 'Goodshuffle project',
+  leads: 'lead'
 };
 
 // One readable line for Settings -> Access log, e.g.

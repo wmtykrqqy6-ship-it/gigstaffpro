@@ -13,7 +13,7 @@ Built in small pieces, each usable on its own:
 
 1. **Clients tab** (done, 2026-11-24): see below.
 2. **Goodshuffle history import** (built 2026-11-24): see below.
-3. Website quote request form that creates a lead.
+3. **Website quote form → leads** (built 2026-11-24): see below.
 4. Leads pipeline (New, Quoted, Booked, Lost) with an automatic
    "still interested?" email after 7 days without a reply.
 5. Messages inbox: client emails in and out, kept on the client's history.
@@ -86,6 +86,33 @@ logic in `src/utils/goodshuffleImport.js`).
   `goodshuffle_projects` table (admin-only) and `clients.source`.
 - Client lists are read in pages (`fetchAllRows`), since Supabase returns at
   most 1,000 rows per request and there are ~1,100+ clients after the import.
+
+## Website quote form and Leads tab
+
+Dylan wants the form on vegasonwheels.com (WordPress), not a page on
+gigstaffpro.com, so visitors never leave the Vegas on Wheels site
+(decided 2026-11-24).
+
+- **Form:** `docs/wordpress-quote-form.html`, pasted into a Custom HTML block
+  on vegasonwheels.com/contact-us/ in place of the old form. Same fields as
+  the old one (name, email, phone required; company, location, date, start
+  time, guests, games, extra services, message). It posts with `fetch` to
+  `https://www.gigstaffpro.com/api/quote-request`.
+- **Server:** `api/_lib/quoteRequest.js`, reached through a `vercel.json`
+  rewrite to `api/send-email.js` (the Vercel plan is at its 12-function
+  limit). It is the only path in that file without the admin check. It
+  accepts only the vegasonwheels.com origins (CORS; more through
+  `QUOTE_FORM_ORIGINS`), drops bots (hidden honeypot field, sent in under 3
+  seconds), limits 5 per IP per hour, ignores the same email again within 10
+  minutes, saves the lead with the service key, links it to a client with
+  the same email, and emails the `admin_email` setting (reply-to is the
+  visitor).
+- **Leads tab** (`src/components/views/LeadsView.jsx`): New, Quoted, Booked,
+  Lost, with counts. Change a lead's stage; Lost asks why (price, date not
+  available, went with someone else, no reply, event cancelled, other).
+  "Add as client" creates a client from the lead and links it. "Add lead"
+  for phone inquiries.
+- Migration `20261124140000_add_leads.sql`: admin-only `public.leads`.
 
 Not built yet (from the plan): a planner linked to several clients
 ("booked through"), and merging duplicate clients (worth doing with the
