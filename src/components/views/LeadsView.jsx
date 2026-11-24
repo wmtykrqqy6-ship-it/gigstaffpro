@@ -6,7 +6,7 @@ import { logClientAccess } from '../../utils/clientAccessLog';
 import { isMissingSchemaError, fetchAllRows, formatEventDate } from '../../utils/clientRecords';
 import {
   LEAD_STAGES, LOST_REASONS, stageLabel, countByStage, sortLeads, stagePatch,
-  clientFromLead, emptyLeadForm, leadFromForm, followupStatus
+  clientFromLead, emptyLeadForm, leadFromForm, followupStatus, contactPatch
 } from '../../utils/leads';
 
 const FOLLOWUP_KEY = 'lead_followup_enabled';
@@ -84,6 +84,17 @@ export default function LeadsView() {
     }
     if (error) { notify('Could not update the lead: ' + error.message); return; }
     setLostFor(null);
+    await load();
+  };
+
+  // "We talked" restarts the 7-day clock; "Don't send" turns it off for this lead.
+  const updateLead = async (lead, patch, done) => {
+    const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
+    if (error) {
+      notify(isMissingSchemaError(error) ? 'Run the follow-up SQL file (20261124150000) first.' : 'Could not update the lead: ' + error.message);
+      return;
+    }
+    if (done) notify(done);
     await load();
   };
 
@@ -168,7 +179,7 @@ export default function LeadsView() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center space-x-2 text-gray-800">
               <Clock size={16} className="text-red-900" />
-              <span><strong>Automatic follow-up:</strong> email a quoted lead once if they haven't booked after 7 days.</span>
+              <span><strong>Automatic follow-up:</strong> email a quoted lead if 7 days pass with no contact. Press "We talked" on a lead to restart the 7 days.</span>
             </div>
             <div className="flex items-center space-x-3">
               <button onClick={() => setShowFollowupInfo(s => !s)} className="text-red-900 hover:underline">{showFollowupInfo ? 'Hide email' : 'See the email'}</button>
@@ -185,7 +196,7 @@ export default function LeadsView() {
               <p>We wanted to check in on the quote we sent for your event on (date). Are you still planning your casino party?</p>
               <p>If you have questions, want to change anything, or are ready to book, just reply to this email or call us at (262) 549-3559. Dates fill up, so let us know soon and we'll hold yours.</p>
               <p>Thanks,<br />Vegas on Wheels</p>
-              <p className="text-xs text-gray-500">Replies go to sales@vegasonwheels.com. Goes out between 9 AM and 6 PM, once per lead, only for leads moved to Quoted in the last 2 weeks. Moving a lead to Booked or Lost stops it.</p>
+              <p className="text-xs text-gray-500">Replies go to sales@vegasonwheels.com. Goes out between 9 AM and 6 PM, 7 days after the lead was quoted or after the last "We talked", whichever is later. Never for a lead set to "Don't send auto email", or once it's Booked or Lost.</p>
             </div>
           )}
         </div>
@@ -248,6 +259,14 @@ export default function LeadsView() {
                       className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
                       {LEAD_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
+                    {lead.stage === 'quoted' && (
+                      <>
+                        <button onClick={() => updateLead(lead, contactPatch(), 'Got it. The 7 days start over today.')}
+                          className="text-xs text-red-900 hover:underline">We talked</button>
+                        <button onClick={() => updateLead(lead, { followup_paused: !lead.followup_paused, updated_at: new Date().toISOString() })}
+                          className="text-xs text-gray-600 hover:underline">{lead.followup_paused ? 'Allow auto email' : "Don't send auto email"}</button>
+                      </>
+                    )}
                     {(lead.client_id === null || lead.client_id === undefined) && (
                       <button onClick={() => addAsClient(lead)} className="text-xs text-red-900 hover:underline flex items-center space-x-1">
                         <UserPlus size={13} /><span>Add as client</span>

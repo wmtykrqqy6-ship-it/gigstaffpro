@@ -43,6 +43,17 @@ export function stagePatch(stage, lostReason = null, now = new Date()) {
   };
 }
 
+// "We talked": restarts the 7-day clock and allows one more follow-up.
+export const contactPatch = (now = new Date()) => ({
+  last_contact_at: now.toISOString(), followup_sent_at: null, updated_at: now.toISOString()
+});
+
+// Later of quoted_at and last_contact_at (same rule as api/_lib/leadFollowups.js).
+export function lastContactTime(lead) {
+  const times = [lead?.quoted_at, lead?.last_contact_at].filter(Boolean).map(d => new Date(d).getTime()).filter(n => !Number.isNaN(n));
+  return times.length ? Math.max(...times) : null;
+}
+
 export const FOLLOWUP_AFTER_DAYS = 7; // same as api/_lib/leadFollowups.js
 
 // One line about the automatic follow-up for a lead card, or null.
@@ -50,9 +61,11 @@ export function followupStatus(lead, enabled, now = new Date()) {
   if (!lead || lead.stage !== 'quoted') return null;
   const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   if (lead.followup_sent_at) return `Follow-up email sent ${fmt(lead.followup_sent_at)}`;
+  if (lead.followup_paused) return 'Automatic follow-up off for this lead';
   if (!lead.email) return 'No email, so no automatic follow-up';
-  if (!enabled || !lead.quoted_at) return null;
-  const due = new Date(new Date(lead.quoted_at).getTime() + FOLLOWUP_AFTER_DAYS * 86400000);
+  const start = lastContactTime(lead);
+  if (!enabled || start === null) return null;
+  const due = new Date(start + FOLLOWUP_AFTER_DAYS * 86400000);
   return due <= now ? 'Follow-up email going out soon' : `Follow-up email ${fmt(due)} if they haven't booked`;
 }
 
