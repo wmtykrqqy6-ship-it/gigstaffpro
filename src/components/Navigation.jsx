@@ -12,7 +12,8 @@ import {
   ChevronDown,
   Truck,
   Briefcase,
-  Inbox
+  Inbox,
+  Mail
 } from 'lucide-react';
 
 export default function Navigation({
@@ -44,6 +45,7 @@ export default function Navigation({
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'clients', label: 'Clients', icon: Briefcase },
     { id: 'leads', label: 'Leads', icon: Inbox },
+    { id: 'messages', label: 'Messages', icon: Mail },
     { id: 'schedule', label: 'Schedule', icon: Clock },
     { id: 'applications', label: 'Applications', icon: FileText, badge: pendingApplicationsCount },
     { id: 'logistics', label: 'Logistics', icon: Truck },

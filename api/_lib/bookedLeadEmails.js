@@ -16,6 +16,7 @@ import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, addDays, emailDueDate } from './clientEmailSettings.js';
 import { firstName, fmtLeadDate, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL, CLIENT_FROM } from './leadFollowups.js';
+import { recordClientMessage } from './recordClientMessage.js';
 
 export const KINDS = ['thankyou', 'upsell', 'prep', 'review'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -147,7 +148,7 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
   const replyTo = EMAIL_REGEX.test(leadEmail) ? leadEmail : DEFAULT_LEAD_EMAIL;
 
   const since = addDays(today, -40);
-  const leads = await call(`leads?select=id,name,email,stage,event_date,start_time,event_location,booked_at,followup_paused&stage=eq.booked&followup_paused=is.false&email=not.is.null&or=(event_date.gte.${since},event_date.is.null)&limit=1000`);
+  const leads = await call(`leads?select=id,client_id,name,email,stage,event_date,start_time,event_location,booked_at,followup_paused&stage=eq.booked&followup_paused=is.false&email=not.is.null&or=(event_date.gte.${since},event_date.is.null)&limit=1000`);
   if (!leads.length) return results;
   const ids = leads.map(l => l.id);
   const sentRows = await call(`lead_emails_sent?select=lead_id,kind&lead_id=in.(${ids.map(encodeURIComponent).join(',')})`);
@@ -176,6 +177,13 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
         continue;
       }
       results.sent++;
+      // Show it in the Messages inbox (best effort).
+      const sentId = (await r.json().catch(() => null))?.id;
+      await recordClientMessage({ env, fetchImpl, row: {
+        direction: 'out', kind, lead_id: lead.id, client_id: lead.client_id ?? null,
+        contact_email: String(lead.email).toLowerCase(), contact_name: lead.name || null,
+        subject, body_text: text, resend_id: sentId ? `out:${sentId}` : null, read_at: now.toISOString()
+      } });
     } catch (err) {
       results.errors.push({ leadId: lead.id, kind, error: err.message });
     }

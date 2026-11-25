@@ -6,6 +6,7 @@ import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import ClientForm from './ClientForm';
+import EmailHistory from '../messages/EmailHistory';
 import { logClientAccess } from '../../utils/clientAccessLog';
 import { formatTime } from '../../utils/dateHelpers';
 import {
@@ -303,6 +304,7 @@ export default function ClientDetail({ client, timeFormat, onBack, onChanged, on
                   {client.billing_address && <span className="flex items-start space-x-1 whitespace-pre-line"><MapPin size={14} className="mt-0.5" /><span>{client.billing_address}</span></span>}
                 </div>
                 {client.notes && <p className="text-sm text-gray-600 mt-3 whitespace-pre-line">{client.notes}</p>}
+                <EmailHistory clientId={client.id} emails={[client.email, ...contacts.map(c => c.email)]} />
               </div>
             </div>
             <div className="flex items-center space-x-1 flex-shrink-0">

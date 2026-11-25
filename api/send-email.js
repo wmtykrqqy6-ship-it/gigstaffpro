@@ -7,6 +7,7 @@ import { verifyAdminRequest } from './_lib/verifyAdmin.js';
 import { htmlToPlainText } from './_lib/emailShell.js';
 import { handleAdminPush } from './_lib/push.js';
 import { handleQuoteRequest } from './_lib/quoteRequest.js';
+import { handleInboundEmail, handleClientReply } from './_lib/clientMessages.js';
 
 export const config = {
   api: {
@@ -34,6 +35,14 @@ export default async function handler(req, res) {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return res.status(500).json({ ok: false, error: 'Not configured' });
     return handleQuoteRequest(req, res, { supabase: createClient(url, key) });
+  }
+
+  // Resend's "email received" webhook for the Messages inbox
+  // (/api/inbound-email, rewritten here). Not admin-checked: it only takes
+  // an email id and fetches that email from Resend with our own key. See
+  // api/_lib/clientMessages.js.
+  if (req.query?.route === 'inbound-email') {
+    return handleInboundEmail(req, res);
   }
 
   if (req.method !== 'POST') {
@@ -98,6 +107,18 @@ export default async function handler(req, res) {
   }
 
   const body = req.body;
+
+  // Reply to a client from the Messages screen: sent from
+  // sales@vegasonwheels.com and saved to the inbox.
+  if (body && typeof body === 'object' && body.action === 'client-reply') {
+    try {
+      const result = await handleClientReply({ body, adminUserId: adminCheck.adminUserId });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('client reply failed:', err?.message || err);
+      return res.status(500).json({ success: false, error: 'Server error sending email' });
+    }
+  }
 
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return res.status(400).json({
