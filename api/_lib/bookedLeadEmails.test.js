@@ -78,6 +78,7 @@ describe('sendBookedLeadEmails', () => {
     expect(r.sent).toBe(1);
     const mail = f.calls.find(c => c.url.includes('resend')).body;
     expect(mail.reply_to).toBe('sales@vegasonwheels.com');
+    expect(mail.from).toBe('Vegas on Wheels <sales@vegasonwheels.com>');
     expect(f.calls.find(c => c.url.includes('on_conflict')).body).toEqual([{ lead_id: 'L1', kind: 'upsell' }]);
   });
 

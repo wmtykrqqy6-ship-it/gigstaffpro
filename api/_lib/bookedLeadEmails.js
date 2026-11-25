@@ -15,7 +15,7 @@
 import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, addDays, emailDueDate } from './clientEmailSettings.js';
-import { firstName, fmtLeadDate, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL } from './leadFollowups.js';
+import { firstName, fmtLeadDate, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL, CLIENT_FROM } from './leadFollowups.js';
 
 export const KINDS = ['thankyou', 'upsell', 'prep', 'review'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -168,7 +168,7 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
       const r = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: 'Vegas on Wheels <noreply@gigstaffpro.com>', to: [lead.email], reply_to: replyTo, subject, html, text })
+        body: JSON.stringify({ from: CLIENT_FROM, to: [lead.email], reply_to: replyTo, subject, html, text })
       });
       if (!r.ok) {
         await call(`lead_emails_sent?lead_id=eq.${encodeURIComponent(lead.id)}&kind=eq.${kind}`, { method: 'DELETE' });

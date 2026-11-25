@@ -24,6 +24,10 @@ export const FOLLOWUP_AFTER_DAYS = 7;  // default; admins change it in the Leads
 export const FOLLOWUP_GRACE_DAYS = 7; // only leads whose clock ran out in the last week
 export const DEFAULT_LEAD_EMAIL = 'sales@vegasonwheels.com'; // same as quoteRequest.js
 export const BUSINESS_PHONE = '(262) 549-3559';
+// Client-facing emails come from the business's own address (Dylan, 2026-11-24:
+// customers shouldn't see GigStaffPro). vegasonwheels.com is verified in Resend
+// for sending only; staff emails still use noreply@gigstaffpro.com.
+export const CLIENT_FROM = 'Vegas on Wheels <sales@vegasonwheels.com>';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -118,7 +122,7 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Vegas on Wheels <noreply@gigstaffpro.com>',
+          from: CLIENT_FROM,
           to: [lead.email],
           ...(replyTo ? { reply_to: replyTo } : {}),
           subject, html, text
