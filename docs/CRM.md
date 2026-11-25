@@ -157,6 +157,13 @@ emails"); code in `api/_lib/bookedLeadEmails.js`, same cron and hours.
 - The review email includes the Google review and tip links only when they
   are filled in on the panel (no online tip page exists yet).
 - Migration `20261124160000_add_booked_lead_emails.sql`.
+- Sender: client emails (follow-up and booked emails) come from
+  `Vegas on Wheels <sales@vegasonwheels.com>` (`CLIENT_FROM` in
+  `api/_lib/leadFollowups.js`) so customers never see GigStaffPro. The domain
+  is verified in Resend for sending only (DNS in GoDaddy: TXT
+  `resend._domainkey`, CNAMEs `send` and `rsend`). Receiving is off, because
+  Resend's receiving MX would replace the GoDaddy/Microsoft 365 mailbox.
+  Staff emails still come from `noreply@gigstaffpro.com`.
 - Hosting note: vegasonwheels.com runs on GoDaddy WordPress, whose firewall
   refuses page saves containing `<script>` or `<iframe>`. The form markup is
   a Custom HTML block on the page; the script is a WPCode Lite JavaScript

@@ -85,6 +85,7 @@ describe('sendLeadFollowups', () => {
     const mail = f.calls.find(c => c.url.includes('resend')).body;
     expect(mail.to).toEqual(['pat@example.com']);
     expect(mail.reply_to).toBe('boss@example.com');
+    expect(mail.from).toBe('Vegas on Wheels <sales@vegasonwheels.com>');
   });
 
   it('undoes the claim when the email is refused', async () => {
