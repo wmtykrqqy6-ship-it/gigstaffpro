@@ -169,6 +169,45 @@ emails"); code in `api/_lib/bookedLeadEmails.js`, same cron and hours.
   a Custom HTML block on the page; the script is a WPCode Lite JavaScript
   snippet (site-wide footer, does nothing on pages without the form).
 
+## Messages inbox (step 5)
+
+Works like Goodshuffle's: client emails that come in, and replies sent from
+GigStaffPro, show up; emails typed directly in Outlook don't (Dylan,
+2026-11-24: "this is exactly how goodshuffle works").
+
+- **Incoming:** sales@vegasonwheels.com (GoDaddy email on Microsoft 365) has
+  an Outlook rule that *redirects* (not forwards, so the client stays the
+  sender) outside email to an address on `in.vegasonwheels.com`. That
+  subdomain is a Resend receiving domain (DNS in GoDaddy: MX `in` ->
+  `receive.forge.rmta.net` priority 10, TXT `resend._domainkey.in`); the main
+  domain's mail is untouched. Resend calls `/api/inbound-email` (a
+  `vercel.json` rewrite to `api/send-email.js?route=inbound-email`) with an
+  `email.received` event.
+- **Trust:** the webhook body is not trusted. The server takes only the email
+  id and fetches the email from `GET https://api.resend.com/emails/receiving/{id}`
+  with our `RESEND_API_KEY` (so no webhook secret is needed). It must be
+  addressed to `@in.vegasonwheels.com`, and mail from our own addresses is
+  ignored. Code: `api/_lib/clientMessages.js`.
+- **Matching:** by the sender's email: an open lead first (newest), else a
+  client's email, else a client contact's email. Unknown senders are saved as
+  "Not linked". A matched lead gets `last_contact_at` = now and
+  `followup_sent_at` cleared, so the follow-up clock starts over.
+- **Outgoing:** replies from the Messages screen (admin-only
+  `action: 'client-reply'` on `api/send-email.js`, same email rate limit) go
+  from sales@vegasonwheels.com with reply-to sales@, are saved, and count as
+  contact. The automatic emails are saved too (`recordClientMessage`).
+- **Storage:** `public.client_messages` (migration
+  `20261125120000_add_client_messages.sql`): text only, no HTML or
+  attachments. Admin-only read; admins can only mark read or re-link
+  (column-level grant); only the server inserts. Viewing the Messages tab is
+  logged in the client access log (`where: messages_tab`).
+- **Screens:** Messages tab (conversations by contact, All / Unread / Not
+  linked, search, reply), and an "Emails" section on each lead card and
+  client page.
+- If Microsoft 365 blocks the redirect (outbound auto-forwarding is off by
+  default in some tenants), it's turned on in the Microsoft 365 admin center
+  (Defender > Anti-spam > outbound policy > automatic forwarding).
+
 Not built yet (from the plan): a planner linked to several clients
 ("booked through"), and merging duplicate clients (worth doing with the
 Goodshuffle import).

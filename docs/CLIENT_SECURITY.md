@@ -13,7 +13,7 @@ data goes in"), decided with Dylan 2026-11-21.
   `event_client_details` (admin-only), not on the public `events` row
   (migration `20261121120000_make_client_details_admin_only.sql`).
 - Admin-only tables (RLS `is_admin()`): `clients`, `client_contacts`,
-  `client_activity`, `goodshuffle_projects`, `leads`, `lead_emails_sent`, `event_client_details`, `venues`,
+  `client_activity`, `goodshuffle_projects`, `leads`, `lead_emails_sent`, `client_messages`, `event_client_details`, `venues`,
   `client_access_log`.
 - The role is stored on `admin_users.role`: `admin` or `sales_manager`.
   `public.my_staff_role()` returns the signed-in person's role. Today the

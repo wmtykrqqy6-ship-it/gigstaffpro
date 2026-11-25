@@ -9,6 +9,7 @@ import {
   clientFromLead, emptyLeadForm, leadFromForm, followupStatus, contactPatch
 } from '../../utils/leads';
 import AutoEmailsPanel from '../leads/AutoEmailsPanel';
+import EmailHistory from '../messages/EmailHistory';
 
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
 
@@ -228,6 +229,7 @@ export default function LeadsView() {
                     )}
                   </div>
                 </div>
+                {lead.email && <EmailHistory leadId={lead.id} emails={[lead.email]} />}
                 {lostFor === lead.id && (
                   <div className="mt-3 border-t pt-3 flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-gray-700">Why was it lost?</span>

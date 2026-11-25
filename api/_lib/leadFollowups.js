@@ -19,6 +19,7 @@
 import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from './clientEmailSettings.js';
+import { recordClientMessage } from './recordClientMessage.js';
 
 export const FOLLOWUP_AFTER_DAYS = 7;  // default; admins change it in the Leads tab
 export const FOLLOWUP_GRACE_DAYS = 7; // only leads whose clock ran out in the last week
@@ -108,7 +109,7 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
   const replyTo = EMAIL_REGEX.test(byKey.lead_email || '') ? byKey.lead_email : DEFAULT_LEAD_EMAIL;
 
   const since = new Date(now.getTime() - (followup.days + FOLLOWUP_GRACE_DAYS) * DAY_MS).toISOString();
-  const leads = await get(`leads?select=id,name,email,stage,event_date,quoted_at,last_contact_at,followup_sent_at,followup_paused&stage=eq.quoted&followup_sent_at=is.null&followup_paused=is.false&or=(quoted_at.gte.${encodeURIComponent(since)},last_contact_at.gte.${encodeURIComponent(since)})&limit=200`);
+  const leads = await get(`leads?select=id,client_id,name,email,stage,event_date,quoted_at,last_contact_at,followup_sent_at,followup_paused&stage=eq.quoted&followup_sent_at=is.null&followup_paused=is.false&or=(quoted_at.gte.${encodeURIComponent(since)},last_contact_at.gte.${encodeURIComponent(since)})&limit=200`);
   const due = dueLeads(leads, now, today, followup.days);
   results.due = due.length;
 
@@ -134,6 +135,13 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
         continue;
       }
       results.sent++;
+      // Show it in the Messages inbox (best effort).
+      const sentId = (await r.json().catch(() => null))?.id;
+      await recordClientMessage({ env, fetchImpl, row: {
+        direction: 'out', kind: 'followup', lead_id: lead.id, client_id: lead.client_id ?? null,
+        contact_email: String(lead.email).toLowerCase(), contact_name: lead.name || null,
+        subject, body_text: text, resend_id: sentId ? `out:${sentId}` : null, read_at: now.toISOString()
+      } });
     } catch (err) {
       results.errors.push({ leadId: lead.id, error: err.message });
     }
