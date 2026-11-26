@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Send, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
-import { kindLabel, replySubject } from '../../utils/clientMessages';
+import { kindLabel, replySubject, senderName } from '../../utils/clientMessages';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
@@ -22,7 +22,10 @@ async function sendReply(payload) {
 }
 
 // One conversation: the emails (oldest first) and a reply box.
-export default function MessageThread({ conversation, onSent, compact = false }) {
+// team / myId / signature come from the Messages screen; elsewhere (lead and
+// client email history) they're left out and the server still adds the
+// sender's signature.
+export default function MessageThread({ conversation, onSent, compact = false, team = {}, myId = null, signature, onEditSignature }) {
   const notify = useToast();
   const [subject, setSubject] = useState(() => replySubject(conversation));
   const [text, setText] = useState('');
@@ -50,7 +53,7 @@ export default function MessageThread({ conversation, onSent, compact = false })
             <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
               <span className="flex items-center space-x-1 min-w-0">
                 {m.direction === 'in' ? <ArrowDownLeft size={12} className="text-green-700" /> : <ArrowUpRight size={12} className="text-red-900" />}
-                <span className="font-semibold text-gray-700 truncate">{m.direction === 'in' ? (m.contact_name || m.contact_email) : 'Vegas on Wheels'}</span>
+                <span className="font-semibold text-gray-700 truncate">{senderName(m, team, myId)}</span>
                 {m.direction === 'out' && m.kind !== 'reply' && <span className="bg-white border border-red-100 text-red-800 px-1.5 rounded-full">{kindLabel(m.kind)}</span>}
               </span>
               <span className="flex-shrink-0">{fmt(m.created_at)}</span>
@@ -64,6 +67,16 @@ export default function MessageThread({ conversation, onSent, compact = false })
         <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" />
         <textarea className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" rows={compact ? 3 : 5} value={text} onChange={e => setText(e.target.value)}
           placeholder={`Reply to ${conversation.name || conversation.email}. Sent from sales@vegasonwheels.com.`} />
+        {signature !== undefined && (
+          signature ? (
+            <div className="text-xs text-gray-500">
+              <span>Your signature is added below your message{onEditSignature && <> · <button onClick={onEditSignature} className="text-red-900 hover:underline">Edit</button></>}</span>
+              <p className="mt-1 pl-2 border-l-2 border-gray-200 whitespace-pre-line text-gray-600">{signature}</p>
+            </div>
+          ) : onEditSignature ? (
+            <p className="text-xs text-gray-500">No signature yet. <button onClick={onEditSignature} className="text-red-900 hover:underline">Add your signature</button></p>
+          ) : null
+        )}
         <button onClick={send} disabled={sending || !text.trim() || !subject.trim()}
           className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-300 flex items-center space-x-1 text-sm">
           <Send size={14} /><span>{sending ? 'Sending...' : 'Send'}</span>

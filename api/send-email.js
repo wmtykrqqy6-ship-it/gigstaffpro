@@ -4,6 +4,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { verifyAdminRequest } from './_lib/verifyAdmin.js';
+import { handleSignatureAction } from './_lib/emailSignatures.js';
 import { htmlToPlainText } from './_lib/emailShell.js';
 import { handleAdminPush } from './_lib/push.js';
 import { handleQuoteRequest } from './_lib/quoteRequest.js';
@@ -73,6 +74,18 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error('admin push failed:', err?.message || err);
       return res.status(500).json({ ok: false, error: 'Could not send the notification.' });
+    }
+  }
+
+  // Each rep's email signature for Messages replies (api/_lib/emailSignatures.js).
+  // Not an email, so it doesn't use the email rate limit below.
+  if (req.body && typeof req.body === 'object' && (req.body.action === 'signature-get' || req.body.action === 'signature-save')) {
+    try {
+      const result = await handleSignatureAction(supabaseAdmin, req.body, adminCheck.adminUserId);
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('signature action failed:', err?.message || err);
+      return res.status(500).json({ ok: false, error: 'Could not load or save the signature.' });
     }
   }
 

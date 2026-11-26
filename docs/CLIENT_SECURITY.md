@@ -15,6 +15,8 @@ data goes in"), decided with Dylan 2026-11-21.
 - Admin-only tables (RLS `is_admin()`): `clients`, `client_contacts`,
   `client_activity`, `goodshuffle_projects`, `leads`, `lead_emails_sent`, `client_messages`, `event_client_details`, `venues`,
   `client_access_log`.
+- Server-only (no browser access): `admin_email_signatures` (reps' names and
+  signatures for Messages replies).
 - The role is stored on `admin_users.role`: `admin` or `sales_manager`.
   `public.my_staff_role()` returns the signed-in person's role. Today the
   two roles have the same access; the role is a label in the log.
