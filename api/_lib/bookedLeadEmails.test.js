@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { dueBookedEmails, buildBookedEmail, sendBookedLeadEmails } from './bookedLeadEmails.js';
+import { dueBookedEmails, dueCustomEmails, buildBookedEmail, sendBookedLeadEmails } from './bookedLeadEmails.js';
 import { normalizeClientEmailSettings } from './clientEmailSettings.js';
 
 const ALL_ON = normalizeClientEmailSettings({
@@ -87,5 +87,55 @@ describe('sendBookedLeadEmails', () => {
     const r = await sendBookedLeadEmails({ now: NOW, today: '2027-01-09', env, fetchImpl: f });
     expect(r.sent).toBe(0);
     expect(f.calls.some(c => c.method === 'DELETE')).toBe(true);
+  });
+});
+
+describe('custom wording', () => {
+  it('uses the saved subject and message, with blanks filled in', () => {
+    const s = normalizeClientEmailSettings({ upsell: { on: true, days: 21, subject: '{days_away} left, {first_name}', message: 'Hi {first_name},\n\n- **Add a DJ**' } });
+    const e = buildBookedEmail('upsell', lead(), s, { today: '2027-01-09' });
+    expect(e.subject).toBe('3 weeks left, Pat');
+    expect(e.html).toContain('<strong>Add a DJ</strong>');
+    expect(e.text).toContain('Hi Pat,');
+  });
+
+  it('can change just the subject and keep the built-in message', () => {
+    const s = normalizeClientEmailSettings({ thankyou: { on: true, subject: 'Welcome aboard!' } });
+    const e = buildBookedEmail('thankyou', lead(), s);
+    expect(e.subject).toBe('Welcome aboard!');
+    expect(e.html).toContain('Thank you for choosing Vegas on Wheels!');
+  });
+});
+
+describe('custom emails', () => {
+  const custom = (over = {}) => normalizeClientEmailSettings({ custom: [{ id: 'abcd1234', name: 'Check-in', on: true, trigger: 'before_event', days: 30, subject: 'Hi {first_name}', message: 'Party on {event_date}!', ...over }] });
+  const due = (s, l, today, sent) => kinds(dueCustomEmails([l], s, { today, sent }));
+
+  it('goes out N days before the event, once', () => {
+    expect(due(custom(), lead(), '2026-12-31')).toEqual(['L1:custom:abcd1234']);
+    expect(due(custom(), lead(), '2026-12-30')).toEqual([]);
+    expect(due(custom(), lead(), '2027-01-04')).toEqual([]); // more than 3 days late
+    expect(due(custom(), lead(), '2026-12-31', new Set(['L1:custom:abcd1234']))).toEqual([]);
+    expect(due(custom(), lead({ booked_at: '2027-01-02T12:00:00Z' }), '2026-12-31')).toEqual([]);
+  });
+
+  it('handles after-event, after-booking and after-quote timing', () => {
+    expect(due(custom({ trigger: 'after_event', days: 2 }), lead(), '2027-02-01')).toEqual(['L1:custom:abcd1234']);
+    expect(due(custom({ trigger: 'after_booked', days: 0 }), lead({ booked_at: '2027-01-09T14:00:00Z' }), '2027-01-09')).toEqual(['L1:custom:abcd1234']);
+    const quoted = lead({ stage: 'quoted', quoted_at: '2027-01-01T15:00:00Z', last_contact_at: '2027-01-05T15:00:00Z' });
+    expect(due(custom({ trigger: 'after_quote', days: 3 }), quoted, '2027-01-08')).toEqual(['L1:custom:abcd1234']);
+    expect(due(custom({ trigger: 'after_quote', days: 3 }), lead(), '2027-01-08')).toEqual([]); // booked, not quoted
+  });
+
+  it('skips emails that are off, empty or paused', () => {
+    expect(due(custom({ on: false }), lead(), '2026-12-31')).toEqual([]);
+    expect(due(custom({ message: '' }), lead(), '2026-12-31')).toEqual([]);
+    expect(due(custom(), lead({ followup_paused: true }), '2026-12-31')).toEqual([]);
+  });
+
+  it('builds the email from the templates', () => {
+    const e = buildBookedEmail('custom:abcd1234', lead(), custom(), { today: '2026-12-31' });
+    expect(e.subject).toBe('Hi Pat');
+    expect(e.text).toContain('Party on Saturday, January 30!');
   });
 });

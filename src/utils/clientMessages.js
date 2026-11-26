@@ -9,7 +9,8 @@ export const MESSAGE_KIND_LABELS = {
   thankyou: 'Auto: booking thank-you',
   upsell: 'Auto: upsell ideas',
   prep: 'Auto: get-ready checklist',
-  review: 'Auto: review and tip'
+  review: 'Auto: review and tip',
+  custom: 'Auto: custom email'
 };
 
 export const kindLabel = (kind) => MESSAGE_KIND_LABELS[kind] || 'Email';

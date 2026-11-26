@@ -30,7 +30,8 @@ export default function LeadsView({ onOpenSettings }) {
   const [emailSettings, setEmailSettings] = useState(null);
   const followupOn = !!emailSettings?.followup.on;
   const followupDays = emailSettings?.followup.days;
-  const autoEmailsOn = AUTO_EMAIL_KINDS.filter(k => emailSettings?.[k]?.on).length;
+  const autoEmailsOn = AUTO_EMAIL_KINDS.filter(k => emailSettings?.[k]?.on).length + (emailSettings?.custom || []).filter(c => c.on).length;
+  const autoEmailsTotal = AUTO_EMAIL_KINDS.length + (emailSettings?.custom || []).length;
 
   // Follow-up timing is shown on quoted leads; it's edited in Settings > Email.
   useEffect(() => {
@@ -167,7 +168,7 @@ export default function LeadsView({ onOpenSettings }) {
 
       {!needsSql && onOpenSettings && (
         <button onClick={() => onOpenSettings('email')} className="text-sm text-red-900 hover:underline flex items-center space-x-1">
-          <Clock size={14} /><span>Automatic emails: {emailSettings ? `${autoEmailsOn} of ${AUTO_EMAIL_KINDS.length} on` : '...'} (change in Settings &gt; Email)</span>
+          <Clock size={14} /><span>Automatic emails: {emailSettings ? `${autoEmailsOn} of ${autoEmailsTotal} on` : '...'} (change in Settings &gt; Email)</span>
         </button>
       )}
 
