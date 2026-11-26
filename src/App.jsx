@@ -180,6 +180,12 @@ const GigStaffPro = () => {
     setCurrentView(view);
   };
 
+  // Open Settings on a given tab (used by the Leads and Messages shortcuts).
+  const openSettingsTab = (tab) => {
+    sessionStorage.setItem('settingsTab', tab);
+    navigate('settings');
+  };
+
   const goWorkerTab = (tab) => {
     if (tab === workerTab) return;
     window.history.pushState({ workerTab: tab }, '', window.location.pathname + window.location.search);
@@ -1460,10 +1466,10 @@ setAppPositions(storedPositions);
       return <ClientsView timeFormat={timeFormat} />;
     }
     if (currentView === 'leads') {
-      return <LeadsView />;
+      return <LeadsView onOpenSettings={openSettingsTab} />;
     }
     if (currentView === 'messages') {
-      return <MessagesView />;
+      return <MessagesView onOpenSettings={openSettingsTab} />;
     }
     if (currentView === 'applications') {
       return (

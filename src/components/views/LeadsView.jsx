@@ -8,14 +8,15 @@ import {
   LEAD_STAGES, LOST_REASONS, stageLabel, countByStage, sortLeads, stagePatch,
   clientFromLead, emptyLeadForm, leadFromForm, followupStatus, contactPatch
 } from '../../utils/leads';
-import AutoEmailsPanel from '../leads/AutoEmailsPanel';
+import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from '../../utils/clientEmailSettings';
 import EmailHistory from '../messages/EmailHistory';
 
+const AUTO_EMAIL_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review'];
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
 
 // Leads tab (CRM Phase 1). Quote requests from the website form land here
 // as "New". Admins and sales managers only (public.leads is admin-only).
-export default function LeadsView() {
+export default function LeadsView({ onOpenSettings }) {
   const notify = useToast();
   const [leads, setLeads] = useState([]);
   const [clientNames, setClientNames] = useState({});
@@ -29,6 +30,15 @@ export default function LeadsView() {
   const [emailSettings, setEmailSettings] = useState(null);
   const followupOn = !!emailSettings?.followup.on;
   const followupDays = emailSettings?.followup.days;
+  const autoEmailsOn = AUTO_EMAIL_KINDS.filter(k => emailSettings?.[k]?.on).length;
+
+  // Follow-up timing is shown on quoted leads; it's edited in Settings > Email.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('settings').select('setting_value').eq('setting_key', CLIENT_EMAILS_KEY).maybeSingle();
+      setEmailSettings(normalizeClientEmailSettings(data?.setting_value));
+    })();
+  }, []);
 
   const load = async () => {
     const { data, error } = await fetchAllRows(() => supabase.from('leads').select('*').order('created_at', { ascending: false }).order('id'));
@@ -155,7 +165,11 @@ export default function LeadsView() {
         </div>
       )}
 
-      {!needsSql && <AutoEmailsPanel onChange={setEmailSettings} />}
+      {!needsSql && onOpenSettings && (
+        <button onClick={() => onOpenSettings('email')} className="text-sm text-red-900 hover:underline flex items-center space-x-1">
+          <Clock size={14} /><span>Automatic emails: {emailSettings ? `${autoEmailsOn} of ${AUTO_EMAIL_KINDS.length} on` : '...'} (change in Settings &gt; Email)</span>
+        </button>
+      )}
 
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-full overflow-x-auto">
         {LEAD_STAGES.map(s => (

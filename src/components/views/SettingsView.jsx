@@ -9,6 +9,7 @@ import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
 import ClientAccessLogCard from '../settings/ClientAccessLogCard';
+import EmailSettingsTab from '../settings/EmailSettingsTab';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -236,7 +237,12 @@ export default function SettingsView({
 }) {
   const confirm = useConfirm();
   const notify = useToast();
-  const [activeTab, setActiveTab] = useState('venues');
+  // Other screens can open a tab directly (e.g. Leads -> Settings > Email).
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = sessionStorage.getItem('settingsTab');
+    sessionStorage.removeItem('settingsTab');
+    return t || 'venues';
+  });
   const [hostLabelValue, setHostLabelValue] = useState(getHostLabel());
   const [businessNameValue, setBusinessNameValue] = useState(() => {
     const n = getBusinessName();
@@ -968,6 +974,7 @@ export default function SettingsView({
           { id: 'positions', label: '🎰 Positions' },
           { id: 'payrates', label: '💰 Pay Rates' },
           { id: 'general', label: '⚙️ System' },
+          { id: 'email', label: '✉️ Email' },
           { id: 'accesslog', label: '🔒 Access log' },
         ].map(tab => (
           <button
@@ -1681,6 +1688,7 @@ export default function SettingsView({
       {/* ── POSITIONS TAB ── */}
 
       {/* ── PAY RATES TAB ── */}
+      {activeTab === 'email' && <EmailSettingsTab />}
       {activeTab === 'accesslog' && <ClientAccessLogCard />}
 
       {activeTab === 'payrates' && (
