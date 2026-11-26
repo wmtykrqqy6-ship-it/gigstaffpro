@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Inbox, RefreshCw, PenLine } from 'lucide-react';
+import { Search, Inbox, RefreshCw, PenLine, Settings as SettingsIcon } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { logClientAccess } from '../../utils/clientAccessLog';
 import { isMissingSchemaError, fetchAllRows } from '../../utils/clientRecords';
@@ -19,7 +19,7 @@ const FILTERS = [
 // redirected from sales@vegasonwheels.com, replies sent from here, and the
 // automatic emails. Admins and sales managers only (client_messages is
 // admin-only).
-export default function MessagesView({ onUnreadChange }) {
+export default function MessagesView({ onUnreadChange, onOpenSettings }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needsSql, setNeedsSql] = useState(false);
@@ -76,6 +76,11 @@ export default function MessagesView({ onUnreadChange }) {
           {!sig.needsSql && (
             <button onClick={() => setEditingSig(v => !v)} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">
               <PenLine size={14} /><span>My signature</span>
+            </button>
+          )}
+          {onOpenSettings && (
+            <button onClick={() => onOpenSettings('email')} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">
+              <SettingsIcon size={14} /><span>Email settings</span>
             </button>
           )}
           <button onClick={load} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">

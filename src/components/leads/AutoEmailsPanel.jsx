@@ -22,10 +22,10 @@ const EMAILS = [
 
 const inputClass = 'px-2 py-1 border border-gray-300 rounded-md text-sm';
 
-export default function AutoEmailsPanel({ onChange }) {
+export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
   const notify = useToast();
   const [settings, setSettings] = useState(normalizeClientEmailSettings(null));
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 

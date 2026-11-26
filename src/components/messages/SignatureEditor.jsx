@@ -71,7 +71,7 @@ export default function SignatureEditor({ mine, onClose, onSaved, onLogoChange }
           <h3 className="font-bold text-gray-900">My email signature</h3>
           <p className="text-xs text-gray-500">Added to the end of every reply you send from Messages. Replies still come from sales@vegasonwheels.com.</p>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close"><X size={18} /></button>
+        {onClose && <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close"><X size={18} /></button>}
       </div>
       <label className="block text-sm">
         <span className="text-gray-700">Your name (shown on your replies in Messages)</span>
@@ -101,7 +101,7 @@ export default function SignatureEditor({ mine, onClose, onSaved, onLogoChange }
         <button onClick={save} disabled={saving || uploading} className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-300 text-sm">
           {saving ? 'Saving...' : 'Save'}
         </button>
-        <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">Cancel</button>
+        {onClose && <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">Cancel</button>}
       </div>
     </div>
   );

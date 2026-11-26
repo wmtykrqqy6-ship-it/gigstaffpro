@@ -87,6 +87,15 @@ logic in `src/utils/goodshuffleImport.js`).
 - Client lists are read in pages (`fetchAllRows`), since Supabase returns at
   most 1,000 rows per request and there are ~1,100+ clients after the import.
 
+## Settings > Email (2026-11-26)
+
+One place for email settings (`src/components/settings/EmailSettingsTab.jsx`,
+Dylan asked for it): the admin's own signature and logo, the automatic client
+emails with the Google review and tip links, and where new quote requests go
+(`lead_email`, plain text; empty means sales@vegasonwheels.com; also the
+reply-to on automatic emails and Messages replies). Leads and Messages have
+shortcut buttons to it.
+
 ## Website quote form and Leads tab
 
 Dylan wants the form on vegasonwheels.com (WordPress), not a page on
@@ -105,8 +114,8 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
   `QUOTE_FORM_ORIGINS`), drops bots (hidden honeypot field, sent in under 3
   seconds), limits 5 per IP per hour, ignores the same email again within 10
   minutes, saves the lead with the service key, links it to a client with
-  the same email, and emails sales@vegasonwheels.com (a `lead_email`
-  settings row overrides it; reply-to is the visitor).
+  the same email, and emails sales@vegasonwheels.com (the `lead_email`
+  setting, set in Settings > Email, overrides it; reply-to is the visitor).
 - **Leads tab** (`src/components/views/LeadsView.jsx`): New, Quoted, Booked,
   Lost, with counts. Change a lead's stage; Lost asks why (price, date not
   available, went with someone else, no reply, event cancelled, other).
@@ -116,8 +125,8 @@ gigstaffpro.com, so visitors never leave the Vegas on Wheels site
 
 ## Automatic lead follow-up (step 4)
 
-- Off until an admin turns it on in the Leads tab's **Automatic emails**
-  panel, which also sets the number of days (default 7). Stored with the
+- Off until an admin turns it on in **Settings > Email** (Automatic emails;
+  the Leads tab links there), which also sets the number of days (default 7). Stored with the
   other automatic emails in settings `client_emails`
   (`api/_lib/clientEmailSettings.js`, copied to `src/utils/`).
 - The days count from the **last contact**: the later of moving the lead
@@ -148,7 +157,7 @@ emails"); code in `api/_lib/bookedLeadEmails.js`, same cron and hours.
 | Get-ready checklist | 7 days before the event | on/off, days before |
 | Review and tip | the Monday after the event | on/off, days after (empty = Monday after) |
 
-- All off until turned on in the Leads tab. One email of each kind per lead,
+- All off until turned on in Settings > Email. One email of each kind per lead,
   tracked in `lead_emails_sent` (claimed before sending, removed if the send
   fails). A missed day still sends within 3 days.
 - Only leads in Booked with an email and event date; "Don't send auto
@@ -217,7 +226,8 @@ GigStaffPro, show up; emails typed directly in Outlook don't (Dylan,
   shows whether a copy was sent.
 - **Rep signatures (Dylan, 2026-11-26: shared sales@ + a signature per rep):**
   every reply still comes from sales@, so clients always reach the team.
-  Each admin / sales manager sets "My signature" on the Messages screen (a
+  Each admin / sales manager sets "My signature" in Settings > Email (also
+  reachable from the Messages screen's "My signature" button) (a
   display name and up to 1,000 characters); the server adds it below the
   message when sending (`handleClientReply`), and the saved copy includes it.
   Replies show the rep's name, and a **Mine** filter lists conversations
