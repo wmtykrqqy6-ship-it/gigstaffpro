@@ -62,8 +62,25 @@ export function preview(text, n = 120) {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-export function matchesFilter(conversation, filter, search = '') {
+// A conversation is "mine" once I've replied in it.
+export function isMine(conversation, myId) {
+  if (!myId) return false;
+  return (conversation?.messages || []).some(m => m.direction === 'out' && m.sent_by === myId);
+}
+
+// Who wrote an outgoing email: the rep's name for a reply, else the company.
+export function senderName(message, team = {}, myId = null) {
+  if (message?.direction !== 'out') return message?.contact_name || message?.contact_email || '';
+  if (message.kind === 'reply' && message.sent_by) {
+    if (message.sent_by === myId) return team[myId] ? `${team[myId]} (you)` : 'You';
+    if (team[message.sent_by]) return team[message.sent_by];
+  }
+  return 'Vegas on Wheels';
+}
+
+export function matchesFilter(conversation, filter, search = '', myId = null) {
   if (filter === 'unread' && conversation.unread === 0) return false;
+  if (filter === 'mine' && !isMine(conversation, myId)) return false;
   if (filter === 'unmatched' && conversation.matched) return false;
   const q = String(search || '').trim().toLowerCase();
   if (!q) return true;

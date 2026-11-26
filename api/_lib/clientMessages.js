@@ -19,6 +19,7 @@ import { htmlToPlainText } from './emailShell.js';
 import { createRateLimiter, getClientIp } from './rateLimit.js';
 import { CLIENT_FROM, DEFAULT_LEAD_EMAIL } from './leadFollowups.js';
 import { recordClientMessage } from './recordClientMessage.js';
+import { withSignature } from './emailSignatures.js';
 
 export { recordClientMessage };
 
@@ -178,17 +179,25 @@ export async function handleClientReply({ body, adminUserId, env = process.env, 
   const leadEmail = String(setting?.[0]?.setting_value ?? '').replace(/"/g, '').trim();
   const replyTo = EMAIL_REGEX.test(leadEmail) ? leadEmail : DEFAULT_LEAD_EMAIL;
 
+  // The rep's own signature goes at the end (still sent from sales@).
+  let signature = '';
+  if (adminUserId && ID_REGEX.test(String(adminUserId))) {
+    const sig = await call(`admin_email_signatures?select=signature&admin_user_id=eq.${encodeURIComponent(adminUserId)}`).catch(() => []);
+    signature = sig?.[0]?.signature || '';
+  }
+  const fullText = withSignature(text, signature);
+
   const r = await fetchImpl('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: CLIENT_FROM, to: [to.email], reply_to: replyTo, subject, html: replyHtml(text), text })
+    body: JSON.stringify({ from: CLIENT_FROM, to: [to.email], reply_to: replyTo, subject, html: replyHtml(fullText), text: fullText })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return { status: 400, body: { success: false, error: data.message || 'Failed to send email' } };
 
   await recordClientMessage({ env, fetchImpl, row: {
     direction: 'out', kind: 'reply', lead_id: leadId, client_id: clientId,
-    contact_email: to.email, contact_name: to.name || null, subject, body_text: text,
+    contact_email: to.email, contact_name: to.name || null, subject, body_text: fullText,
     resend_id: data.id ? `out:${data.id}` : null, sent_by: adminUserId || null, read_at: now.toISOString()
   } });
   if (leadId) {

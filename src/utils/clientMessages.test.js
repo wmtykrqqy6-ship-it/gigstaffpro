@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupConversations, unreadCount, replySubject, preview, matchesFilter, kindLabel } from './clientMessages';
+import { groupConversations, unreadCount, replySubject, preview, matchesFilter, kindLabel, isMine, senderName } from './clientMessages';
 
 const m = (over) => ({ id: Math.random().toString(36), direction: 'in', contact_email: 'pat@example.com', created_at: '2026-12-01T10:00:00Z', ...over });
 
@@ -36,5 +36,19 @@ describe('client messages', () => {
     expect(matchesFilter(c, 'all', 'fundraiser')).toBe(true);
     expect(matchesFilter(c, 'all', 'zzz')).toBe(false);
     expect(kindLabel('upsell')).toMatch(/upsell/);
+  });
+
+  it('finds my conversations and names who sent each reply', () => {
+    const [c] = groupConversations([m({}), m({ direction: 'out', kind: 'reply', sent_by: 'me', created_at: '2026-12-01T11:00:00Z' })]);
+    expect(isMine(c, 'me')).toBe(true);
+    expect(isMine(c, 'other')).toBe(false);
+    expect(matchesFilter(c, 'mine', '', 'me')).toBe(true);
+    expect(matchesFilter(c, 'mine', '', 'other')).toBe(false);
+    const team = { me: 'Dylan', sam: 'Sam' };
+    expect(senderName({ direction: 'out', kind: 'reply', sent_by: 'me' }, team, 'me')).toBe('Dylan (you)');
+    expect(senderName({ direction: 'out', kind: 'reply', sent_by: 'sam' }, team, 'me')).toBe('Sam');
+    expect(senderName({ direction: 'out', kind: 'reply', sent_by: 'gone' }, team, 'me')).toBe('Vegas on Wheels');
+    expect(senderName({ direction: 'out', kind: 'followup' }, team, 'me')).toBe('Vegas on Wheels');
+    expect(senderName({ direction: 'in', contact_email: 'pat@example.com' }, team, 'me')).toBe('pat@example.com');
   });
 });

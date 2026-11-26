@@ -204,9 +204,29 @@ GigStaffPro, show up; emails typed directly in Outlook don't (Dylan,
 - **Screens:** Messages tab (conversations by contact, All / Unread / Not
   linked, search, reply), and an "Emails" section on each lead card and
   client page.
-- If Microsoft 365 blocks the redirect (outbound auto-forwarding is off by
-  default in some tenants), it's turned on in the Microsoft 365 admin center
-  (Defender > Anti-spam > outbound policy > automatic forwarding).
+- **Set up (live 2026-11-26):** the Outlook rule "GigStaffPro copy" on
+  sales@ redirects all mail to `inbox@in.vegasonwheels.com` (any address on
+  the subdomain works). Microsoft 365 blocks outside auto-forwarding by
+  default (bounce `550 5.7.520`), so a custom outbound anti-spam policy
+  "Allow sales@ forwarding" (security.microsoft.com/antispam) turns automatic
+  forwarding on for sales@ only. The Resend webhook (`email.received` ->
+  `https://www.gigstaffpro.com/api/inbound-email`) is in the account that
+  holds gigstaffpro.com. If Resend ever shows the domain "Failed" (its check
+  ran before DNS was live), press Restart on the domain page. Microsoft's
+  message trace (admin.exchange.microsoft.com > Mail flow > Message trace)
+  shows whether a copy was sent.
+- **Rep signatures (Dylan, 2026-11-26: shared sales@ + a signature per rep):**
+  every reply still comes from sales@, so clients always reach the team.
+  Each admin / sales manager sets "My signature" on the Messages screen (a
+  display name and up to 1,000 characters); the server adds it below the
+  message when sending (`handleClientReply`), and the saved copy includes it.
+  Replies show the rep's name, and a **Mine** filter lists conversations
+  you've replied in (`client_messages.sent_by`). Stored in
+  `public.admin_email_signatures` (migration
+  `20261126120000_add_admin_email_signatures.sql`): no browser access at all;
+  read and saved only through `api/send-email.js` actions `signature-get` /
+  `signature-save`, which save only the caller's own row
+  (`api/_lib/emailSignatures.js`).
 
 Not built yet (from the plan): a planner linked to several clients
 ("booked through"), and merging duplicate clients (worth doing with the

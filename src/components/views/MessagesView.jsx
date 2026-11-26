@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Inbox, RefreshCw } from 'lucide-react';
+import { Search, Inbox, RefreshCw, PenLine } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { logClientAccess } from '../../utils/clientAccessLog';
 import { isMissingSchemaError, fetchAllRows } from '../../utils/clientRecords';
 import { groupConversations, matchesFilter, preview } from '../../utils/clientMessages';
 import MessageThread from '../messages/MessageThread';
+import SignatureEditor from '../messages/SignatureEditor';
+import { callSignatureApi } from '../../utils/emailSignatureApi';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
+  { id: 'mine', label: 'Mine' },
   { id: 'unmatched', label: 'Not linked' }
 ];
 
@@ -23,6 +26,9 @@ export default function MessagesView({ onUnreadChange }) {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // contact email
+  // Signatures: { myId, mine: { display_name, signature }, team: { id: name }, needsSql }
+  const [sig, setSig] = useState({ myId: null, mine: null, team: {} });
+  const [editingSig, setEditingSig] = useState(false);
 
   const load = async () => {
     const { data, error } = await fetchAllRows(() => supabase.from('client_messages').select('*').order('created_at', { ascending: false }).order('id'));
@@ -37,10 +43,15 @@ export default function MessagesView({ onUnreadChange }) {
     if (data?.length) logClientAccess(supabase, { action: 'view', recordType: 'clients', recordIds: ids, where: 'messages_tab' });
   };
 
-  useEffect(() => { load(); }, []);
+  const loadSignatures = async () => {
+    const r = await callSignatureApi('signature-get');
+    if (r.ok) setSig({ myId: r.myId || null, mine: r.mine || null, team: r.team || {}, needsSql: !!r.needsSql });
+  };
+
+  useEffect(() => { load(); loadSignatures(); }, []);
 
   const conversations = useMemo(() => groupConversations(rows), [rows]);
-  const visible = conversations.filter(c => matchesFilter(c, filter, search));
+  const visible = conversations.filter(c => matchesFilter(c, filter, search, sig.myId));
   const current = conversations.find(c => c.email === selected) || null;
   const totalUnread = conversations.reduce((n, c) => n + c.unread, 0);
   useEffect(() => { onUnreadChange?.(totalUnread); }, [totalUnread]);
@@ -61,10 +72,22 @@ export default function MessagesView({ onUnreadChange }) {
           <h2 className="text-3xl font-bold text-gray-900">Messages</h2>
           <p className="text-sm text-gray-600 mt-1">Client emails to sales@vegasonwheels.com, your replies, and the automatic emails.</p>
         </div>
-        <button onClick={load} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">
-          <RefreshCw size={14} /><span>Refresh</span>
-        </button>
+        <div className="flex space-x-2">
+          {!sig.needsSql && (
+            <button onClick={() => setEditingSig(v => !v)} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">
+              <PenLine size={14} /><span>My signature</span>
+            </button>
+          )}
+          <button onClick={load} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-sm">
+            <RefreshCw size={14} /><span>Refresh</span>
+          </button>
+        </div>
       </div>
+
+      {editingSig && (
+        <SignatureEditor mine={sig.mine} onClose={() => setEditingSig(false)}
+          onSaved={(mine) => { setEditingSig(false); setSig(s => ({ ...s, mine, team: { ...s.team, ...(s.myId && mine?.display_name ? { [s.myId]: mine.display_name } : {}) } })); }} />
+      )}
 
       {needsSql && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg p-3">
@@ -109,7 +132,7 @@ export default function MessagesView({ onUnreadChange }) {
                         <span className="text-xs text-gray-400 flex-shrink-0">{new Date(c.last.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                       </div>
                       <p className="text-xs text-gray-500 truncate">{c.last.subject || '(no subject)'}</p>
-                      <p className="text-xs text-gray-400 truncate">{c.last.direction === 'out' ? 'You: ' : ''}{preview(c.last.body_text, 90)}</p>
+                      <p className="text-xs text-gray-400 truncate">{c.last.direction === 'out' ? (c.last.kind === 'reply' && c.last.sent_by && c.last.sent_by !== sig.myId ? `${sig.team[c.last.sent_by] || 'Team'}: ` : 'You: ') : ''}{preview(c.last.body_text, 90)}</p>
                       <div className="flex gap-1 mt-1">
                         {c.unread > 0 && <span className="text-xs bg-red-900 text-white px-1.5 rounded-full">{c.unread} new</span>}
                         {!c.matched && <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-1.5 rounded-full">Not linked</span>}
@@ -131,7 +154,8 @@ export default function MessagesView({ onUnreadChange }) {
                     <p className="text-xs text-gray-500 truncate">{current.email}{!current.matched && ' · not linked to a lead or client (no one has this email)'}</p>
                   </div>
                 </div>
-                <MessageThread key={current.email} conversation={current} onSent={load} />
+                <MessageThread key={current.email} conversation={current} onSent={load} team={sig.team} myId={sig.myId}
+                  signature={sig.mine?.signature || ''} onEditSignature={sig.needsSql ? null : () => setEditingSig(true)} />
               </>
             ) : (
               <p className="text-sm text-gray-400 text-center py-16">Pick a conversation.</p>
