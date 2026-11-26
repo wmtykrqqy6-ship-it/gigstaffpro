@@ -40,11 +40,37 @@ export function withSignature(text, signature) {
   return sig ? `${text}\n\n${sig}` : text;
 }
 
+// Uploaded logos (signature-logo action): stored by the server in the public
+// Storage bucket 'email-assets' so email apps can load them. Small images
+// only, checked by their first bytes, not just the type the browser claims.
+export const LOGO_BUCKET = 'email-assets';
+export const MAX_LOGO_BYTES = 500 * 1024;
+const LOGO_TYPES = {
+  'image/png': { ext: 'png', magic: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  'image/jpeg': { ext: 'jpg', magic: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  'image/gif': { ext: 'gif', magic: (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 }
+};
+
+// { buffer, contentType, ext } or { error }.
+export function decodeLogo(dataBase64, contentType) {
+  const type = LOGO_TYPES[String(contentType || '').toLowerCase()];
+  if (!type) return { error: 'Use a PNG, JPG or GIF image.' };
+  const b64 = String(dataBase64 || '').replace(/^data:[^,]*,/, '');
+  if (!b64 || b64.length > Math.ceil(MAX_LOGO_BYTES / 3) * 4 + 8 || !/^[A-Za-z0-9+/=\s]+$/.test(b64)) {
+    return { error: 'The image must be smaller than 500 KB.' };
+  }
+  const buffer = Buffer.from(b64, 'base64');
+  if (!buffer.length || buffer.length > MAX_LOGO_BYTES) return { error: 'The image must be smaller than 500 KB.' };
+  if (!type.magic(buffer)) return { error: "That file doesn't look like the image type it claims to be." };
+  return { buffer, contentType: String(contentType).toLowerCase(), ext: type.ext };
+}
+
 const missingTable = (error) => error?.code === '42P01' || error?.code === 'PGRST205' || /does not exist|schema cache/i.test(error?.message || '');
 
 // Admin-only actions on api/send-email.js (the caller is already verified):
 //   signature-get  -> { ok, myId, mine: { display_name, signature, logo_url }, team: { [adminId]: display_name } }
 //   signature-save -> saves the caller's own signature (never someone else's)
+//   signature-logo -> uploads (or removes) the caller's own logo image
 // Returns { status, body }.
 export async function handleSignatureAction(supabaseAdmin, body, adminUserId) {
   const table = supabaseAdmin.from('admin_email_signatures');
@@ -84,6 +110,27 @@ export async function handleSignatureAction(supabaseAdmin, body, adminUserId) {
       return { status: 500, body: { ok: false, error: 'Could not save your signature.' } };
     }
     return { status: 200, body: { ok: true, mine: { display_name: row.display_name || '', signature: row.signature || '', logo_url: row.logo_url || '' } } };
+  }
+
+  if (body.action === 'signature-logo') {
+    // Upload (or remove, with remove: true) the caller's own logo.
+    let logoUrl = null;
+    if (!body.remove) {
+      const img = decodeLogo(body.dataBase64, body.contentType);
+      if (img.error) return { status: 400, body: { ok: false, error: img.error } };
+      const path = `signature-logos/${adminUserId}-${Date.now()}.${img.ext}`;
+      const bucket = supabaseAdmin.storage.from(LOGO_BUCKET);
+      const { error: upErr } = await bucket.upload(path, img.buffer, { contentType: img.contentType, upsert: false, cacheControl: '31536000' });
+      if (upErr) {
+        const noBucket = /bucket/i.test(upErr.message || '') && /not found|does not exist/i.test(upErr.message || '');
+        return { status: noBucket ? 400 : 500, body: { ok: false, error: noBucket ? 'Logo uploads turn on once the logo upload SQL file has been run.' : 'Could not upload the logo.' } };
+      }
+      logoUrl = cleanLogoUrl(bucket.getPublicUrl(path)?.data?.publicUrl) || null;
+      if (!logoUrl) return { status: 500, body: { ok: false, error: 'Could not upload the logo.' } };
+    }
+    const { error } = await table.upsert({ admin_user_id: adminUserId, logo_url: logoUrl, updated_at: new Date().toISOString() }, { onConflict: 'admin_user_id' });
+    if (error) return { status: 500, body: { ok: false, error: 'Could not save the logo.' } };
+    return { status: 200, body: { ok: true, logo_url: logoUrl || '' } };
   }
 
   return { status: 400, body: { ok: false, error: 'Unknown action' } };

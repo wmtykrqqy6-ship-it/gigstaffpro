@@ -1,28 +1,67 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Upload } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { callSignatureApi } from '../../utils/emailSignatureApi';
 
-// The logo on vegasonwheels.com (same as DEFAULT_LOGO_URL in api/_lib/emailSignatures.js).
-const SITE_LOGO = 'https://vegasonwheels.com/wp-content/uploads/2025/11/logo-transparent-16-to-9.png';
+const MAX_LOGO_BYTES = 500 * 1024; // same as api/_lib/emailSignatures.js
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/gif'];
+
+const readAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(file);
+});
 
 // "My signature": the name shown on my replies and the signature added to
 // the end of every reply I send from Messages (still sent from sales@).
-export default function SignatureEditor({ mine, onClose, onSaved }) {
+export default function SignatureEditor({ mine, onClose, onSaved, onLogoChange }) {
   const notify = useToast();
   const [displayName, setDisplayName] = useState(mine?.display_name || '');
   const [signature, setSignature] = useState(mine?.signature || '');
   const [logoUrl, setLogoUrl] = useState(mine?.logo_url || '');
-  const logoOk = /^https:\/\/[^\s"'<>`]+$/i.test(logoUrl.trim());
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef(null);
   const [saving, setSaving] = useState(false);
+
+  // Uploads right away (the server stores it and saves the link).
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!LOGO_TYPES.includes(file.type)) { notify('Use a PNG, JPG or GIF image.'); return; }
+    if (file.size > MAX_LOGO_BYTES) { notify('The image must be smaller than 500 KB.'); return; }
+    setUploading(true);
+    try {
+      const dataBase64 = await readAsBase64(file);
+      const r = await callSignatureApi('signature-logo', { dataBase64, contentType: file.type });
+      if (!r.ok) { notify('Could not upload: ' + r.error); return; }
+      setLogoUrl(r.logo_url || '');
+      onLogoChange?.(r.logo_url || '');
+      notify('Logo uploaded');
+    } catch {
+      notify('Could not read that file.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setUploading(true);
+    const r = await callSignatureApi('signature-logo', { remove: true });
+    setUploading(false);
+    if (!r.ok) { notify('Could not remove: ' + r.error); return; }
+    setLogoUrl('');
+    onLogoChange?.('');
+  };
 
   const save = async () => {
     setSaving(true);
-    const r = await callSignatureApi('signature-save', { displayName, signature, logoUrl: logoUrl.trim() });
+    const r = await callSignatureApi('signature-save', { displayName, signature });
     setSaving(false);
     if (!r.ok) { notify('Could not save: ' + r.error); return; }
     notify('Signature saved');
-    onSaved?.(r.mine);
+    onSaved?.({ ...r.mine, logo_url: logoUrl });
   };
 
   return (
@@ -47,17 +86,19 @@ export default function SignatureEditor({ mine, onClose, onSaved }) {
       </label>
       <div className="text-sm space-y-1">
         <span className="text-gray-700">Logo under your signature (optional)</span>
+        {logoUrl && <img src={logoUrl} alt="Your logo" className="h-auto border rounded bg-white p-1" style={{ width: 160 }} />}
+        <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif" className="hidden" onChange={uploadLogo} />
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setLogoUrl(SITE_LOGO)} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs">Use the Vegas on Wheels logo</button>
-          {logoUrl && <button type="button" onClick={() => setLogoUrl('')} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs">No logo</button>}
+          <button type="button" onClick={() => fileInput.current?.click()} disabled={uploading}
+            className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs flex items-center space-x-1">
+            <Upload size={12} /><span>{uploading ? 'Uploading...' : logoUrl ? 'Upload a different logo' : 'Upload logo'}</span>
+          </button>
+          {logoUrl && <button type="button" onClick={removeLogo} disabled={uploading} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs">Remove logo</button>}
         </div>
-        <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" maxLength={500}
-          value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="Or paste an image link (https://...)" />
-        {logoUrl.trim() && !logoOk && <p className="text-xs text-red-700">The link must start with https:// (right-click an image on your website and copy its address).</p>}
-        {logoOk && <img src={logoUrl.trim()} alt="Logo preview" className="mt-1 h-auto border rounded bg-white p-1" style={{ width: 160 }} />}
+        <p className="text-xs text-gray-400">PNG, JPG or GIF, under 500 KB. Shown about 160 pixels wide.</p>
       </div>
       <div className="flex space-x-2">
-        <button onClick={save} disabled={saving || (logoUrl.trim() && !logoOk)} className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-300 text-sm">
+        <button onClick={save} disabled={saving || uploading} className="bg-red-900 text-white px-4 py-2 rounded-lg hover:bg-red-800 disabled:bg-gray-300 text-sm">
           {saving ? 'Saving...' : 'Save'}
         </button>
         <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">Cancel</button>

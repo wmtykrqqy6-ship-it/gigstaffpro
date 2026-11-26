@@ -79,7 +79,7 @@ export default async function handler(req, res) {
 
   // Each rep's email signature for Messages replies (api/_lib/emailSignatures.js).
   // Not an email, so it doesn't use the email rate limit below.
-  if (req.body && typeof req.body === 'object' && (req.body.action === 'signature-get' || req.body.action === 'signature-save')) {
+  if (req.body && typeof req.body === 'object' && ['signature-get', 'signature-save', 'signature-logo'].includes(req.body.action)) {
     try {
       const result = await handleSignatureAction(supabaseAdmin, req.body, adminCheck.adminUserId);
       return res.status(result.status).json(result.body);

@@ -227,12 +227,17 @@ GigStaffPro, show up; emails typed directly in Outlook don't (Dylan,
   read and saved only through `api/send-email.js` actions `signature-get` /
   `signature-save`, which save only the caller's own row
   (`api/_lib/emailSignatures.js`).
-- **Signature logo (2026-11-26):** optional `logo_url` per rep (migration
-  `20261126130000_add_signature_logo.sql`), https links only, shown 160px
+- **Signature logo (2026-11-26):** each rep clicks **Upload logo** on My
+  signature (PNG, JPG or GIF under 500 KB). The server (`signature-logo`
+  action) checks it's a real image by its first bytes, stores it in the
+  public Storage bucket `email-assets` (migration
+  `20261126140000_add_email_assets_bucket.sql`; no upload policies, server
+  only) and saves the link in `admin_email_signatures.logo_url` (migration
+  `20261126130000_add_signature_logo.sql`, https links only). It's shown 160px
   wide under the signature in the HTML email (not in the plain-text copy or
-  the saved copy). "Use the Vegas on Wheels logo" fills in the logo hosted on
-  vegasonwheels.com, so clients' email loads it from our own site. Some email
-  apps hide images until the client clicks "show images".
+  the saved copy). Some email apps hide images until the client clicks "show
+  images". Replaced logos stay in the bucket (small; clean up by hand if
+  ever needed).
 
 Not built yet (from the plan): a planner linked to several clients
 ("booked through"), and merging duplicate clients (worth doing with the
