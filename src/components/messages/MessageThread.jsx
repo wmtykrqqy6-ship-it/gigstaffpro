@@ -25,7 +25,7 @@ async function sendReply(payload) {
 // team / myId / signature come from the Messages screen; elsewhere (lead and
 // client email history) they're left out and the server still adds the
 // sender's signature.
-export default function MessageThread({ conversation, onSent, compact = false, team = {}, myId = null, signature, onEditSignature }) {
+export default function MessageThread({ conversation, onSent, compact = false, team = {}, myId = null, signature, logoUrl = '', onEditSignature }) {
   const notify = useToast();
   const [subject, setSubject] = useState(() => replySubject(conversation));
   const [text, setText] = useState('');
@@ -71,7 +71,10 @@ export default function MessageThread({ conversation, onSent, compact = false, t
           signature ? (
             <div className="text-xs text-gray-500">
               <span>Your signature is added below your message{onEditSignature && <> · <button onClick={onEditSignature} className="text-red-900 hover:underline">Edit</button></>}</span>
-              <p className="mt-1 pl-2 border-l-2 border-gray-200 whitespace-pre-line text-gray-600">{signature}</p>
+              <div className="mt-1 pl-2 border-l-2 border-gray-200">
+                <p className="whitespace-pre-line text-gray-600">{signature}</p>
+                {logoUrl && <img src={logoUrl} alt="Logo" className="mt-1 h-auto" style={{ width: 120 }} />}
+              </div>
             </div>
           ) : onEditSignature ? (
             <p className="text-xs text-gray-500">No signature yet. <button onClick={onEditSignature} className="text-red-900 hover:underline">Add your signature</button></p>

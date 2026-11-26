@@ -9,7 +9,7 @@ function fakeRes() {
   return { code: 0, data: null, status(c) { this.code = c; return this; }, json(d) { this.data = d; return this; } };
 }
 
-function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved = [{ id: 'm1' }], resendOk = true, signature = null } = {}) {
+function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved = [{ id: 'm1' }], resendOk = true, signature = null, logo = null } = {}) {
   const calls = [];
   const fn = vi.fn(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
@@ -20,7 +20,7 @@ function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved =
     if (url.includes('/client_messages?')) return { ok: true, json: async () => saved };
     if (url.includes('/leads?id=')) return { ok: true, status: 204, json: async () => null };
     if (url.includes('/settings?')) return { ok: true, json: async () => [] };
-    if (url.includes('/admin_email_signatures?')) return { ok: true, json: async () => (signature ? [{ signature }] : []) };
+    if (url.includes('/admin_email_signatures?')) return { ok: true, json: async () => (signature ? [{ signature, logo_url: logo }] : []) };
     if (url.includes('api.resend.com/emails')) return { ok: resendOk, status: resendOk ? 200 : 422, json: async () => (resendOk ? { id: 'sent-1' } : { message: 'nope' }) };
     return { ok: false, status: 404, json: async () => null };
   });
@@ -127,6 +127,16 @@ describe('handleClientReply', () => {
     expect(mail.html).toContain('Sam Lee<br>Sales, Vegas on Wheels');
     expect(mail.from).toBe('Vegas on Wheels <sales@vegasonwheels.com>');
     expect(f.calls.find(c => c.url.includes('/client_messages?')).body[0].body_text).toBe(mail.text);
+    expect(mail.html).not.toContain('<img');
+  });
+
+  it('puts the logo under the signature in the HTML only', async () => {
+    const f = fakeFetch({ signature: 'Sam', logo: 'https://vegasonwheels.com/logo.png' });
+    await handleClientReply({ body: { to: 'pat@example.com', subject: 'Re: quote', text: 'Hi Pat' }, adminUserId: '99999999-8888-7777-6666-555555555555', env, fetchImpl: f, now: NOW });
+    const mail = f.calls.find(c => c.url === 'https://api.resend.com/emails').body;
+    expect(mail.html).toContain('<img src="https://vegasonwheels.com/logo.png"');
+    expect(mail.html.indexOf('Sam')).toBeLessThan(mail.html.indexOf('<img'));
+    expect(mail.text).toBe('Hi Pat\n\nSam');
   });
 
   it('checks its input', async () => {
