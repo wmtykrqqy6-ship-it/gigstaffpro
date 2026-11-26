@@ -57,7 +57,7 @@ export default function SignatureEditor({ mine, onClose, onSaved, onLogoChange }
 
   const save = async () => {
     setSaving(true);
-    const r = await callSignatureApi('signature-save', { displayName, signature });
+    const r = await callSignatureApi('signature-save', { displayName, signature, logoUrl: logoUrl.trim() });
     setSaving(false);
     if (!r.ok) { notify('Could not save: ' + r.error); return; }
     notify('Signature saved');
