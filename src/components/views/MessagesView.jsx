@@ -155,7 +155,7 @@ export default function MessagesView({ onUnreadChange }) {
                   </div>
                 </div>
                 <MessageThread key={current.email} conversation={current} onSent={load} team={sig.team} myId={sig.myId}
-                  signature={sig.mine?.signature || ''} onEditSignature={sig.needsSql ? null : () => setEditingSig(true)} />
+                  signature={sig.mine?.signature || ''} logoUrl={sig.mine?.logo_url || ''} onEditSignature={sig.needsSql ? null : () => setEditingSig(true)} />
               </>
             ) : (
               <p className="text-sm text-gray-400 text-center py-16">Pick a conversation.</p>

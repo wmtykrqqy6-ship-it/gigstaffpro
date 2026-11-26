@@ -19,7 +19,7 @@ import { htmlToPlainText } from './emailShell.js';
 import { createRateLimiter, getClientIp } from './rateLimit.js';
 import { CLIENT_FROM, DEFAULT_LEAD_EMAIL } from './leadFollowups.js';
 import { recordClientMessage } from './recordClientMessage.js';
-import { withSignature } from './emailSignatures.js';
+import { withSignature, logoHtml } from './emailSignatures.js';
 
 export { recordClientMessage };
 
@@ -157,9 +157,10 @@ export async function handleInboundEmail(req, res, { env = process.env, fetchImp
   }
 }
 
-export function replyHtml(text) {
+// extraHtml: already-safe HTML added at the end (the rep's logo).
+export function replyHtml(text, extraHtml = '') {
   const paras = String(text).split(/\n{2,}/).map(p => `<p style="margin:0 0 12px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`);
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827">${paras.join('')}</div>`;
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827">${paras.join('')}${extraHtml}</div>`;
 }
 
 // Admin reply from the Messages screen. Returns { status, body }.
@@ -181,16 +182,20 @@ export async function handleClientReply({ body, adminUserId, env = process.env, 
 
   // The rep's own signature goes at the end (still sent from sales@).
   let signature = '';
+  let logo = '';
   if (adminUserId && ID_REGEX.test(String(adminUserId))) {
-    const sig = await call(`admin_email_signatures?select=signature&admin_user_id=eq.${encodeURIComponent(adminUserId)}`).catch(() => []);
+    const q = `admin_email_signatures?admin_user_id=eq.${encodeURIComponent(adminUserId)}&select=`;
+    // logo_url only exists once the logo SQL has been run.
+    const sig = await call(`${q}signature,logo_url`).catch(() => call(`${q}signature`)).catch(() => []);
     signature = sig?.[0]?.signature || '';
+    logo = sig?.[0]?.logo_url || '';
   }
   const fullText = withSignature(text, signature);
 
   const r = await fetchImpl('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: CLIENT_FROM, to: [to.email], reply_to: replyTo, subject, html: replyHtml(fullText), text: fullText })
+    body: JSON.stringify({ from: CLIENT_FROM, to: [to.email], reply_to: replyTo, subject, html: replyHtml(fullText, logoHtml(logo)), text: fullText })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return { status: 400, body: { success: false, error: data.message || 'Failed to send email' } };
