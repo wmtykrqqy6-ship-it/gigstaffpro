@@ -96,6 +96,27 @@ emails with the Google review and tip links, and where new quote requests go
 reply-to on automatic emails and Messages replies). Leads and Messages have
 shortcut buttons to it.
 
+### Editing the wording and adding emails (Dylan, 2026-11-26)
+
+- Every automatic email has **Edit wording**: a subject and a plain-text
+  message with blanks ({first_name}, {name}, {event_date}, {start_time},
+  {location}, {days_away}, {phone}, {review_link}, {tip_link}), blank lines
+  between paragraphs, "- " bullets and **bold**. The editor starts from the
+  original wording (`DEFAULT_WORDING` in `clientEmailSettings.js`); wording
+  left the same isn't saved, so that email keeps its built-in HTML. A line
+  with {review_link} / {tip_link} is dropped when that link isn't set.
+  Preview uses a made-up client.
+- **Your own emails** (up to 10, `settings.custom`): name, subject, message,
+  on/off, and when: N days before the event, after the event, after booking
+  (booked clients), or after the quote / last "We talked" (quoted leads).
+  Sent by the same hourly loop as the booked emails (`dueCustomEmails` in
+  `api/_lib/bookedLeadEmails.js`), once per lead (`lead_emails_sent.kind =
+  'custom:<id>'`), within 3 days of the due date, skipped for "Don't send
+  auto emails". Saved in Messages as kind `custom`. Needs migration
+  `20261126150000_allow_custom_client_emails.sql` (widens the two kind checks).
+- The wording lives in the public-read `settings` row like the timing: fine
+  for email text, but never put client details in it.
+
 ## Website quote form and Leads tab
 
 Dylan wants the form on vegasonwheels.com (WordPress), not a page on

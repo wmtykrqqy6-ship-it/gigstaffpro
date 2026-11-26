@@ -5,7 +5,9 @@
 //   prep      N days before the event (default 7): get-ready checklist
 //   review    the Monday after the event, or N days after: Google review + tip
 // Timing and on/off live in settings (api/_lib/clientEmailSettings.js), set in
-// the Leads tab. Runs on the hourly shift-reminder cron, 9 AM to 6 PM.
+// Settings > Email, which can also change the wording and add custom emails
+// (settings.custom, sent by the same loop; see dueCustomEmails). Runs on
+// the hourly shift-reminder cron, 9 AM to 6 PM.
 //
 // Only leads in Booked with an email and event date, and not set to "Don't
 // send auto emails" (followup_paused). Each email goes once per lead:
@@ -14,8 +16,8 @@
 
 import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
-import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, addDays, emailDueDate } from './clientEmailSettings.js';
-import { firstName, fmtLeadDate, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL, CLIENT_FROM } from './leadFollowups.js';
+import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, addDays, emailDueDate, DEFAULT_WORDING, templateValues, fillSubject, renderMessageHtml } from './clientEmailSettings.js';
+import { firstName, fmtLeadDate, lastContactTime, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL, CLIENT_FROM } from './leadFollowups.js';
 import { recordClientMessage } from './recordClientMessage.js';
 
 export const KINDS = ['thankyou', 'upsell', 'prep', 'review'];
@@ -27,7 +29,35 @@ const p = (html) => `<p style="margin:0 0 12px">${html}</p>`;
 const list = (items) => `<ul style="margin:0 0 12px;padding-left:20px">${items.map(i => `<li style="margin:0 0 6px">${i}</li>`).join('')}</ul>`;
 const sign = (closing) => `<p style="margin:0">${closing},<br>Vegas on Wheels</p>`;
 
-export function buildBookedEmail(kind, lead, settings) {
+// Days from today to the event (null if unknown or past).
+const daysUntil = (today, eventDate) => {
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(String(eventDate || ''))) return null;
+  const n = Math.round((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
+  return n > 0 ? n : null;
+};
+
+const SUBTITLES = { thankyou: "You're booked", upsell: 'Make it even bigger', prep: 'Get-ready checklist', review: 'Thank you' };
+
+export function buildBookedEmail(kind, lead, settings, { today } = {}) {
+  if (String(kind).startsWith('custom:')) {
+    const c = (settings.custom || []).find(x => `custom:${x.id}` === kind);
+    if (!c) throw new Error(`Unknown email kind: ${kind}`);
+    return buildCustomEmail(c, lead, settings, { today });
+  }
+  // Wording changed in Settings > Email replaces the built-in subject/message.
+  const custom = settings[kind];
+  if (custom?.subject || custom?.message) {
+    const values = templateValues(lead, {
+      settings, eventDateText: fmtLeadDate(lead.event_date), phone: BUSINESS_PHONE,
+      daysAway: kind === 'upsell' ? settings.upsell.days : daysUntil(today, lead.event_date)
+    });
+    const subject = fillSubject(custom.subject || DEFAULT_WORDING[kind]?.subject, values);
+    if (custom.message && SUBTITLES[kind]) {
+      const html = renderEmailShell({ subtitle: SUBTITLES[kind], bodyHtml: renderMessageHtml(custom.message, values) });
+      return { subject, html, text: htmlToPlainText(html) };
+    }
+    return { ...buildBookedEmail(kind, lead, { ...settings, [kind]: { ...custom, subject: '', message: '' } }), subject };
+  }
   const name = escapeHtml(firstName(lead.name));
   const date = fmtLeadDate(lead.event_date);
   const dateText = date ? escapeHtml(date) : 'your event date';
@@ -97,6 +127,62 @@ export function buildBookedEmail(kind, lead, settings) {
   return { subject: subject.replace(/[\r\n]/g, ' '), html, text: htmlToPlainText(html) };
 }
 
+// A custom email from Settings > Email (subject and message templates).
+export function buildCustomEmail(c, lead, settings, { today } = {}) {
+  const values = templateValues(lead, {
+    settings, eventDateText: fmtLeadDate(lead.event_date), phone: BUSINESS_PHONE,
+    daysAway: c.trigger === 'before_event' ? c.days : daysUntil(today, lead.event_date)
+  });
+  const subject = fillSubject(c.subject, values) || 'A note from Vegas on Wheels';
+  const html = renderEmailShell({ subtitle: subject, bodyHtml: renderMessageHtml(c.message, values) });
+  return { subject, html, text: htmlToPlainText(html) };
+}
+
+const dateOf = (ts) => { const t = ts ? new Date(ts) : null; return t && !Number.isNaN(t.getTime()) ? t.toISOString().slice(0, 10) : null; };
+
+// Which (lead, custom email) pairs are due today. Same rules as the built-in
+// ones: once per lead, not when "Don't send auto emails" is set, and a day
+// missed by the cron still goes out within GRACE_DAYS (never a pile of old
+// ones when an email is first turned on).
+export function dueCustomEmails(leads, settings, { today, sent = new Set() }) {
+  const out = [];
+  const list = (settings.custom || []).filter(c => c.on && c.subject && c.message);
+  for (const l of leads || []) {
+    if (!l || l.followup_paused || !l.email || !EMAIL_REGEX.test(String(l.email))) continue;
+    const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(String(l.event_date || ''));
+    for (const c of list) {
+      const kind = `custom:${c.id}`;
+      if (sent.has(`${l.id}:${kind}`)) continue;
+      let due = null;
+      if (c.trigger === 'after_quote') {
+        if (l.stage !== 'quoted') continue;
+        const start = lastContactTime(l);
+        if (start === null) continue;
+        if (hasDate && l.event_date < today) continue;
+        due = addDays(dateOf(start), c.days);
+      } else {
+        if (l.stage !== 'booked') continue;
+        if (c.trigger === 'before_event') {
+          if (!hasDate || today >= l.event_date) continue;
+          due = addDays(l.event_date, -c.days);
+          const booked = dateOf(l.booked_at);
+          if (booked && booked > due) continue; // booked after it was due
+        } else if (c.trigger === 'after_event') {
+          if (!hasDate) continue;
+          due = addDays(l.event_date, c.days);
+        } else if (c.trigger === 'after_booked') {
+          const booked = dateOf(l.booked_at);
+          if (!booked || (hasDate && today > l.event_date)) continue;
+          due = addDays(booked, c.days);
+        }
+      }
+      if (!due || today < due || today > addDays(due, GRACE_DAYS)) continue;
+      out.push({ lead: l, kind });
+    }
+  }
+  return out;
+}
+
 // Which (lead, kind) pairs are due today. `sent` = Set of `${leadId}:${kind}`.
 // `today` = YYYY-MM-DD business date.
 export function dueBookedEmails(leads, settings, { now = new Date(), today, sent = new Set() }) {
@@ -143,18 +229,20 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
   const rows = await call(`settings?select=setting_key,setting_value&setting_key=in.(${CLIENT_EMAILS_KEY},lead_email)`);
   const byKey = Object.fromEntries((rows || []).map(s => [s.setting_key, s.setting_value]));
   const settings = normalizeClientEmailSettings(byKey[CLIENT_EMAILS_KEY]);
-  if (!KINDS.some(k => settings[k].on)) return { ...results, message: 'Client emails are off' };
+  const anyCustom = settings.custom.some(c => c.on);
+  if (!KINDS.some(k => settings[k].on) && !anyCustom) return { ...results, message: 'Client emails are off' };
   const leadEmail = String(byKey.lead_email ?? '').replace(/"/g, '').trim();
   const replyTo = EMAIL_REGEX.test(leadEmail) ? leadEmail : DEFAULT_LEAD_EMAIL;
 
   const since = addDays(today, -40);
-  const leads = await call(`leads?select=id,client_id,name,email,stage,event_date,start_time,event_location,booked_at,followup_paused&stage=eq.booked&followup_paused=is.false&email=not.is.null&or=(event_date.gte.${since},event_date.is.null)&limit=1000`);
+  const stages = settings.custom.some(c => c.on && c.trigger === 'after_quote') ? 'in.(booked,quoted)' : 'eq.booked';
+  const leads = await call(`leads?select=id,client_id,name,email,stage,event_date,start_time,event_location,booked_at,quoted_at,last_contact_at,followup_paused&stage=${stages}&followup_paused=is.false&email=not.is.null&or=(event_date.gte.${since},event_date.is.null)&limit=1000`);
   if (!leads.length) return results;
   const ids = leads.map(l => l.id);
   const sentRows = await call(`lead_emails_sent?select=lead_id,kind&lead_id=in.(${ids.map(encodeURIComponent).join(',')})`);
   const sent = new Set(sentRows.map(s => `${s.lead_id}:${s.kind}`));
 
-  const due = dueBookedEmails(leads, settings, { now, today, sent });
+  const due = [...dueBookedEmails(leads, settings, { now, today, sent }), ...dueCustomEmails(leads, settings, { today, sent })];
   results.due = due.length;
   for (const { lead, kind } of due) {
     try {
@@ -165,14 +253,14 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
         body: JSON.stringify([{ lead_id: lead.id, kind }])
       });
       if (!claimed.length) continue;
-      const { subject, html, text } = buildBookedEmail(kind, lead, settings);
+      const { subject, html, text } = buildBookedEmail(kind, lead, settings, { today });
       const r = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: CLIENT_FROM, to: [lead.email], reply_to: replyTo, subject, html, text })
       });
       if (!r.ok) {
-        await call(`lead_emails_sent?lead_id=eq.${encodeURIComponent(lead.id)}&kind=eq.${kind}`, { method: 'DELETE' });
+        await call(`lead_emails_sent?lead_id=eq.${encodeURIComponent(lead.id)}&kind=eq.${encodeURIComponent(kind)}`, { method: 'DELETE' });
         results.errors.push({ leadId: lead.id, kind, error: `Resend HTTP ${r.status}` });
         continue;
       }
@@ -180,7 +268,7 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
       // Show it in the Messages inbox (best effort).
       const sentId = (await r.json().catch(() => null))?.id;
       await recordClientMessage({ env, fetchImpl, row: {
-        direction: 'out', kind, lead_id: lead.id, client_id: lead.client_id ?? null,
+        direction: 'out', kind: kind.startsWith('custom:') ? 'custom' : kind, lead_id: lead.id, client_id: lead.client_id ?? null,
         contact_email: String(lead.email).toLowerCase(), contact_name: lead.name || null,
         subject, body_text: text, resend_id: sentId ? `out:${sentId}` : null, read_at: now.toISOString()
       } });

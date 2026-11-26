@@ -3,9 +3,9 @@
 //
 // Runs on the hourly shift-reminder cron (api/send-shift-reminders.js), the
 // same way the route reminders do, because the Vercel plan is at its
-// 12-function limit. Does nothing unless the admin turned it on in the Leads
-// tab (settings 'client_emails', api/_lib/clientEmailSettings.js), which also
-// sets how many days (default 7).
+// 12-function limit. Does nothing unless the admin turned it on in
+// Settings > Email (settings 'client_emails', api/_lib/clientEmailSettings.js), which also
+// sets how many days (default 7) and, optionally, the wording.
 //
 // A quoted lead gets a follow-up 7 days after the last contact: the later of
 // when it was moved to Quoted and when someone last pressed "We talked"
@@ -18,7 +18,7 @@
 
 import { escapeHtml } from './escapeHtml.js';
 import { renderEmailShell, htmlToPlainText } from './emailShell.js';
-import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from './clientEmailSettings.js';
+import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, DEFAULT_WORDING, templateValues, fillSubject, renderMessageHtml } from './clientEmailSettings.js';
 import { recordClientMessage } from './recordClientMessage.js';
 
 export const FOLLOWUP_AFTER_DAYS = 7;  // default; admins change it in the Leads tab
@@ -62,8 +62,21 @@ export function dueLeads(leads, now = new Date(), today = null, days = FOLLOWUP_
   });
 }
 
-export function buildFollowupEmail(lead) {
+// settings.followup.subject / .message (Settings > Email) replace the
+// built-in wording when set.
+export function buildFollowupEmail(lead, settings = null) {
   const date = fmtLeadDate(lead.event_date);
+  const custom = settings?.followup;
+  if (custom?.subject || custom?.message) {
+    const values = templateValues(lead, { settings, eventDateText: date, phone: BUSINESS_PHONE });
+    const subject = fillSubject(custom.subject || DEFAULT_WORDING.followup.subject, values);
+    const bodyHtml = custom.message ? renderMessageHtml(custom.message, values) : null;
+    if (bodyHtml) {
+      const html = renderEmailShell({ subtitle: 'Checking in on your quote', bodyHtml });
+      return { subject, html, text: htmlToPlainText(html) };
+    }
+    return { ...buildFollowupEmail(lead), subject };
+  }
   const forEvent = date ? ` for your event on ${escapeHtml(date)}` : '';
   const body = `
     <p style="margin:0 0 12px">Hi ${escapeHtml(firstName(lead.name))},</p>
@@ -103,7 +116,8 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
 
   const settings = await get(`settings?select=setting_key,setting_value&setting_key=in.(${CLIENT_EMAILS_KEY},lead_email)`);
   const raw = Object.fromEntries((settings || []).map(s => [s.setting_key, s.setting_value]));
-  const { followup } = normalizeClientEmailSettings(raw[CLIENT_EMAILS_KEY]);
+  const emailSettings = normalizeClientEmailSettings(raw[CLIENT_EMAILS_KEY]);
+  const { followup } = emailSettings;
   if (!followup.on) return { ...results, message: 'Lead follow-ups are off' };
   const byKey = { lead_email: settingValue(raw.lead_email) };
   const replyTo = EMAIL_REGEX.test(byKey.lead_email || '') ? byKey.lead_email : DEFAULT_LEAD_EMAIL;
@@ -118,7 +132,7 @@ export async function sendLeadFollowups({ now = new Date(), today = null, env = 
       // Claim it first so two overlapping runs can't both send.
       const claimed = await patch(lead.id, { followup_sent_at: now.toISOString() }, '&followup_sent_at=is.null');
       if (!claimed.length) continue;
-      const { subject, html, text } = buildFollowupEmail(lead);
+      const { subject, html, text } = buildFollowupEmail(lead, emailSettings);
       const r = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
