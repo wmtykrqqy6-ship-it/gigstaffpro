@@ -86,6 +86,7 @@ export default function MessagesView({ onUnreadChange }) {
 
       {editingSig && (
         <SignatureEditor mine={sig.mine} onClose={() => setEditingSig(false)}
+          onLogoChange={(logo_url) => setSig(s => ({ ...s, mine: { ...(s.mine || { display_name: '', signature: '' }), logo_url } }))}
           onSaved={(mine) => { setEditingSig(false); setSig(s => ({ ...s, mine, team: { ...s.team, ...(s.myId && mine?.display_name ? { [s.myId]: mine.display_name } : {}) } })); }} />
       )}
 
