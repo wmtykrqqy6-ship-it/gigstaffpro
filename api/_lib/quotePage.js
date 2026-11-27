@@ -21,7 +21,7 @@ import { escapeHtml } from './escapeHtml.js';
 import { createRateLimiter, getClientIp } from './rateLimit.js';
 import { CLIENT_FROM, DEFAULT_LEAD_EMAIL, BUSINESS_PHONE } from './leadFollowups.js';
 import { recordClientMessage } from './recordClientMessage.js';
-import { withSignature, logoHtml, DEFAULT_LOGO_URL } from './emailSignatures.js';
+import { withSignature, cleanSignature, cleanLogoUrl, DEFAULT_LOGO_URL } from './emailSignatures.js';
 import { priceQuote, partyHours, formatTime12 } from './quotePricing.js';
 import { DEFAULT_TERMS } from './quoteTerms.js';
 
@@ -115,16 +115,60 @@ export function buildSnapshot(quote, items, lead, now = new Date()) {
 }
 
 export function quoteEmailText(message, url, signature) {
-  const body = `${String(message || '').trim()}\n\nView and accept your quote: ${url}`;
-  return withSignature(body, signature);
+  // Signature first, so a message ending "Sincerely," reads right.
+  return `${withSignature(String(message || '').trim(), signature)}\n\nView and accept your quote: ${url}`;
 }
 
-export function quoteEmailHtml(text, url, logo) {
-  const paras = String(text).split(/\n{2,}/).map(p => {
-    const safe = escapeHtml(p).replace(/\n/g, '<br>');
-    return `<p style="margin:0 0 12px">${safe.replace(escapeHtml(url), `<a href="${escapeHtml(url)}" style="color:#7f1d1d;font-weight:bold">View and accept your quote</a>`)}</p>`;
-  });
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827">${paras.join('')}${logoHtml(logo)}</div>`;
+// The HTML email, laid out like the quote emails clients got from Goodshuffle
+// (Dylan sent a sample 2026-11-27): logo and "View Quote" at the top, a
+// "Quote" heading, the rep's message and signature, a big "View Quote"
+// button, the event and totals, "Have questions?", and our address. Table
+// layout with inline styles so Outlook and Gmail show it the same way.
+const RED = '#c00000';
+const BUSINESS_ADDRESS = ['535 S 93rd St', 'Milwaukee, WI 53214'];
+
+function emailButton(url, label, big) {
+  const pad = big ? '14px 28px' : '10px 18px';
+  return `<a href="${url}" style="display:inline-block;background:${RED};color:#ffffff;text-decoration:none;font-weight:bold;font-size:${big ? 18 : 15}px;padding:${pad};border-radius:5px">${label}</a>`;
+}
+
+const htmlParas = (text) => String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+  .map(p => `<p style="margin:0 0 14px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
+
+export function quoteEmailHtml({ message, signature, url, logo, snapshot }) {
+  const s = snapshot || {};
+  const ev = s.event || {};
+  const c = s.contact || {};
+  const href = escapeHtml(url);
+  const logoUrl = escapeHtml(cleanLogoUrl(logo) || DEFAULT_LOGO_URL);
+  const when = [longDate(ev.date), ev.start ? `${formatTime12(ev.start)}${ev.end ? ` - ${formatTime12(ev.end)}` : ''}` : ''].filter(Boolean).join(', ');
+  const project = [
+    s.name ? `<div style="font-weight:bold;margin-bottom:4px">${escapeHtml(s.name)}</div>` : '',
+    when ? `<div>${escapeHtml(when)}</div>` : '',
+    ev.venue ? `<div>${escapeHtml(ev.venue)}</div>` : '',
+    c.name ? `<div style="font-weight:bold;margin:12px 0 4px">Contact</div><div>${escapeHtml(c.name)}</div>` : ''
+  ].join('');
+  const row = (label, value, bold) => `<tr><td style="padding:3px 0;${bold ? 'font-weight:bold;border-top:1px solid #d1d5db;padding-top:8px' : ''}">${label}</td><td style="padding:3px 0;text-align:right;${bold ? 'font-weight:bold;border-top:1px solid #d1d5db;padding-top:8px' : ''}">${money(value)}</td></tr>`;
+  const summary = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">${row('Subtotal', s.subtotal)}${row('Taxes', s.tax)}${row('Total', s.total, true)}${s.deposit ? `<tr><td colspan="2" style="padding-top:8px;font-size:13px;color:#6b7280">${escapeHtml(`Deposit to book: ${money(s.deposit)}`)}</td></tr>` : ''}</table>`;
+  const sig = cleanSignature(signature);
+  const hr = '<tr><td style="border-top:1px solid #e5e7eb;font-size:0;line-height:0">&nbsp;</td></tr>';
+  return `<div style="background:#f3f4f6;padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1f2937">
+<tr><td style="padding:20px 24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td><img src="${logoUrl}" alt="Vegas on Wheels" width="150" style="display:block;width:150px;max-width:100%;height:auto;border:0"></td>
+<td style="text-align:right;vertical-align:middle">${emailButton(href, 'View Quote')}</td></tr></table></td></tr>
+${hr}
+<tr><td style="padding:20px 24px 8px;text-align:center"><div style="font-size:30px;font-weight:bold;color:#374151">Quote</div></td></tr>
+<tr><td style="padding:12px 24px 4px">${htmlParas(message)}${sig ? `<div style="margin-top:20px">${htmlParas(sig)}</div>` : ''}</td></tr>
+<tr><td style="padding:12px 24px 24px;text-align:center">${emailButton(href, 'View Quote', true)}</td></tr>
+${hr}
+<tr><td style="padding:20px 24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px"><tr>
+<td width="50%" style="vertical-align:top;padding-right:12px"><div style="font-weight:bold;color:#6b7280;font-size:12px;text-transform:uppercase;margin-bottom:6px">Event</div>${project}</td>
+<td width="50%" style="vertical-align:top;padding-left:12px"><div style="font-weight:bold;color:#6b7280;font-size:12px;text-transform:uppercase;margin-bottom:6px">Summary</div>${summary}</td>
+</tr></table></td></tr>
+${hr}
+<tr><td style="padding:20px 24px;text-align:center"><div style="font-size:18px;font-weight:bold;margin-bottom:4px">Have Questions?</div><div>Call ${escapeHtml(BUSINESS_PHONE)} or reply directly to this email.</div></td></tr>
+<tr><td style="padding:20px 24px;background:#4b5563;color:#e5e7eb;font-size:13px;line-height:1.7"><div style="font-size:16px;margin-bottom:4px">Vegas on Wheels</div>${BUSINESS_ADDRESS.map(escapeHtml).join('<br>')}<br>P: ${escapeHtml(BUSINESS_PHONE)}<br>${escapeHtml(DEFAULT_LEAD_EMAIL)}</td></tr>
+</table></div>`;
 }
 
 // Admin action 'quote-send'. body: { quoteId, subject, message }.
@@ -178,7 +222,7 @@ export async function handleQuoteSend({ body, adminUserId, env = process.env, fe
   const r = await fetchImpl('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: CLIENT_FROM, to: [to], reply_to: replyTo, subject, html: quoteEmailHtml(text, url, logo), text })
+    body: JSON.stringify({ from: CLIENT_FROM, to: [to], reply_to: replyTo, subject, html: quoteEmailHtml({ message, signature, url, logo, snapshot }), text })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return { status: 502, body: { ok: false, error: data.message || 'The email did not send. The quote is saved; try again.' } };

@@ -69,7 +69,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
   const firstName = String(lead?.name || '').trim().split(/\s+/)[0] || 'there';
   const [sendForm, setSendForm] = useState({
     subject: 'Your casino party quote from Vegas on Wheels',
-    message: `Hi ${firstName},\n\nThanks for reaching out! Here's your quote${lead?.event_date ? ` for ${new Date(`${lead.event_date}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` : ''}. You can look it over and accept it online, or just reply with any questions or changes.`
+    // Same wording as the Goodshuffle quote emails.
+    message: `Hello ${firstName},\n\nThank you so much for considering our family-owned business Vegas on Wheels for your event.\n\nHere is your quote${lead?.event_date ? ` for ${new Date(`${lead.event_date}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` : ''}. You can review and accept it by clicking View Quote. Please let me know if you would like any changes or other options.\n\nPlease be sure to provide chairs for the gaming tables. Please feel free to reach out with any questions or concerns.\n\nSincerely,`
   });
   const set = (patch) => setForm(f => ({ ...f, ...patch }));
 
