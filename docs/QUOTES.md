@@ -107,9 +107,11 @@ Build order (one PR and one SQL file each):
   on the Google Maps key) and fills the tax area and rate
   (`src/utils/salesTax.js` `findTaxArea`). Outside Wisconsin, or if the lookup
   fails, the rep picks the area or types the rate. New quotes start at 5.5%.
-- Caveat: Google's "locality" is the mailing city. A few addresses outside
-  the City of Milwaukee use a Milwaukee mailing address; check the tax area
-  on those.
+- Google's "locality" is the mailing city, and a Milwaukee mailing address
+  also covers West Allis, Wauwatosa, Greenfield and other suburbs (e.g. the
+  warehouse, 53214). So the lookup always fills the county rate (Milwaukee
+  County 5.9%) and shows a note; the rep picks City of Milwaukee (7.9%) only
+  for events inside the city limits (Dylan, 2026-11-27).
 
 ## Availability (step 4)
 

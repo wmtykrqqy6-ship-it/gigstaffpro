@@ -134,10 +134,14 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
     setLookingUp(false);
     const patch = {};
     if (typeof dist?.miles === 'number') patch.miles = Math.round(dist.miles * 10) / 10;
-    const area = findTaxArea(geo, taxRates);
+    // County rate only: the mailing city can't tell City of Milwaukee from
+    // the suburbs that share its mail (see findTaxArea).
+    const area = findTaxArea(geo, taxRates, { cities: false });
+    const cityArea = findTaxArea(geo, taxRates);
     if (area) { patch.tax_county = area.area; patch.tax_rate = Number(area.rate); }
     set(patch);
     if (!('miles' in patch)) notify("Couldn't look up the miles. Type them in.");
+    if (area && cityArea && cityArea !== area) setTaxNote(`Using ${area.area} (${formatRate(area.rate)}). If the event is inside ${cityArea.area} limits (not West Allis, Wauwatosa, Greenfield or another suburb with a Milwaukee address), pick ${cityArea.area} (${formatRate(cityArea.rate)}).`);
     if (!area) setTaxNote(geo?.county ? `${geo.county} County${geo.state ? `, ${geo.state}` : ''} isn't in the tax table. Pick the area or type the rate.` : "Couldn't find the county. Pick the tax area below.");
   };
 

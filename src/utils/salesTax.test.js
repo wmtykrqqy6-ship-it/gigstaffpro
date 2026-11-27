@@ -13,6 +13,7 @@ describe('sales tax', () => {
     expect(findTaxArea({ county: 'Waukesha', city: 'Menomonee Falls', state: 'WI' }, rates).rate).toBe(0.05);
     expect(findTaxArea({ county: 'Milwaukee County', city: 'West Allis', state: 'WI' }, rates).area).toBe('Milwaukee County');
     expect(findTaxArea({ county: 'Milwaukee', city: 'Milwaukee', state: 'WI' }, rates).rate).toBe(0.079);
+    expect(findTaxArea({ county: 'Milwaukee', city: 'Milwaukee', state: 'WI' }, rates, { cities: false }).area).toBe('Milwaukee County');
     expect(findTaxArea({ county: 'St Croix', state: 'WI' }, rates).area).toBe('St. Croix County');
   });
 
