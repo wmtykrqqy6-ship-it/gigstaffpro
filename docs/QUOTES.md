@@ -168,6 +168,14 @@ Build order (one PR and one SQL file each):
   snapshot (lines with photo/size/description, tax, total, 50% deposit,
   balance due 7 days before) and the quote terms.
   - **Accept**: typed full name + tick the terms box (no gratuity box).
+  - **E-signature** (Dylan, 2026-11-27): accepting is the signature. The
+    server saves `quotes.signature` (SQL 20261127180000): typed name, time,
+    IP, device (user agent), the quote email, the exact terms accepted, and
+    SHA-256 fingerprints of the quote snapshot and terms. The page then shows
+    "Signed electronically by ..." with those details and the terms as
+    signed, and a signed copy (`signedCopyEmailHtml`) is emailed to the
+    client (saved in Messages) and to the team (`lead_email`). If the column
+    is missing, accepting still works without the record.
     Only a quote still "sent" can be accepted (the update is
     conditional). Marks the quote accepted, the lead Booked (so the booking
     thank-you email goes out if it's on), and emails the team (`lead_email`

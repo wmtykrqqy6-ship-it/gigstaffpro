@@ -415,7 +415,12 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
             <div className="flex items-center gap-3 text-sm">
               {savedQuote?.id && savedQuote.status === 'draft' && <button onClick={remove} className="text-gray-500 hover:text-red-700">Delete quote</button>}
               {clientLink && <a href={clientLink} target="_blank" rel="noopener noreferrer" className="text-red-900 hover:underline">Open client's page</a>}
-              {savedQuote?.status === 'accepted' && <span className="text-green-700">Accepted{savedQuote.accepted_name ? ` by ${savedQuote.accepted_name}` : ''}</span>}
+              {savedQuote?.status === 'accepted' && (
+                <span className="text-green-700" title={savedQuote.signature ? [savedQuote.signature.ip && `IP ${savedQuote.signature.ip}`, savedQuote.signature.user_agent].filter(Boolean).join(' · ') : undefined}>
+                  {savedQuote.signature ? 'Signed electronically' : 'Accepted'}{savedQuote.accepted_name ? ` by ${savedQuote.accepted_name}` : ''}
+                  {savedQuote.accepted_at ? ` on ${new Date(savedQuote.accepted_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+                </span>
+              )}
               {savedQuote?.viewed_at && savedQuote.status === 'sent' && <span className="text-gray-500">Client opened it</span>}
             </div>
             <div className="flex space-x-2">
