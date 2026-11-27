@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { isMissingSchemaError } from '../../utils/clientRecords';
+import TaxRatesCard from './TaxRatesCard';
 import {
   PRICE_CATEGORIES, PRICE_UNITS, BONUS_KEY, formatPrice, unitLabel, packageSummary, validatePriceItem, groupPriceItems
 } from '../../utils/priceList';
@@ -205,6 +206,8 @@ export default function PricesSettingsTab() {
           </ul>
         </div>
       ))}
+
+      <TaxRatesCard />
     </div>
   );
 }
