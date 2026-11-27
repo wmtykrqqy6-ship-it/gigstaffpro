@@ -4,15 +4,18 @@
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+county$/, '').replace(/[^a-z]/g, '');
 
 // The rate row for a place ({ county, city, state }), or null. A city row
-// (City of Milwaukee) wins over its county. Wisconsin only: other states
+// (City of Milwaukee) wins over its county, unless { cities: false }: the
+// address lookup passes that, because Google's city is the mailing city and
+// "Milwaukee" mail also covers West Allis, Wauwatosa, Greenfield and other
+// suburbs that don't charge the city's 2%. Wisconsin only: other states
 // return null and the rep types the rate.
-export function findTaxArea(place, rates = []) {
+export function findTaxArea(place, rates = [], { cities = true } = {}) {
   if (!place?.county) return null;
   if (place.state && String(place.state).toUpperCase() !== 'WI') return null;
   const county = norm(place.county);
   const city = norm(place.city);
   const list = rates || [];
-  return list.find(r => r.kind === 'city' && norm(r.county) === county && city && norm(r.city) === city)
+  return (cities && list.find(r => r.kind === 'city' && norm(r.county) === county && city && norm(r.city) === city))
     || list.find(r => r.kind === 'county' && norm(r.county) === county)
     || null;
 }
