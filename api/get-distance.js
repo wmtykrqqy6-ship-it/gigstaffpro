@@ -6,6 +6,7 @@
 // key. Rate limiting (below) caps abuse from direct/scripted callers, which
 // CORS can't do anyway since it's a browser-only mechanism.
 import { createRateLimiter, getClientIp } from './_lib/rateLimit.js';
+import { geocodeAddress } from './_lib/geocode.js';
 
 const isRateLimited = createRateLimiter(30, 60 * 1000);
 
@@ -16,6 +17,22 @@ export default async function handler(req, res) {
   }
 
   const { origin, destination } = req.query;
+
+  // ?geocode=1&address=...: county / city / state for quote sales tax
+  // (docs/QUOTES.md). Lives here because the Vercel plan is at its function
+  // limit. Same rate limit as distance lookups.
+  if (req.query.geocode) {
+    const address = String(req.query.address || '').trim();
+    if (!address || address.length > 300) return res.status(400).json({ error: 'Missing address' });
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(500).json({ error: 'Google Maps API key not configured' });
+    try {
+      return res.status(200).json(await geocodeAddress(address, { apiKey: key }));
+    } catch (err) {
+      console.error('get-distance geocode:', err.message);
+      return res.status(400).json({ error: 'Could not look up that address' });
+    }
+  }
 
   if (!origin || !destination) {
     return res.status(400).json({ error: 'Missing origin or destination' });

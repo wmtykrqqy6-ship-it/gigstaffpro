@@ -10,7 +10,7 @@ Build order (one PR and one SQL file each):
 
 1. Price list in the app (Settings > Prices). Done (PR #26).
 2. Quote builder on each lead, with the pricing rules below. Done (drafts).
-3. Sales tax by county.
+3. Sales tax by county. Done.
 4. Availability by time window.
 5. Sending, the client's quote page, Accept.
 
@@ -91,5 +91,22 @@ Build order (one PR and one SQL file each):
   and dealers; a bonus game counts as 1 table, 1 dealer. The rep can leave a
   rule off a quote, edit any picked line's quantity, price and tax, and add
   custom lines (magician, gratuity).
-- Tax rate and county are typed in for now (default 5.5%); step 3 fills them
-  from the address. Status stays "draft" until step 5 (sending).
+- Status stays "draft" until step 5 (sending).
+
+## Sales tax (step 3)
+
+- Table `public.tax_rates` (migration `20261127150000_add_tax_rates.sql`),
+  admin-only: the total rate per area. 72 Wisconsin counties (5% state +
+  0.5% county in most; Milwaukee County 5.9%; Waukesha and Winnebago 5%)
+  and City of Milwaukee 7.9% (`kind 'city'`, wins over its county). Resort
+  taxes are left out (they apply to lodging/food sellers). Edited under
+  Settings > Prices > Sales tax rates.
+- The builder's map-pin button looks up both the driving miles and the
+  address's county/city (`/api/get-distance?geocode=1&address=...`, Google
+  Geocoding, parsed by `api/_lib/geocode.js`; needs the Geocoding API enabled
+  on the Google Maps key) and fills the tax area and rate
+  (`src/utils/salesTax.js` `findTaxArea`). Outside Wisconsin, or if the lookup
+  fails, the rep picks the area or types the rate. New quotes start at 5.5%.
+- Caveat: Google's "locality" is the mailing city. A few addresses outside
+  the City of Milwaukee use a Milwaukee mailing address; check the tax area
+  on those.

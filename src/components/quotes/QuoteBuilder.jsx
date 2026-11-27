@@ -8,6 +8,7 @@ import { PRICE_CATEGORIES, formatPrice, unitLabel, packageSummary } from '../../
 import {
   AUTO_RULES, TRAVEL_FREE_MILES, priceQuote, partyHours, lineFromItem, customLine, cleanLines, suggestPackage, toTime24
 } from '../../utils/quotePricing';
+import { findTaxArea, formatRate, sortTaxAreas } from '../../utils/salesTax';
 
 const input = 'w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm';
 const money = (n) => `${Number(n) < 0 ? '-' : ''}$${Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -49,6 +50,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [taxRates, setTaxRates] = useState([]);
+  const [taxNote, setTaxNote] = useState('');
   const [originId, setOriginId] = useState('');
   const [form, setForm] = useState(() => (quote ? { ...fromLead(lead), ...quote, miles: quote.miles ?? '', guest_count: quote.guest_count ?? '', tax_rate: Number(quote.tax_rate) } : fromLead(lead)));
   const [adding, setAdding] = useState('');
@@ -62,6 +65,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
       const { data, error } = await supabase.from('price_items').select('*').order('sort_order').order('name');
       if (error) setProblem(isMissingSchemaError(error) ? 'Quotes turn on once the price list SQL file (20261127130000) has been run in Supabase.' : `Could not load prices: ${error.message}`);
       else setItems(data || []);
+      const { data: rates } = await supabase.from('tax_rates').select('*');
+      setTaxRates(sortTaxAreas(rates || []));
       const { data: locs } = await supabase.from('locations').select('id, name, address').eq('is_active', true).order('name');
       const withAddress = (locs || []).filter(l => l.address);
       setLocations(withAddress);
@@ -93,20 +98,33 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
   };
   const toggleRule = (rule) => set({ auto_off: form.auto_off.includes(rule) ? form.auto_off.filter(r => r !== rule) : [...form.auto_off, rule] });
 
-  const lookUpMiles = async () => {
-    const origin = locations.find(l => String(l.id) === originId)?.address;
-    if (!origin || !form.address.trim()) { notify('Add the event address first.'); return; }
+  const pickArea = (area) => {
+    const r = taxRates.find(t => t.area === area);
+    set(r ? { tax_county: r.area, tax_rate: Number(r.rate) } : { tax_county: '' });
+  };
+
+  // Driving miles from the market's warehouse, and the sales tax area for
+  // the address (county / City of Milwaukee).
+  const lookUp = async () => {
+    const address = form.address.trim();
+    if (!address) { notify('Add the event address first.'); return; }
     setLookingUp(true);
-    try {
-      const r = await fetch(`/api/get-distance?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(form.address.trim())}`);
-      const d = await r.json();
-      if (!r.ok || typeof d.miles !== 'number') throw new Error(d.error || 'No distance found');
-      set({ miles: Math.round(d.miles * 10) / 10 });
-    } catch (err) {
-      notify(`Couldn't look up the distance: ${err.message}`);
-    } finally {
-      setLookingUp(false);
-    }
+    setTaxNote('');
+    const origin = locations.find(l => String(l.id) === originId)?.address;
+    const [dist, geo] = await Promise.all([
+      origin
+        ? fetch(`/api/get-distance?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(address)}`).then(r => r.json().then(d => (r.ok ? d : null))).catch(() => null)
+        : Promise.resolve(null),
+      fetch(`/api/get-distance?geocode=1&address=${encodeURIComponent(address)}`).then(r => r.json().then(d => (r.ok ? d : null))).catch(() => null)
+    ]);
+    setLookingUp(false);
+    const patch = {};
+    if (typeof dist?.miles === 'number') patch.miles = Math.round(dist.miles * 10) / 10;
+    const area = findTaxArea(geo, taxRates);
+    if (area) { patch.tax_county = area.area; patch.tax_rate = Number(area.rate); }
+    set(patch);
+    if (!('miles' in patch)) notify("Couldn't look up the miles. Type them in.");
+    if (!area) setTaxNote(geo?.county ? `${geo.county} County${geo.state ? `, ${geo.state}` : ''} isn't in the tax table. Pick the area or type the rate.` : "Couldn't find the county. Pick the tax area below.");
   };
 
   const save = async () => {
@@ -188,7 +206,7 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                 <label className="text-xs text-gray-600">Miles from warehouse
                   <div className="flex space-x-1">
                     <input type="number" min="0" step="0.1" className={input} value={form.miles} onChange={e => set({ miles: e.target.value })} />
-                    <button type="button" onClick={lookUpMiles} disabled={lookingUp || !locations.length} title="Look up driving miles" className="px-2 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"><MapPin size={14} /></button>
+                    <button type="button" onClick={lookUp} disabled={lookingUp} title="Look up driving miles and sales tax" className="px-2 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"><MapPin size={14} /></button>
                   </div>
                 </label>
                 {locations.length > 1 ? (
@@ -202,7 +220,16 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                   <input type="number" min="0" max="20" step="0.01" className={input} value={Math.round(Number(form.tax_rate) * 10000) / 100}
                     onChange={e => set({ tax_rate: (Number(e.target.value) || 0) / 100 })} />
                 </label>
-                <label className="text-xs text-gray-600">County<input className={input} value={form.tax_county} placeholder="e.g. Waukesha" onChange={e => set({ tax_county: e.target.value })} /></label>
+                {taxRates.length ? (
+                  <label className="text-xs text-gray-600">Tax area
+                    <select className={input} value={taxRates.some(t => t.area === form.tax_county) ? form.tax_county : ''} onChange={e => pickArea(e.target.value)}>
+                      <option value="">{form.tax_county ? `${form.tax_county} (typed)` : 'Pick…'}</option>
+                      {taxRates.map(t => <option key={t.area} value={t.area}>{t.area} ({formatRate(t.rate)})</option>)}
+                    </select>
+                  </label>
+                ) : (
+                  <label className="text-xs text-gray-600">County<input className={input} value={form.tax_county} placeholder="e.g. Waukesha" onChange={e => set({ tax_county: e.target.value })} /></label>
+                )}
                 <label className="col-span-2 flex items-center space-x-2 text-sm text-gray-700"><input type="checkbox" checked={form.fundraiser} onChange={e => set({ fundraiser: e.target.checked })} /><span>Fundraiser ($50 off each table)</span></label>
                 <label className="col-span-2 text-xs text-gray-600">Extra hours are
                   <select className={input} value={form.extra_hour_mode} onChange={e => set({ extra_hour_mode: e.target.value })}>
@@ -211,6 +238,7 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                   </select>
                 </label>
               </section>
+              {taxNote && <p className="text-xs text-amber-700 -mt-3">{taxNote}</p>}
               {far && <p className="text-xs text-amber-700 -mt-3">Past {TRAVEL_FREE_MILES} miles: the far delivery fee and the dealer travel fee are added.</p>}
 
               <section>
