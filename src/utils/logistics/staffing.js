@@ -19,9 +19,16 @@ import { isAssignmentFilled } from '../positionHelpers';
 const TABLE_CLASSES = ['craps', 'roulette', 'poker', 'blackjack'];
 const NONE = { position_key: null, staff_per_unit: 0 };
 
-// Dealers per table, from the Goodshuffle descriptions ("comes with one
-// dealer", "includes two dealers"): craps is 2, every other game is 1.
-export const dealersPerTable = (positionKey) => (/craps/i.test(positionKey || '') ? 2 : 1);
+// Dealers per table (Dylan, 2026-11-26): 8 ft craps 1, 10 ft craps 2,
+// 12 ft super craps 3, every other game 1. A craps table with no size in
+// its name counts as 10 ft.
+export const dealersPerTable = (positionKey, itemName = '') => {
+  if (!/craps/i.test(positionKey || '')) return 1;
+  const name = String(itemName || '').toLowerCase();
+  if (/\b8\s*(ft|foot|')/.test(name)) return 1;
+  if (/\b12\s*(ft|foot|')|super/.test(name)) return 3;
+  return 2;
+};
 
 const phrase = (s) => normalizeItemName(String(s || '').replace(/_/g, ' ')).replace(/\s*dealer$/, '');
 const containsWords = (haystack, needle) =>
@@ -51,7 +58,7 @@ export function suggestStaffing(itemName, sizeClass, positions = []) {
     if (!key) return NONE;
     best = { key };
   }
-  return { position_key: best.key, staff_per_unit: dealersPerTable(best.key) };
+  return { position_key: best.key, staff_per_unit: dealersPerTable(best.key, itemName) };
 }
 
 // name_key -> { position_key, staff_per_unit } from catalog rows.
