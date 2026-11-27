@@ -189,5 +189,9 @@ Build order (one PR and one SQL file each):
   address from the Goodshuffle contract is left out on purpose (the repo is
   public); add it to the terms in Settings if wanted.
 - **Link domain**: links use `https://www.gigstaffpro.com/q/...` unless
-  `quote_settings.link_base` is set (an `https://` host only), e.g. a
-  `quotes.vegasonwheels.com` domain pointed at the Vercel project.
+  `quote_settings.link_base` is set (an `https://` host only; Settings >
+  Prices > Quote terms > Client link address). Dylan chose
+  `https://quotes.vegasonwheels.com` (2026-11-27: clients don't know
+  GigStaffPro): a Vercel domain on this project + a GoDaddy CNAME. On that
+  host only `/q/...` is served; `vercel.json` redirects every other path to
+  vegasonwheels.com, so the admin app never shows there.

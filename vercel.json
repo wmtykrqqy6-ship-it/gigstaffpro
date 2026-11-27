@@ -19,5 +19,13 @@
     { "source": "/api/quote-request", "destination": "/api/send-email?route=quote-request" },
     { "source": "/api/inbound-email", "destination": "/api/send-email?route=inbound-email" },
     { "source": "/q/:token", "destination": "/api/send-email?route=quote&token=:token" }
+  ],
+  "redirects": [
+    {
+      "source": "/:path((?!q/).*)",
+      "has": [{ "type": "host", "value": "quotes.vegasonwheels.com" }],
+      "destination": "https://vegasonwheels.com/",
+      "permanent": false
+    }
   ]
 }
