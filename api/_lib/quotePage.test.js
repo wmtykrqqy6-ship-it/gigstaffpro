@@ -96,6 +96,7 @@ describe('quote page helpers', () => {
     expect(html).toContain('Smith party &lt;b&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain('Accept quote');
+    expect(html).not.toMatch(/gratuity/i);
     expect(html).not.toMatch(/gigstaff/i);
   });
 });
@@ -159,20 +160,21 @@ describe('handleQuotePage', () => {
     expect(res2.code).toBe(404);
   });
 
-  it('accepts with a name and gratuity, books the lead and tells the team', async () => {
+  it('accepts with a name (no gratuity before the event), books the lead and tells the team', async () => {
     const f = fakeFetch({ byToken: sent });
     const res = fakeRes();
     await handleQuotePage(req('POST', { action: 'accept', name: ' Pat  Smith ', gratuity: '20', agree: 'yes' }), res, { env, fetchImpl: f, now: NOW });
     expect(res.code).toBe(200);
     const patch = f.calls.find(c => c.url.includes('status=eq.sent')).body;
-    expect(patch).toMatchObject({ status: 'accepted', accepted_name: 'Pat Smith', gratuity_per_dealer: 20, total: 1451.25 });
-    expect(patch.sent_snapshot.lines.at(-1)).toMatchObject({ name: 'Gratuity for dealers', qty: 3, amount: 60, taxable: false });
+    expect(patch).toMatchObject({ status: 'accepted', accepted_name: 'Pat Smith', total: 1391.25 });
+    expect(patch).not.toHaveProperty('gratuity_per_dealer');
+    expect(patch.sent_snapshot.lines.some(l => /gratuity/i.test(l.name))).toBe(false);
     expect(f.calls.find(c => c.url.includes('/leads?id=eq.') && c.method === 'PATCH').body.stage).toBe('booked');
     expect(f.calls.some(c => c.url.includes('api.resend.com'))).toBe(true);
   });
 
   it('needs a name and the box ticked, and never accepts twice', async () => {
-    for (const body of [{ action: 'accept', name: '', agree: 'yes' }, { action: 'accept', name: 'Pat', agree: '' }, { action: 'accept', name: 'Pat', agree: 'yes', gratuity: '9999' }]) {
+    for (const body of [{ action: 'accept', name: '', agree: 'yes' }, { action: 'accept', name: 'Pat', agree: '' }]) {
       const res = fakeRes();
       await handleQuotePage(req('POST', body), res, { env, fetchImpl: fakeFetch({ byToken: sent }), now: NOW });
       expect(res.code).toBe(400);

@@ -25,8 +25,10 @@ Build order (one PR and one SQL file each):
   Milwaukee), $75 per dealer, and the delivery/setup fee is $450 instead of
   $350.
 - Fundraisers: $50 off per table (website: April to October, within 30 miles).
-- Gratuity: optional, the client picks an amount per dealer (or none). Not
-  taxed.
+- Gratuity: not on the quote or the client's page (Dylan, 2026-11-27: clients
+  shouldn't feel they must tip before hiring us). Tips are asked for only
+  after the event (Monday-after review + tip email). A rep can still add a
+  gratuity line by hand. Not taxed.
 - Magician and other one-off items are priced on each quote.
 - Tax is added on top of prices and charged on everything, delivery
   included (as Goodshuffle contracts do), until Dylan's accountant says
@@ -165,9 +167,8 @@ Build order (one PR and one SQL file each):
   CSP (no scripts), `noindex`, `no-store`, rate limited per IP. Shows the
   snapshot (lines with photo/size/description, tax, total, 50% deposit,
   balance due 7 days before) and the quote terms.
-  - **Accept**: typed full name + tick the terms box + optional gratuity per
-    dealer ($0-500, added as an untaxed line; deposit and balance worked out
-    again). Only a quote still "sent" can be accepted (the update is
+  - **Accept**: typed full name + tick the terms box (no gratuity box).
+    Only a quote still "sent" can be accepted (the update is
     conditional). Marks the quote accepted, the lead Booked (so the booking
     thank-you email goes out if it's on), and emails the team (`lead_email`
     setting or sales@).

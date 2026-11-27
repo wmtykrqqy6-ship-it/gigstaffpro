@@ -11,7 +11,8 @@
 // The client's page (/q/<code>, rewritten to api/send-email.js?route=quote):
 // a plain server-rendered HTML page with Vegas on Wheels branding only. It
 // shows the frozen snapshot, never live data, and offers Accept (typed name,
-// optional gratuity per dealer) and Ask a question (saved to Messages).
+// no gratuity: Dylan wants tips asked for only after the event, by the
+// Monday-after email) and Ask a question (saved to Messages).
 // The code is the only key: 32 random URL-safe characters, checked exactly.
 // Pages stop working once the event date has passed or the quote is
 // cancelled or declined.
@@ -32,11 +33,9 @@ export const DEFAULT_QUOTE_BASE_URL = 'https://www.gigstaffpro.com';
 export const TOKEN_REGEX = /^[A-Za-z0-9_-]{32}$/;
 const ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAX_GRATUITY = 500;
 
 
 const isLimited = createRateLimiter(60, 60 * 1000);
-const cents = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const money = (n) => `${Number(n) < 0 ? '-' : ''}$${Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const newToken = () => crypto.randomBytes(24).toString('base64url');
@@ -314,7 +313,6 @@ export function renderQuotePage({ quote, settings, state, notice = '', error = '
     action = `
       <form method="post"><input type="hidden" name="action" value="accept">
         <label for="name">Your full name</label><input id="name" name="name" maxlength="120" required autocomplete="name">
-        <label for="tip">Optional gratuity for the dealers, per dealer ($)</label><input id="tip" name="gratuity" type="number" min="0" max="${MAX_GRATUITY}" step="1" placeholder="0">
         <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="agree" value="yes" required style="width:auto;margin-top:3px"> <span>I accept this quote and the terms and conditions above.</span></label>
         <button type="submit">Accept quote</button>
       </form>
@@ -413,28 +411,13 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
     const name = String(body.name || '').replace(/\s+/g, ' ').trim();
     if (name.length < 2 || name.length > 120) return send(res, 400, renderQuotePage({ quote, settings, state, error: 'Type your full name to accept.' }));
     if (body.agree !== 'yes' && body.agree !== true) return send(res, 400, renderQuotePage({ quote, settings, state, error: 'Tick the box to accept the terms.' }));
-    const tip = body.gratuity === '' || body.gratuity === undefined ? 0 : Math.floor(Number(body.gratuity));
-    if (!Number.isFinite(tip) || tip < 0 || tip > MAX_GRATUITY) return send(res, 400, renderQuotePage({ quote, settings, state, error: `Gratuity must be between $0 and $${MAX_GRATUITY} per dealer.` }));
-
-    // Gratuity is a line of its own, never taxed; the deposit and balance
-    // are worked out again with it.
-    let snapshot = s;
-    if (tip > 0 && s.dealers > 0) {
-      const amount = cents(tip * s.dealers);
-      const total = cents(s.total + amount);
-      const deposit = cents(total / 2);
-      snapshot = {
-        ...s,
-        lines: [...(s.lines || []), { name: 'Gratuity for dealers', description: 'Goes to the dealers at your event.', category: 'fee', unit: 'dealer', qty: s.dealers, unit_price: tip, amount, taxable: false, auto: null }],
-        subtotal: cents(s.subtotal + amount), total, deposit, balance: cents(total - deposit)
-      };
-    }
+    const snapshot = s;
     const at = now.toISOString();
     // Only a quote still "sent" can be accepted (no double accept).
     const updated = await call(`quotes?id=eq.${quote.id}&status=eq.sent`, {
       method: 'PATCH',
       headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({ status: 'accepted', accepted_at: at, accepted_name: name, gratuity_per_dealer: tip, sent_snapshot: snapshot, total: snapshot.total, deposit: snapshot.deposit, subtotal: snapshot.subtotal, updated_at: at })
+      body: JSON.stringify({ status: 'accepted', accepted_at: at, accepted_name: name, sent_snapshot: snapshot, total: snapshot.total, deposit: snapshot.deposit, subtotal: snapshot.subtotal, updated_at: at })
     }).catch(err => { console.error('quote accept failed:', err.message); return null; });
     if (!updated?.length) return send(res, 500, renderMessagePage('Something went wrong', 'Your acceptance did not go through. Please try again or call us.'));
     if (quote.lead_id) {
@@ -444,7 +427,7 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
     if (env.RESEND_API_KEY) {
       const leadEmailSetting = String(await readSetting(call, 'lead_email') ?? '').replace(/"/g, '').trim();
       const teamTo = EMAIL_REGEX.test(leadEmailSetting) ? leadEmailSetting : DEFAULT_LEAD_EMAIL;
-      const textMsg = `${name} accepted the quote "${s.name || ''}" for ${longDate(s.event?.date)}.\nTotal: ${money(snapshot.total)}${tip ? ` (includes ${money(tip)} per dealer gratuity)` : ''}\nDeposit due to book: ${money(snapshot.deposit)}\n\nThe lead is now Booked in GigStaffPro.`;
+      const textMsg = `${name} accepted the quote "${s.name || ''}" for ${longDate(s.event?.date)}.\nTotal: ${money(snapshot.total)}\nDeposit due to book: ${money(snapshot.deposit)}\n\nThe lead is now Booked in GigStaffPro.`;
       await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
