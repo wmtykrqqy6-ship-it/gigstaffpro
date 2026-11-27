@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buildSnapshot, parseQuoteSettings, quoteEmailHtml, quoteEmailText, quoteState, renderQuotePage, handleQuoteSend, handleQuotePage, newToken, TOKEN_REGEX, DEFAULT_TERMS
+  buildSnapshot, parseQuoteSettings, quoteEmailHtml, quoteEmailText, buildSignature, signedCopyEmailHtml, signedCopyEmailText, quoteState, renderQuotePage, handleQuoteSend, handleQuotePage, newToken, TOKEN_REGEX, DEFAULT_TERMS
 } from './quotePage.js';
 
 const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', RESEND_API_KEY: 'r' };
@@ -139,7 +139,7 @@ describe('handleQuoteSend', () => {
 
 describe('handleQuotePage', () => {
   const sent = { ...quote, status: 'sent', public_token: TOKEN, sent_snapshot: buildSnapshot(quote, items, lead, NOW), viewed_at: null };
-  const req = (method, body = {}, token = TOKEN) => ({ method, query: { token }, body, headers: {}, socket: { remoteAddress: '1.2.3.4' } });
+  const req = (method, body = {}, token = TOKEN) => ({ method, query: { token }, body, headers: { 'user-agent': 'TestBrowser/1.0' }, socket: { remoteAddress: '1.2.3.4' } });
 
   it('shows the quote and notes the first view', async () => {
     const f = fakeFetch({ byToken: sent });
@@ -169,8 +169,41 @@ describe('handleQuotePage', () => {
     expect(patch).toMatchObject({ status: 'accepted', accepted_name: 'Pat Smith', total: 1391.25 });
     expect(patch).not.toHaveProperty('gratuity_per_dealer');
     expect(patch.sent_snapshot.lines.some(l => /gratuity/i.test(l.name))).toBe(false);
+    expect(patch.signature).toMatchObject({ name: 'Pat Smith', ip: '1.2.3.4', user_agent: 'TestBrowser/1.0', email: 'Pat@Example.com', signed_at: NOW.toISOString() });
+    expect(patch.signature.terms).toBe(DEFAULT_TERMS);
+    expect(patch.signature.quote_sha256).toMatch(/^[0-9a-f]{64}$/);
+    const emails = f.calls.filter(c => c.url.includes('api.resend.com')).map(c => c.body);
+    expect(emails.map(e => e.to[0])).toEqual(['pat@example.com', 'sales@vegasonwheels.com']);
+    expect(emails[0].html).toContain('Signed electronically by Pat Smith');
+    expect(emails[0].html).toContain('IP address: 1.2.3.4');
+    expect(res.html).toContain('Signed electronically');
     expect(f.calls.find(c => c.url.includes('/leads?id=eq.') && c.method === 'PATCH').body.stage).toBe('booked');
     expect(f.calls.some(c => c.url.includes('api.resend.com'))).toBe(true);
+  });
+
+  it('still accepts if the signature column is not there yet', async () => {
+    const base = fakeFetch({ byToken: sent });
+    let tries = 0;
+    const f = vi.fn(async (url, opts = {}) => {
+      if (url.includes('status=eq.sent') && JSON.parse(opts.body).signature && ++tries) return { ok: false, status: 400, json: async () => ({}) };
+      return base(url, opts);
+    });
+    const res = fakeRes();
+    await handleQuotePage(req('POST', { action: 'accept', name: 'Pat Smith', agree: 'yes' }), res, { env, fetchImpl: f, now: NOW });
+    expect(tries).toBe(1);
+    expect(res.code).toBe(200);
+  });
+
+  it('shows the signature and the terms as signed once accepted', async () => {
+    const signature = buildSignature({ name: 'Pat Smith', req: req('POST'), snapshot: sent.sent_snapshot, terms: 'Old term one\nOld term two', now: NOW });
+    const res = fakeRes();
+    await handleQuotePage(req('GET'), res, { env, fetchImpl: fakeFetch({ byToken: { ...sent, status: 'accepted', accepted_name: 'Pat Smith', signature } }), now: NOW });
+    expect(res.html).toContain('Signed electronically by Pat Smith');
+    expect(res.html).toContain('Old term two');
+    expect(res.html).toContain('IP address: 1.2.3.4');
+    const text = signedCopyEmailText({ snapshot: sent.sent_snapshot, signature, url: 'https://x/q/abc' });
+    expect(text).toContain('Old term one');
+    expect(signedCopyEmailHtml({ snapshot: sent.sent_snapshot, signature: { ...signature, name: '<b>x</b>' }, url: '' })).not.toContain('<b>x</b>');
   });
 
   it('needs a name and the box ticked, and never accepts twice', async () => {
