@@ -10,6 +10,7 @@ import { useToast } from '../ui/Toast';
 import MinimumHoursCard from '../settings/MinimumHoursCard';
 import ClientAccessLogCard from '../settings/ClientAccessLogCard';
 import EmailSettingsTab from '../settings/EmailSettingsTab';
+import PricesSettingsTab from '../settings/PricesSettingsTab';
 
 
 // --- Position rate row (uses position label, saves by key) ---
@@ -974,6 +975,7 @@ export default function SettingsView({
           { id: 'positions', label: '🎰 Positions' },
           { id: 'payrates', label: '💰 Pay Rates' },
           { id: 'general', label: '⚙️ System' },
+          { id: 'prices', label: '🏷️ Prices' },
           { id: 'email', label: '✉️ Email' },
           { id: 'accesslog', label: '🔒 Access log' },
         ].map(tab => (
@@ -1688,6 +1690,7 @@ export default function SettingsView({
       {/* ── POSITIONS TAB ── */}
 
       {/* ── PAY RATES TAB ── */}
+      {activeTab === 'prices' && <PricesSettingsTab />}
       {activeTab === 'email' && <EmailSettingsTab />}
       {activeTab === 'accesslog' && <ClientAccessLogCard />}
 
