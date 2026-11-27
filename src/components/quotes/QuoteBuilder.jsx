@@ -11,6 +11,7 @@ import {
 import { findTaxArea, formatRate, sortTaxAreas } from '../../utils/salesTax';
 import { DEFAULT_SETUP_MINUTES, DEFAULT_PICKUP_MINUTES } from '../../utils/availability';
 import AvailabilityPanel from './AvailabilityPanel';
+import { callSignatureApi } from '../../utils/emailSignatureApi';
 
 const input = 'w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm';
 const money = (n) => `${Number(n) < 0 ? '-' : ''}$${Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -62,6 +63,14 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [problem, setProblem] = useState('');
+  const [savedQuote, setSavedQuote] = useState(quote || null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const firstName = String(lead?.name || '').trim().split(/\s+/)[0] || 'there';
+  const [sendForm, setSendForm] = useState({
+    subject: 'Your casino party quote from Vegas on Wheels',
+    message: `Hi ${firstName},\n\nThanks for reaching out! Here's your quote${lead?.event_date ? ` for ${new Date(`${lead.event_date}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` : ''}. You can look it over and accept it online, or just reply with any questions or changes.`
+  });
   const set = (patch) => setForm(f => ({ ...f, ...patch }));
 
   useEffect(() => {
@@ -131,13 +140,16 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
     if (!area) setTaxNote(geo?.county ? `${geo.county} County${geo.state ? `, ${geo.state}` : ''} isn't in the tax table. Pick the area or type the rate.` : "Couldn't find the county. Pick the tax area below.");
   };
 
-  const save = async () => {
-    if (!form.lines.length) { notify('Add at least one item.'); return; }
+  // Saves the quote. With { close: false } it stays open (used before sending)
+  // and returns the saved row, or null.
+  const save = async ({ close = true } = {}) => {
+    if (!form.lines.length) { notify('Add at least one item.'); return null; }
+    const current = savedQuote;
     setSaving(true);
     const now = new Date().toISOString();
     const row = {
-      lead_id: lead?.id || quote?.lead_id || null,
-      client_id: lead?.client_id ?? quote?.client_id ?? null,
+      lead_id: lead?.id || current?.lead_id || null,
+      client_id: lead?.client_id ?? current?.client_id ?? null,
       name: String(form.name || '').trim().slice(0, 200) || null,
       event_date: form.event_date || null,
       start_time: /^\d{2}:\d{2}$/.test(form.start_time) ? form.start_time : null,
@@ -162,8 +174,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
       pickup_minutes: Math.min(Math.max(Math.round(Number(form.pickup_minutes) || 0), 0), 1440),
       updated_at: now
     };
-    const write = (r) => (quote?.id
-      ? supabase.from('quotes').update(r).eq('id', quote.id).select().single()
+    const write = (r) => (current?.id
+      ? supabase.from('quotes').update(r).eq('id', current.id).select().single()
       : supabase.from('quotes').insert([r]).select().single());
     let res = await write(row);
     if (res.error && isMissingSchemaError(res.error) && /setup_minutes|pickup_minutes/.test(res.error.message || '')) {
@@ -174,16 +186,37 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
     setSaving(false);
     if (res.error) {
       notify(isMissingSchemaError(res.error) ? 'Saving quotes turns on once the quotes SQL file (20261127140000) has been run.' : `Could not save: ${res.error.message}`);
-      return;
+      return null;
     }
-    notify('Quote saved');
-    onSaved?.(res.data);
+    setSavedQuote(res.data);
+    if (close) {
+      notify('Quote saved');
+      onSaved?.(res.data);
+    }
+    return res.data;
   };
 
+  // Save, then send from sales@ (api/_lib/quotePage.js): the server prices it
+  // again, freezes the copy the client sees and emails the link.
+  const sendQuote = async () => {
+    if (!lead?.email) { notify("This lead doesn't have an email address."); return; }
+    setSending(true);
+    const saved = await save({ close: false });
+    if (!saved) { setSending(false); return; }
+    const r = await callSignatureApi('quote-send', { quoteId: saved.id, subject: sendForm.subject, message: sendForm.message });
+    setSending(false);
+    if (!r.ok) { notify(r.error || 'The quote did not send.'); return; }
+    notify(`Quote sent to ${lead.email}`);
+    onSaved?.({ ...saved, status: 'sent' });
+  };
+
+  const clientLink = savedQuote?.public_token ? `${window.location.origin}/q/${savedQuote.public_token}` : '';
+  const locked = savedQuote && !['draft', 'sent'].includes(savedQuote.status);
+
   const remove = async () => {
-    if (!quote?.id) return;
+    if (!savedQuote?.id) return;
     if (!await confirm('Delete this quote? This cannot be undone.')) return;
-    const { error } = await supabase.from('quotes').delete().eq('id', quote.id);
+    const { error } = await supabase.from('quotes').delete().eq('id', savedQuote.id);
     if (error) { notify(`Could not delete: ${error.message}`); return; }
     onSaved?.(null);
   };
@@ -196,8 +229,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <div>
-              <h3 className="text-lg font-bold text-gray-900">{quote?.id ? 'Edit quote' : 'New quote'}</h3>
-              <p className="text-xs text-gray-500">{lead?.name}{lead?.email ? ` · ${lead.email}` : ''}{quote?.status ? ` · ${quote.status}` : ''}</p>
+              <h3 className="text-lg font-bold text-gray-900">{savedQuote?.id ? 'Edit quote' : 'New quote'}</h3>
+              <p className="text-xs text-gray-500">{lead?.name}{lead?.email ? ` · ${lead.email}` : ''}{savedQuote?.status ? ` · ${savedQuote.status}` : ''}{savedQuote?.status === 'sent' ? ' (changes reach the client when you send again)' : ''}</p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Close"><X size={20} /></button>
           </div>
@@ -337,7 +370,7 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                 )}
               </section>
 
-              <AvailabilityPanel quoteId={quote?.id || null} lines={form.lines} items={items} date={form.event_date}
+              <AvailabilityPanel quoteId={savedQuote?.id || null} lines={form.lines} items={items} date={form.event_date}
                 start={form.start_time} end={form.end_time} setup={form.setup_minutes} pickup={form.pickup_minutes} />
 
               <section className="flex flex-col sm:flex-row gap-4">
@@ -361,11 +394,29 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
             </div>
           )}
 
-          <div className="flex items-center justify-between px-4 py-3 border-t">
-            <div>{quote?.id && <button onClick={remove} className="text-sm text-gray-500 hover:text-red-700">Delete quote</button>}</div>
+          {sendOpen && !problem && (
+            <div className="border-t px-4 py-3 bg-gray-50 space-y-2">
+              <p className="text-sm text-gray-700">Sends from sales@vegasonwheels.com to <strong>{lead?.email || 'no email on this lead'}</strong> with your signature and a link to view and accept the quote. Sending again updates the same link.</p>
+              <label className="block text-xs text-gray-600">Subject<input className={input} value={sendForm.subject} onChange={e => setSendForm(f => ({ ...f, subject: e.target.value }))} /></label>
+              <label className="block text-xs text-gray-600">Message<textarea rows={5} className={input} value={sendForm.message} onChange={e => setSendForm(f => ({ ...f, message: e.target.value }))} /></label>
+              <div className="flex justify-end space-x-2">
+                <button onClick={() => setSendOpen(false)} className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">Back</button>
+                <button onClick={sendQuote} disabled={sending || !lead?.email} className="px-3 py-1.5 bg-red-900 text-white rounded-lg text-sm hover:bg-red-800 disabled:opacity-50">{sending ? 'Sending…' : 'Send quote'}</button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between px-4 py-3 border-t flex-wrap gap-2">
+            <div className="flex items-center gap-3 text-sm">
+              {savedQuote?.id && savedQuote.status === 'draft' && <button onClick={remove} className="text-gray-500 hover:text-red-700">Delete quote</button>}
+              {clientLink && <a href={clientLink} target="_blank" rel="noopener noreferrer" className="text-red-900 hover:underline">Open client's page</a>}
+              {savedQuote?.status === 'accepted' && <span className="text-green-700">Accepted{savedQuote.accepted_name ? ` by ${savedQuote.accepted_name}` : ''}</span>}
+              {savedQuote?.viewed_at && savedQuote.status === 'sent' && <span className="text-gray-500">Client opened it</span>}
+            </div>
             <div className="flex space-x-2">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">Cancel</button>
-              {!problem && <button onClick={save} disabled={saving} className="px-4 py-2 bg-red-900 text-white rounded-lg text-sm hover:bg-red-800 disabled:opacity-50">{saving ? 'Saving…' : 'Save draft'}</button>}
+              <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">Close</button>
+              {!problem && !locked && <button onClick={() => save()} disabled={saving} className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>}
+              {!problem && !locked && !sendOpen && <button onClick={() => setSendOpen(true)} className="px-4 py-2 bg-red-900 text-white rounded-lg text-sm hover:bg-red-800">{savedQuote?.status === 'sent' ? 'Send again' : 'Send to client'}</button>}
             </div>
           </div>
         </div>

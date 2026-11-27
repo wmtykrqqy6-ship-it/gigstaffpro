@@ -9,6 +9,7 @@ import { htmlToPlainText } from './_lib/emailShell.js';
 import { handleAdminPush } from './_lib/push.js';
 import { handleQuoteRequest } from './_lib/quoteRequest.js';
 import { handleInboundEmail, handleClientReply } from './_lib/clientMessages.js';
+import { handleQuotePage, handleQuoteSend } from './_lib/quotePage.js';
 
 export const config = {
   api: {
@@ -44,6 +45,13 @@ export default async function handler(req, res) {
   // api/_lib/clientMessages.js.
   if (req.query?.route === 'inbound-email') {
     return handleInboundEmail(req, res);
+  }
+
+  // The client's quote page (/q/<code>, rewritten here). Not admin-checked:
+  // the long random code in the link is the key, and the page shows only
+  // the copy frozen when the quote was sent. See api/_lib/quotePage.js.
+  if (req.query?.route === 'quote') {
+    return handleQuotePage(req, res);
   }
 
   if (req.method !== 'POST') {
@@ -120,6 +128,17 @@ export default async function handler(req, res) {
   }
 
   const body = req.body;
+
+  // Send a quote to the client (CRM Phase 2, docs/QUOTES.md).
+  if (body && typeof body === 'object' && body.action === 'quote-send') {
+    try {
+      const result = await handleQuoteSend({ body, adminUserId: adminCheck.adminUserId });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('quote send failed:', err?.message || err);
+      return res.status(500).json({ ok: false, error: 'Server error sending the quote' });
+    }
+  }
 
   // Reply to a client from the Messages screen: sent from
   // sales@vegasonwheels.com and saved to the inbox.

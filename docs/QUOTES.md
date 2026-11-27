@@ -12,7 +12,7 @@ Build order (one PR and one SQL file each):
 2. Quote builder on each lead, with the pricing rules below. Done (drafts).
 3. Sales tax by county. Done.
 4. Availability by time window. Done.
-5. Sending, the client's quote page, Accept.
+5. Sending, the client's quote page, Accept. Done.
 
 ## Business rules (Dylan, 2026-11-26)
 
@@ -134,3 +134,43 @@ Build order (one PR and one SQL file each):
 - Gap: future bookings that exist only in Goodshuffle (about 222 projects
   from the Phase 1 import, which has no item lists) aren't counted until
   their pull sheets are imported or their items are backfilled.
+
+## Sending and the client's page (step 5)
+
+- Migration `20261127170000_add_quote_sending.sql` adds to `quotes`:
+  `public_token` (32 random URL-safe characters, unique), `sent_snapshot`
+  (the quote as sent), `viewed_at`, `accepted_name`, `gratuity_per_dealer`.
+  Quotes stay admin-only; nothing is opened to the browser.
+- **Send** (builder: "Send to client"): saves, then calls the admin action
+  `quote-send` on `api/send-email.js` (email rate limit applies). The server
+  (`api/_lib/quotePage.js` `handleQuoteSend`) re-prices the saved lines with
+  the current price list using server copies of the pricing code
+  (`api/_lib/priceList.js`, `quotePricing.js`, `quoteTerms.js`; a test keeps
+  them identical to `src/utils/`), freezes `sent_snapshot`, keeps or makes
+  the link code, emails the lead's address (only that address) from
+  sales@ with the rep's signature and logo, saves the email in Messages, and
+  moves a New lead to Quoted (starting the follow-up clock). Sending again
+  updates the same link.
+- **Client's page** `/q/<code>` (`vercel.json` rewrite to
+  `api/send-email.js?route=quote`, `handleQuotePage`): server-rendered HTML,
+  Vegas on Wheels logo and contact details only, everything escaped, strict
+  CSP (no scripts), `noindex`, `no-store`, rate limited per IP. Shows the
+  snapshot (lines with photo/size/description, tax, total, 50% deposit,
+  balance due 7 days before) and the quote terms.
+  - **Accept**: typed full name + tick the terms box + optional gratuity per
+    dealer ($0-500, added as an untaxed line; deposit and balance worked out
+    again). Only a quote still "sent" can be accepted (the update is
+    conditional). Marks the quote accepted, the lead Booked (so the booking
+    thank-you email goes out if it's on), and emails the team (`lead_email`
+    setting or sales@).
+  - **Ask a question**: saved to Messages as an incoming email on the lead.
+  - The page stops accepting once the event date has passed (Central time)
+    or the quote isn't "sent".
+- **Quote terms**: Settings > Prices > Quote terms, stored in the settings
+  row `quote_settings` (`terms`; empty = the standard terms from the
+  Goodshuffle contract in `src/utils/quoteTerms.js`). The check mailing
+  address from the Goodshuffle contract is left out on purpose (the repo is
+  public); add it to the terms in Settings if wanted.
+- **Link domain**: links use `https://www.gigstaffpro.com/q/...` unless
+  `quote_settings.link_base` is set (an `https://` host only), e.g. a
+  `quotes.vegasonwheels.com` domain pointed at the Vercel project.
