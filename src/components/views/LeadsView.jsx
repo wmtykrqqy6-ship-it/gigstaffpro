@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Phone, Mail, Calendar, MapPin, Users, UserPlus, Save, Clock } from 'lucide-react';
+import { Plus, Phone, Mail, Calendar, MapPin, Users, UserPlus, Save, Clock, FileText } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast } from '../ui/Toast';
 import { logClientAccess } from '../../utils/clientAccessLog';
@@ -10,6 +10,7 @@ import {
 } from '../../utils/leads';
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from '../../utils/clientEmailSettings';
 import EmailHistory from '../messages/EmailHistory';
+import QuoteBuilder from '../quotes/QuoteBuilder';
 
 const AUTO_EMAIL_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review'];
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
@@ -28,6 +29,9 @@ export default function LeadsView({ onOpenSettings }) {
   const [form, setForm] = useState(emptyLeadForm());
   const [saving, setSaving] = useState(false);
   const [emailSettings, setEmailSettings] = useState(null);
+  const [quotes, setQuotes] = useState([]); // quote summaries (all leads)
+  const [quotesOn, setQuotesOn] = useState(false); // quotes SQL run
+  const [builder, setBuilder] = useState(null); // { lead, quote }
   const followupOn = !!emailSettings?.followup.on;
   const followupDays = emailSettings?.followup.days;
   const autoEmailsOn = AUTO_EMAIL_KINDS.filter(k => emailSettings?.[k]?.on).length + (emailSettings?.custom || []).filter(c => c.on).length;
@@ -61,7 +65,15 @@ export default function LeadsView({ onOpenSettings }) {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // Quotes (CRM Phase 2, docs/QUOTES.md). Hidden until the quotes SQL is run.
+  const loadQuotes = async () => {
+    const { data, error } = await supabase.from('quotes').select('*').order('created_at');
+    if (error) { setQuotesOn(false); return; }
+    setQuotesOn(true);
+    setQuotes(data || []);
+  };
+
+  useEffect(() => { load(); loadQuotes(); }, []);
 
   const counts = useMemo(() => countByStage(leads), [leads]);
   const visible = useMemo(() => sortLeads(leads.filter(l => l.stage === stage)), [leads, stage]);
@@ -237,6 +249,11 @@ export default function LeadsView({ onOpenSettings }) {
                       <button onClick={() => updateLead(lead, { followup_paused: !lead.followup_paused, updated_at: new Date().toISOString() })}
                         className="text-xs text-gray-600 hover:underline">{lead.followup_paused ? 'Allow auto emails' : "Don't send auto emails"}</button>
                     )}
+                    {quotesOn && (
+                      <button onClick={() => setBuilder({ lead, quote: null })} className="text-xs text-red-900 hover:underline flex items-center space-x-1">
+                        <FileText size={13} /><span>Build quote</span>
+                      </button>
+                    )}
                     {(lead.client_id === null || lead.client_id === undefined) && (
                       <button onClick={() => addAsClient(lead)} className="text-xs text-red-900 hover:underline flex items-center space-x-1">
                         <UserPlus size={13} /><span>Add as client</span>
@@ -244,6 +261,18 @@ export default function LeadsView({ onOpenSettings }) {
                     )}
                   </div>
                 </div>
+                {quotes.filter(q => q.lead_id === lead.id).length > 0 && (
+                  <div className="mt-3 border-t pt-2 flex flex-wrap gap-2">
+                    {quotes.filter(q => q.lead_id === lead.id).map(q => (
+                      <button key={q.id} onClick={() => setBuilder({ lead, quote: q })}
+                        className="text-xs px-2 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center space-x-1">
+                        <FileText size={12} className="text-gray-500" />
+                        <span>{q.name || 'Quote'}</span>
+                        <span className="text-gray-500">· ${Number(q.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {q.status}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {lead.email && <EmailHistory leadId={lead.id} emails={[lead.email]} />}
                 {lostFor === lead.id && (
                   <div className="mt-3 border-t pt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -258,6 +287,10 @@ export default function LeadsView({ onOpenSettings }) {
             );
           })}
         </div>
+      )}
+      {builder && (
+        <QuoteBuilder lead={builder.lead} quote={builder.quote} onClose={() => setBuilder(null)}
+          onSaved={() => { setBuilder(null); loadQuotes(); }} />
       )}
     </div>
   );
