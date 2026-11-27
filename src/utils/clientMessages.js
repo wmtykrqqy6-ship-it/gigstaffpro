@@ -79,13 +79,33 @@ export function senderName(message, team = {}, myId = null) {
   return 'Vegas on Wheels';
 }
 
+// Folders in the Messages screen. Inbox and Unread hold conversations
+// linked to a lead or client; email from anyone else (newsletters, vendors,
+// a client writing from a new address) goes to Other, so the copy of every
+// sales@ email doesn't bury client mail. Mine is every conversation you've
+// replied in, linked or not. Deleted is its own list (splitDeleted).
 export function matchesFilter(conversation, filter, search = '', myId = null) {
+  const other = filter === 'other' || filter === 'unmatched';
+  if (['inbox', 'unread', 'other', 'unmatched'].includes(filter) && conversation.matched === other) return false;
   if (filter === 'unread' && conversation.unread === 0) return false;
   if (filter === 'mine' && !isMine(conversation, myId)) return false;
-  if (filter === 'unmatched' && conversation.matched) return false;
   const q = String(search || '').trim().toLowerCase();
   if (!q) return true;
   return conversation.email.includes(q)
     || conversation.name.toLowerCase().includes(q)
     || conversation.messages.some(m => String(m.subject || '').toLowerCase().includes(q));
+}
+
+// { live, deleted }: messages deleted in the Messages screen (deleted_at set)
+// are kept apart, so a new email from the same person still shows up.
+export function splitDeleted(messages) {
+  const live = [];
+  const deleted = [];
+  for (const m of messages || []) if (m) (m.deleted_at ? deleted : live).push(m);
+  return { live, deleted };
+}
+
+// Unread count for a folder ('inbox' = linked, 'other' = not linked).
+export function folderUnread(conversations, folder) {
+  return (conversations || []).filter(c => (folder === 'other' ? !c.matched : c.matched)).reduce((n, c) => n + c.unread, 0);
 }

@@ -27,8 +27,9 @@ export default function EmailHistory({ leadId = null, clientId = null, emails = 
       setRows([]);
       return;
     }
-    setRows(data || []);
-    const unread = (data || []).filter(m => m.direction === 'in' && !m.read_at).map(m => m.id);
+    // Conversations deleted in the Messages screen stay hidden here too.
+    setRows((data || []).filter(m => !m.deleted_at));
+    const unread = (data || []).filter(m => m.direction === 'in' && !m.read_at && !m.deleted_at).map(m => m.id);
     if (unread.length) await supabase.from('client_messages').update({ read_at: new Date().toISOString() }).in('id', unread);
   };
 
