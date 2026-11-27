@@ -30,7 +30,7 @@ Goodshuffle pull sheet PDFs as the data source (Goodshuffle has no API).
 ## Staffing from pull sheets
 
 Each catalog item can need staff: a position (from Settings → Positions) and a count per table.
-Seeded from the Goodshuffle descriptions and confirmed 2026-09-28: craps = 2 dealers; blackjack,
+Seeded from the Goodshuffle descriptions and confirmed 2026-09-28: craps = 2 dealers (updated 2026-11-26: 8 ft craps 1, 10 ft 2, 12 ft super craps 3); blackjack,
 roulette and poker = 1. Vegas on Wheels' positions are named after games (`blackjack`, `craps`,
 `roulette`, `poker`, `let_it_ride`, `money_wheel`, …), so a new table is matched to a position by
 name (most specific wins: "3 Card Poker Table" → 3 Card Poker), falling back to its size class.

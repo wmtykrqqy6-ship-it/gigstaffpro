@@ -50,9 +50,9 @@ describe('staffingFromItems', () => {
 describe('suggestStaffing (new catalog items)', () => {
   const s = (name, cls) => suggestStaffing(name, cls, LIVE_POSITIONS);
 
-  it('matches the pull sheet tables to the live positions; craps is 2 dealers', () => {
+  it('matches the pull sheet tables to the live positions; 8 ft craps is 1 dealer', () => {
     expect(s('Blackjack Table', 'blackjack')).toEqual({ position_key: 'blackjack', staff_per_unit: 1 });
-    expect(s('8ft Craps Table', 'craps')).toEqual({ position_key: 'craps', staff_per_unit: 2 });
+    expect(s('8ft Craps Table', 'craps')).toEqual({ position_key: 'craps', staff_per_unit: 1 });
     expect(s('Roulette Table', 'roulette')).toEqual({ position_key: 'roulette', staff_per_unit: 1 });
     expect(s("Texas Hold'EM Poker", 'poker')).toEqual({ position_key: 'poker', staff_per_unit: 1 });
   });
@@ -76,6 +76,14 @@ describe('suggestStaffing (new catalog items)', () => {
     expect(s('Chip Trays', 'accessory')).toEqual({ position_key: null, staff_per_unit: 0 });
     expect(s('Host Table', 'blackjack').position_key).toBe('blackjack');
     expect(suggestStaffing('Blackjack Table', 'blackjack', [])).toEqual({ position_key: null, staff_per_unit: 0 });
+  });
+
+  it('dealersPerTable: 8 ft craps 1, 10 ft 2, 12 ft super craps 3', () => {
+    expect(dealersPerTable('craps', '8ft Craps Table')).toBe(1);
+    expect(dealersPerTable('craps', '10ft Craps Table')).toBe(2);
+    expect(dealersPerTable('craps', '12ft Craps Table')).toBe(3);
+    expect(dealersPerTable('craps', 'Super Craps')).toBe(3);
+    expect(dealersPerTable('roulette', '8ft Roulette')).toBe(1);
   });
 
   it('dealersPerTable: craps 2, everything else 1', () => {
