@@ -6,6 +6,7 @@ import { useConfirm } from '../ui/ConfirmDialog';
 import { isMissingSchemaError } from '../../utils/clientRecords';
 import TaxRatesCard from './TaxRatesCard';
 import StockPoolsCard from './StockPoolsCard';
+import QuoteTermsCard from './QuoteTermsCard';
 import {
   PRICE_CATEGORIES, PRICE_UNITS, BONUS_KEY, formatPrice, unitLabel, packageSummary, validatePriceItem, groupPriceItems
 } from '../../utils/priceList';
@@ -222,6 +223,7 @@ export default function PricesSettingsTab() {
 
       {pools.length > 0 && <StockPoolsCard pools={pools} onChange={setPools} />}
       <TaxRatesCard />
+      <QuoteTermsCard />
     </div>
   );
 }

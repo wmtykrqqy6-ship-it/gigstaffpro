@@ -17,6 +17,7 @@
   ],
   "rewrites": [
     { "source": "/api/quote-request", "destination": "/api/send-email?route=quote-request" },
-    { "source": "/api/inbound-email", "destination": "/api/send-email?route=inbound-email" }
+    { "source": "/api/inbound-email", "destination": "/api/send-email?route=inbound-email" },
+    { "source": "/q/:token", "destination": "/api/send-email?route=quote&token=:token" }
   ]
 }
