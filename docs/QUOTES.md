@@ -11,7 +11,7 @@ Build order (one PR and one SQL file each):
 1. Price list in the app (Settings > Prices). Done (PR #26).
 2. Quote builder on each lead, with the pricing rules below. Done (drafts).
 3. Sales tax by county. Done.
-4. Availability by time window.
+4. Availability by time window. Done.
 5. Sending, the client's quote page, Accept.
 
 ## Business rules (Dylan, 2026-11-26)
@@ -110,3 +110,27 @@ Build order (one PR and one SQL file each):
 - Caveat: Google's "locality" is the mailing city. A few addresses outside
   the City of Milwaukee use a Milwaukee mailing address; check the tax area
   on those.
+
+## Availability (step 4)
+
+- Table `public.stock_pools` (migration `20261127160000_add_stock_pools.sql`),
+  admin-only: how many of each kind of table are owned (from Dylan's
+  inventory list: blackjack 40, stand-up 11, bonus game tables 13, pai gow 1,
+  money wheel 3, roulette 10, lighted roulette boards 3, Hold'em 11, craps 8 ft
+  2 / 10 ft 10 / 12 ft 1). Several price items share a pool
+  (`price_items.stock_pool`): Three Card, Let It Ride, Ultimate Hold'em and
+  Casino War all use "bonus"; a package's bonus game does too.
+  `match_names` maps Goodshuffle item names on imported pull sheets to pools.
+  Edited under Settings > Prices > Tables you own; each item's pool is set in
+  its editor.
+- Windows: each booking holds tables from delivery (`quotes.setup_minutes`,
+  default 120) before the start to pickup (`pickup_minutes`, default 60)
+  after the end. Events in the app use the same defaults. Logic:
+  `src/utils/availability.js`; panel: `src/components/quotes/AvailabilityPanel.jsx`.
+- Counted: events (not cancelled/archived) with an imported pull sheet
+  (`event_equipment`) and accepted quotes, on the day before through the day
+  after. Sent quotes show as "pending" and don't hold tables. Warns, never
+  blocks.
+- Gap: future bookings that exist only in Goodshuffle (about 222 projects
+  from the Phase 1 import, which has no item lists) aren't counted until
+  their pull sheets are imported or their items are backfilled.

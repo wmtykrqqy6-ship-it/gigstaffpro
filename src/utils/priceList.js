@@ -89,8 +89,14 @@ export function validatePriceItem(input, { takenKeys = [] } = {}) {
   if (photo && !/^https:\/\/\S+$/.test(photo)) return { error: 'The photo link must start with https://' };
   const size = String(input?.size || '').trim().slice(0, 120);
   const key = KEY_REGEX.test(String(input?.key || '')) ? input.key : makeItemKey(name, takenKeys);
+  // Table stock pool (availability): only sent once that column exists,
+  // i.e. when the item came with one (null included).
+  const pool = input && Object.prototype.hasOwnProperty.call(input, 'stock_pool')
+    ? { stock_pool: KEY_REGEX.test(String(input.stock_pool || '')) ? input.stock_pool : null }
+    : {};
   return {
     item: {
+      ...pool,
       key,
       category,
       name,
