@@ -5,6 +5,7 @@ import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { isMissingSchemaError } from '../../utils/clientRecords';
 import TaxRatesCard from './TaxRatesCard';
+import StockPoolsCard from './StockPoolsCard';
 import {
   PRICE_CATEGORIES, PRICE_UNITS, BONUS_KEY, formatPrice, unitLabel, packageSummary, validatePriceItem, groupPriceItems
 } from '../../utils/priceList';
@@ -31,7 +32,7 @@ function ContentsEditor({ contents, tables, onChange }) {
   );
 }
 
-function ItemEditor({ item, tables, onCancel, onSave, saving }) {
+function ItemEditor({ item, tables, pools, onCancel, onSave, saving }) {
   const [form, setForm] = useState(() => ({ ...item, price: item.price ?? '', dealers: item.dealers ?? 0 }));
   const set = (patch) => setForm(f => ({ ...f, ...patch }));
   return (
@@ -65,6 +66,14 @@ function ItemEditor({ item, tables, onCancel, onSave, saving }) {
           </>
         )}
       </div>
+      {pools.length > 0 && (form.category === 'table' || form.category === 'addon') && (
+        <label className="block text-xs text-gray-600">Uses table stock (for availability)
+          <select className={input} value={form.stock_pool || ''} onChange={e => set({ stock_pool: e.target.value || null })}>
+            <option value="">Not tracked</option>
+            {pools.map(p => <option key={p.key} value={p.key}>{p.name} ({p.owned} owned)</option>)}
+          </select>
+        </label>
+      )}
       {form.category === 'package' && (
         <div className="text-xs text-gray-600">What's included
           <ContentsEditor contents={form.contents} tables={tables} onChange={contents => set({ contents })} />
@@ -102,6 +111,7 @@ export default function PricesSettingsTab() {
   const [editing, setEditing] = useState(null); // item id, or 'new:<category>'
   const [saving, setSaving] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const [pools, setPools] = useState([]); // stock pools (availability SQL run)
 
   const load = async () => {
     const { data, error } = await supabase.from('price_items').select('*').order('sort_order').order('name');
@@ -113,7 +123,10 @@ export default function PricesSettingsTab() {
     }
     setItems(data || []);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    supabase.from('stock_pools').select('*').order('sort_order').then(({ data, error }) => { if (!error) setPools(data || []); });
+  }, []);
 
   const groups = useMemo(() => groupPriceItems(showHidden ? items : items.filter(i => i.active !== false)), [items, showHidden]);
   const tables = useMemo(() => items.filter(i => i.category === 'table'), [items]);
@@ -171,14 +184,14 @@ export default function PricesSettingsTab() {
             {editing === `new:${g.id}` && (
               <li className="p-3">
                 <ItemEditor item={{ category: g.id, unit: g.id === 'table' ? 'table' : 'each', dealers: g.id === 'table' ? 1 : 0, taxable: true, active: true }}
-                  tables={tables} saving={saving} onCancel={() => setEditing(null)} onSave={form => save(form, null)} />
+                  tables={tables} pools={pools} saving={saving} onCancel={() => setEditing(null)} onSave={form => save(form, null)} />
               </li>
             )}
             {g.items.length === 0 && editing !== `new:${g.id}` && <li className="px-4 py-3 text-sm text-gray-400">Nothing here yet.</li>}
             {g.items.map(item => (
               <li key={item.id} className="px-4 py-3">
                 {editing === item.id ? (
-                  <ItemEditor item={item} tables={tables} saving={saving} onCancel={() => setEditing(null)} onSave={form => save(form, item)} />
+                  <ItemEditor item={item} tables={tables} pools={pools} saving={saving} onCancel={() => setEditing(null)} onSave={form => save(form, item)} />
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -207,6 +220,7 @@ export default function PricesSettingsTab() {
         </div>
       ))}
 
+      {pools.length > 0 && <StockPoolsCard pools={pools} onChange={setPools} />}
       <TaxRatesCard />
     </div>
   );

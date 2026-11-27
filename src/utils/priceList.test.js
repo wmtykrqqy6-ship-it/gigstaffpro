@@ -35,6 +35,9 @@ describe('price list', () => {
     expect(custom).toMatchObject({ key: 'magician', price: null });
     const table = validatePriceItem({ name: 'Craps', category: 'table', unit: 'table', price: 800, dealers: 2, bonus_game: true }).item;
     expect(table).toMatchObject({ dealers: 2, bonus_game: true });
+    expect('stock_pool' in table).toBe(false);
+    expect(validatePriceItem({ name: 'C', category: 'table', stock_pool: 'craps_10' }).item.stock_pool).toBe('craps_10');
+    expect(validatePriceItem({ name: 'C', category: 'table', stock_pool: '' }).item.stock_pool).toBeNull();
   });
 
   it('groups by category in order', () => {

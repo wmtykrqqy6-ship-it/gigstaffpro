@@ -9,6 +9,8 @@ import {
   AUTO_RULES, TRAVEL_FREE_MILES, priceQuote, partyHours, lineFromItem, customLine, cleanLines, suggestPackage, toTime24
 } from '../../utils/quotePricing';
 import { findTaxArea, formatRate, sortTaxAreas } from '../../utils/salesTax';
+import { DEFAULT_SETUP_MINUTES, DEFAULT_PICKUP_MINUTES } from '../../utils/availability';
+import AvailabilityPanel from './AvailabilityPanel';
 
 const input = 'w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm';
 const money = (n) => `${Number(n) < 0 ? '-' : ''}$${Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -35,6 +37,8 @@ function fromLead(lead) {
     tax_rate: DEFAULT_TAX_RATE,
     tax_county: '',
     auto_off: [],
+    setup_minutes: DEFAULT_SETUP_MINUTES,
+    pickup_minutes: DEFAULT_PICKUP_MINUTES,
     lines: [],
     client_notes: '',
     internal_notes: ''
@@ -53,7 +57,7 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
   const [taxRates, setTaxRates] = useState([]);
   const [taxNote, setTaxNote] = useState('');
   const [originId, setOriginId] = useState('');
-  const [form, setForm] = useState(() => (quote ? { ...fromLead(lead), ...quote, miles: quote.miles ?? '', guest_count: quote.guest_count ?? '', tax_rate: Number(quote.tax_rate) } : fromLead(lead)));
+  const [form, setForm] = useState(() => (quote ? { ...fromLead(lead), ...quote, miles: quote.miles ?? '', guest_count: quote.guest_count ?? '', tax_rate: Number(quote.tax_rate), setup_minutes: quote.setup_minutes ?? DEFAULT_SETUP_MINUTES, pickup_minutes: quote.pickup_minutes ?? DEFAULT_PICKUP_MINUTES } : fromLead(lead)));
   const [adding, setAdding] = useState('');
   const [saving, setSaving] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
@@ -154,11 +158,19 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
       deposit: priced.deposit,
       client_notes: String(form.client_notes || '').trim().slice(0, 4000) || null,
       internal_notes: String(form.internal_notes || '').trim().slice(0, 4000) || null,
+      setup_minutes: Math.min(Math.max(Math.round(Number(form.setup_minutes) || 0), 0), 1440),
+      pickup_minutes: Math.min(Math.max(Math.round(Number(form.pickup_minutes) || 0), 0), 1440),
       updated_at: now
     };
-    const res = quote?.id
-      ? await supabase.from('quotes').update(row).eq('id', quote.id).select().single()
-      : await supabase.from('quotes').insert([row]).select().single();
+    const write = (r) => (quote?.id
+      ? supabase.from('quotes').update(r).eq('id', quote.id).select().single()
+      : supabase.from('quotes').insert([r]).select().single());
+    let res = await write(row);
+    if (res.error && isMissingSchemaError(res.error) && /setup_minutes|pickup_minutes/.test(res.error.message || '')) {
+      // Availability SQL (20261127160000) not run yet: save without the window.
+      const { setup_minutes, pickup_minutes, ...rest } = row;
+      res = await write(rest);
+    }
     setSaving(false);
     if (res.error) {
       notify(isMissingSchemaError(res.error) ? 'Saving quotes turns on once the quotes SQL file (20261127140000) has been run.' : `Could not save: ${res.error.message}`);
@@ -238,6 +250,17 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                   </select>
                 </label>
               </section>
+              <section className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+                <label className="text-xs text-gray-600">Delivery (hours before)
+                  <input type="number" min="0" max="24" step="0.5" className={input} value={Math.round((Number(form.setup_minutes) || 0) / 30) / 2}
+                    onChange={e => set({ setup_minutes: Math.round((Number(e.target.value) || 0) * 60) })} />
+                </label>
+                <label className="text-xs text-gray-600">Pickup (hours after)
+                  <input type="number" min="0" max="24" step="0.5" className={input} value={Math.round((Number(form.pickup_minutes) || 0) / 30) / 2}
+                    onChange={e => set({ pickup_minutes: Math.round((Number(e.target.value) || 0) * 60) })} />
+                </label>
+                <div className="col-span-2" />
+              </section>
               {taxNote && <p className="text-xs text-amber-700 -mt-3">{taxNote}</p>}
               {far && <p className="text-xs text-amber-700 -mt-3">Past {TRAVEL_FREE_MILES} miles: the far delivery fee and the dealer travel fee are added.</p>}
 
@@ -313,6 +336,9 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
                   ))}</p>
                 )}
               </section>
+
+              <AvailabilityPanel quoteId={quote?.id || null} lines={form.lines} items={items} date={form.event_date}
+                start={form.start_time} end={form.end_time} setup={form.setup_minutes} pickup={form.pickup_minutes} />
 
               <section className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 space-y-2">
