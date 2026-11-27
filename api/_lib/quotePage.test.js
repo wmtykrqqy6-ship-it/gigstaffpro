@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buildSnapshot, parseQuoteSettings, quoteState, renderQuotePage, handleQuoteSend, handleQuotePage, newToken, TOKEN_REGEX, DEFAULT_TERMS
+  buildSnapshot, parseQuoteSettings, quoteEmailHtml, quoteEmailText, quoteState, renderQuotePage, handleQuoteSend, handleQuotePage, newToken, TOKEN_REGEX, DEFAULT_TERMS
 } from './quotePage.js';
 
 const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', RESEND_API_KEY: 'r' };
@@ -65,6 +65,22 @@ describe('quote page helpers', () => {
     expect(parseQuoteSettings({ link_base: 'javascript:alert(1)' }).link_base).toBe('https://www.gigstaffpro.com');
   });
 
+  it('lays out the email like the Goodshuffle one, escaped and unbranded', () => {
+    const url = `https://www.gigstaffpro.com/q/${TOKEN}`;
+    const html = quoteEmailHtml({ message: 'Hello Pat,\n\nSee <your> quote.', signature: 'Dylan\nSales', url, logo: 'javascript:x', snapshot: buildSnapshot(quote, items, lead, NOW) });
+    expect(html.match(/>View Quote</g)).toHaveLength(2);
+    expect(html).toContain(`href="${url}"`);
+    expect(html).toContain('See &lt;your&gt; quote.');
+    expect(html).toContain('Smith party &lt;b&gt;');
+    expect(html).toContain('$1,391.25');
+    expect(html).toContain('Have Questions?');
+    expect(html).toContain('535 S 93rd St');
+    expect(html).toContain('vegasonwheels.com/wp-content');
+    expect(html).not.toContain('javascript:');
+    expect(html.split(url).join('')).not.toMatch(/gigstaff/i);
+    expect(quoteEmailText('Hi\n\nSincerely,', url, 'Dylan')).toBe(`Hi\n\nSincerely,\n\nDylan\n\nView and accept your quote: ${url}`);
+  });
+
   it('knows when a quote can be accepted', () => {
     const snap = { sent_snapshot: {} };
     expect(quoteState({ ...snap, status: 'sent', event_date: '2026-12-05' }, NOW)).toBe('open');
@@ -97,6 +113,7 @@ describe('handleQuoteSend', () => {
     expect(email.to).toEqual(['pat@example.com']);
     expect(email.text).toContain(r.body.url);
     expect(email.text).toContain('Dylan');
+    expect(email.html).toContain(`href="${r.body.url}"`);
     const leadPatch = f.calls.find(c => c.url.includes('/leads?id=eq.') && c.method === 'PATCH').body;
     expect(leadPatch).toMatchObject({ stage: 'quoted', followup_sent_at: null });
   });

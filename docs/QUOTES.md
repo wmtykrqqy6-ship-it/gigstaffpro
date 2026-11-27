@@ -151,6 +151,12 @@ Build order (one PR and one SQL file each):
   sales@ with the rep's signature and logo, saves the email in Messages, and
   moves a New lead to Quoted (starting the follow-up clock). Sending again
   updates the same link.
+- **The email** (`quoteEmailHtml`) follows the layout of Goodshuffle's quote
+  emails (Dylan's sample, 2026-11-27): logo and View Quote button, a "Quote"
+  heading, the rep's message and signature, a big View Quote button, event +
+  subtotal/tax/total, "Have Questions?", and the Vegas on Wheels address
+  footer. No "Powered by" line. The builder's default message uses the same
+  wording as Goodshuffle's.
 - **Client's page** `/q/<code>` (`vercel.json` rewrite to
   `api/send-email.js?route=quote`, `handleQuotePage`): server-rendered HTML,
   Vegas on Wheels logo and contact details only, everything escaped, strict
