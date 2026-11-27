@@ -11,6 +11,7 @@ import {
 import { findTaxArea, formatRate, sortTaxAreas } from '../../utils/salesTax';
 import { DEFAULT_SETUP_MINUTES, DEFAULT_PICKUP_MINUTES } from '../../utils/availability';
 import AvailabilityPanel from './AvailabilityPanel';
+import PaymentsPanel from './PaymentsPanel';
 import { callSignatureApi } from '../../utils/emailSignatureApi';
 
 const input = 'w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm';
@@ -50,7 +51,7 @@ function fromLead(lead) {
 // Lines come from the price list (Settings > Prices); delivery, travel,
 // extra hours and the fundraiser discount are added by the rules in
 // src/utils/quotePricing.js. Saves to public.quotes (admin-only).
-export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
+export default function QuoteBuilder({ lead, quote, onClose, onSaved, onPaymentsChange }) {
   const notify = useToast();
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
@@ -377,6 +378,8 @@ export default function QuoteBuilder({ lead, quote, onClose, onSaved }) {
 
               <AvailabilityPanel quoteId={savedQuote?.id || null} lines={form.lines} items={items} date={form.event_date}
                 start={form.start_time} end={form.end_time} setup={form.setup_minutes} pickup={form.pickup_minutes} />
+
+              {savedQuote?.status === 'accepted' && <PaymentsPanel quote={savedQuote} onChange={onPaymentsChange} />}
 
               <section className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 space-y-2">
