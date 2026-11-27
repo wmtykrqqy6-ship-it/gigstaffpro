@@ -11,6 +11,7 @@ import {
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings } from '../../utils/clientEmailSettings';
 import EmailHistory from '../messages/EmailHistory';
 import QuoteBuilder from '../quotes/QuoteBuilder';
+import { summarizePayments, paymentStatusLabel } from '../../utils/quotePayments';
 
 const AUTO_EMAIL_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review'];
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
@@ -32,6 +33,7 @@ export default function LeadsView({ onOpenSettings }) {
   const [quotes, setQuotes] = useState([]); // quote summaries (all leads)
   const [quotesOn, setQuotesOn] = useState(false); // quotes SQL run
   const [builder, setBuilder] = useState(null); // { lead, quote }
+  const [payments, setPayments] = useState({}); // quote id -> payment rows (docs/PAYMENTS.md)
   const followupOn = !!emailSettings?.followup.on;
   const followupDays = emailSettings?.followup.days;
   const autoEmailsOn = AUTO_EMAIL_KINDS.filter(k => emailSettings?.[k]?.on).length + (emailSettings?.custom || []).filter(c => c.on).length;
@@ -71,6 +73,16 @@ export default function LeadsView({ onOpenSettings }) {
     if (error) { setQuotesOn(false); return; }
     setQuotesOn(true);
     setQuotes(data || []);
+    const booked = (data || []).filter(q => q.status === 'accepted').map(q => q.id);
+    if (booked.length) {
+      // Hidden quietly until the payments SQL (20261128120000) is run.
+      const { data: rows, error: pErr } = await supabase.from('quote_payments').select('quote_id, kind, amount, status').in('quote_id', booked);
+      if (!pErr) {
+        const byQuote = Object.fromEntries(booked.map(id => [id, []]));
+        for (const r of rows || []) (byQuote[r.quote_id] = byQuote[r.quote_id] || []).push(r);
+        setPayments(byQuote);
+      }
+    }
   };
 
   useEffect(() => { load(); loadQuotes(); }, []);
@@ -269,6 +281,11 @@ export default function LeadsView({ onOpenSettings }) {
                         <FileText size={12} className="text-gray-500" />
                         <span>{q.name || 'Quote'}</span>
                         <span className="text-gray-500">· ${Number(q.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {q.status}</span>
+                        {q.status === 'accepted' && payments[q.id] !== undefined && (() => {
+                          const s = summarizePayments(q, payments[q.id]);
+                          const label = paymentStatusLabel(s);
+                          return label ? <span className={s.overdue ? 'text-red-700' : s.status === 'paid' ? 'text-green-700' : 'text-gray-500'}>· {label}</span> : null;
+                        })()}
                       </button>
                     ))}
                   </div>
@@ -290,7 +307,8 @@ export default function LeadsView({ onOpenSettings }) {
       )}
       {builder && (
         <QuoteBuilder lead={builder.lead} quote={builder.quote} onClose={() => setBuilder(null)}
-          onSaved={() => { setBuilder(null); loadQuotes(); }} />
+          onSaved={() => { setBuilder(null); loadQuotes(); }}
+          onPaymentsChange={(id, rows) => setPayments(p => ({ ...p, [id]: rows }))} />
       )}
     </div>
   );

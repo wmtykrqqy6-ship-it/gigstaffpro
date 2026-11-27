@@ -36,6 +36,7 @@ Stack:
 - `docs/CLIENT_SECURITY.md` — who can see client data (admins and sales managers), 2-step sign-in for admins, the client access log, and how to add a sales manager.
 - `docs/CRM.md` — the CRM that replaces Goodshuffle: Clients tab (contacts, events, history), and the Phase 1 pieces still to come.
 - `docs/QUOTES.md` — quotes and availability (CRM Phase 2): pricing rules, the price list (Settings > Prices), and the build order.
+- `docs/PAYMENTS.md` — deposits, balances and tips on booked quotes (CRM Phase 3): payment record, provider choice, build order.
 - `docs/LOCAL_PRIORITY.md` — "Local crew first": new events open only to workers whose primary market is the event's for 48 hours, then to everyone.
 - Additional files will be added under `docs/` over time for product requirements and business rules — check that directory for relevant context before large changes.
 - This file governs *how* to work in the repo; the audit governs *what state the code is currently in*.
