@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupConversations, unreadCount, replySubject, preview, matchesFilter, kindLabel, isMine, senderName } from './clientMessages';
+import { groupConversations, unreadCount, replySubject, preview, matchesFilter, kindLabel, isMine, senderName, splitDeleted, folderUnread } from './clientMessages';
 
 const m = (over) => ({ id: Math.random().toString(36), direction: 'in', contact_email: 'pat@example.com', created_at: '2026-12-01T10:00:00Z', ...over });
 
@@ -31,7 +31,9 @@ describe('client messages', () => {
     expect(preview('a  b\n c')).toBe('a b c');
     expect(preview('x'.repeat(200), 10)).toHaveLength(10);
     const [c] = groupConversations([m({ subject: 'March fundraiser' })]);
-    expect(matchesFilter(c, 'unread')).toBe(true);
+    expect(matchesFilter(c, 'unread')).toBe(false); // not linked: lives in Other
+    expect(matchesFilter(c, 'inbox')).toBe(false);
+    expect(matchesFilter(c, 'other')).toBe(true);
     expect(matchesFilter(c, 'unmatched')).toBe(true);
     expect(matchesFilter(c, 'all', 'fundraiser')).toBe(true);
     expect(matchesFilter(c, 'all', 'zzz')).toBe(false);
@@ -50,5 +52,25 @@ describe('client messages', () => {
     expect(senderName({ direction: 'out', kind: 'reply', sent_by: 'gone' }, team, 'me')).toBe('Vegas on Wheels');
     expect(senderName({ direction: 'out', kind: 'followup' }, team, 'me')).toBe('Vegas on Wheels');
     expect(senderName({ direction: 'in', contact_email: 'pat@example.com' }, team, 'me')).toBe('pat@example.com');
+  });
+
+  it('keeps linked mail in the inbox and the rest in Other', () => {
+    const convs = groupConversations([m({ lead_id: 'L1' }), m({ contact_email: 'news@shop.com' }), m({ contact_email: 'news@shop.com' })]);
+    const linked = convs.find(c => c.matched);
+    const junk = convs.find(c => !c.matched);
+    expect(matchesFilter(linked, 'inbox')).toBe(true);
+    expect(matchesFilter(linked, 'unread')).toBe(true);
+    expect(matchesFilter(linked, 'other')).toBe(false);
+    expect(matchesFilter(junk, 'inbox')).toBe(false);
+    expect(matchesFilter(junk, 'other')).toBe(true);
+    expect(matchesFilter(junk, 'deleted')).toBe(true);
+    expect(folderUnread(convs, 'inbox')).toBe(1);
+    expect(folderUnread(convs, 'other')).toBe(2);
+  });
+
+  it('sets deleted messages apart', () => {
+    const { live, deleted } = splitDeleted([m({ id: 'a' }), m({ id: 'b', deleted_at: '2026-12-02T00:00:00Z' }), null]);
+    expect(live.map(x => x.id)).toEqual(['a']);
+    expect(deleted.map(x => x.id)).toEqual(['b']);
   });
 });

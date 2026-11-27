@@ -1,29 +1,36 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Inbox, RefreshCw, PenLine, Settings as SettingsIcon } from 'lucide-react';
+import { Search, Inbox, RefreshCw, PenLine, Settings as SettingsIcon, Trash2, Ban, RotateCcw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { logClientAccess } from '../../utils/clientAccessLog';
 import { isMissingSchemaError, fetchAllRows } from '../../utils/clientRecords';
-import { groupConversations, matchesFilter, preview } from '../../utils/clientMessages';
+import { groupConversations, matchesFilter, preview, splitDeleted, folderUnread } from '../../utils/clientMessages';
+import { useConfirm } from '../ui/ConfirmDialog';
 import MessageThread from '../messages/MessageThread';
 import SignatureEditor from '../messages/SignatureEditor';
 import { callSignatureApi } from '../../utils/emailSignatureApi';
 
 const FILTERS = [
-  { id: 'all', label: 'All' },
+  { id: 'inbox', label: 'Inbox' },
   { id: 'unread', label: 'Unread' },
   { id: 'mine', label: 'Mine' },
-  { id: 'unmatched', label: 'Not linked' }
+  { id: 'other', label: 'Other' },
+  { id: 'deleted', label: 'Deleted' }
 ];
 
 // Messages inbox (CRM Phase 1 step 5, docs/CRM.md): client emails
 // redirected from sales@vegasonwheels.com, replies sent from here, and the
 // automatic emails. Admins and sales managers only (client_messages is
-// admin-only).
+// admin-only). Inbox holds email from leads and clients; everyone else's
+// lands in Other. Conversations can be deleted (restorable) and senders
+// blocked (client_message_blocks; the server then skips their email).
 export default function MessagesView({ onUnreadChange, onOpenSettings }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needsSql, setNeedsSql] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('inbox');
+  const [blocked, setBlocked] = useState(() => new Set());
+  const [actionError, setActionError] = useState('');
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // contact email
   // Signatures: { myId, mine: { display_name, signature }, team: { id: name }, needsSql }
@@ -48,13 +55,65 @@ export default function MessagesView({ onUnreadChange, onOpenSettings }) {
     if (r.ok) setSig({ myId: r.myId || null, mine: r.mine || null, team: r.team || {}, needsSql: !!r.needsSql });
   };
 
-  useEffect(() => { load(); loadSignatures(); }, []);
+  const loadBlocks = async () => {
+    const { data, error } = await supabase.from('client_message_blocks').select('email');
+    if (!error) setBlocked(new Set((data || []).map(b => b.email)));
+  };
 
-  const conversations = useMemo(() => groupConversations(rows), [rows]);
-  const visible = conversations.filter(c => matchesFilter(c, filter, search, sig.myId));
-  const current = conversations.find(c => c.email === selected) || null;
-  const totalUnread = conversations.reduce((n, c) => n + c.unread, 0);
+  useEffect(() => { load(); loadSignatures(); loadBlocks(); }, []);
+
+  const { live, deleted } = useMemo(() => splitDeleted(rows), [rows]);
+  const conversations = useMemo(() => groupConversations(live), [live]);
+  const deletedConversations = useMemo(() => groupConversations(deleted), [deleted]);
+  const list = filter === 'deleted' ? deletedConversations : conversations;
+  const visible = list.filter(c => matchesFilter(c, filter, search, sig.myId));
+  const current = list.find(c => c.email === selected) || null;
+  const totalUnread = folderUnread(conversations, 'inbox');
+  const otherUnread = folderUnread(conversations, 'other');
   useEffect(() => { onUnreadChange?.(totalUnread); }, [totalUnread]);
+  // Delete needs the delete/block SQL (20261127120000): until then rows have
+  // no deleted_at column.
+  const canDelete = rows.length > 0 && Object.prototype.hasOwnProperty.call(rows[0], 'deleted_at');
+
+  const setDeleted = async (ids, at) => {
+    setActionError('');
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { error } = await supabase.from('client_messages').update({ deleted_at: at }).in('id', chunk);
+      if (error) { setActionError(`Could not ${at ? 'delete' : 'restore'}: ${error.message}`); return false; }
+      setRows(rs => rs.map(m => (chunk.includes(m.id) ? { ...m, deleted_at: at } : m)));
+    }
+    return true;
+  };
+
+  const deleteConversation = async (c, block = false) => {
+    const what = c.name || c.email;
+    const ok = await confirm(block
+      ? `Block ${c.email}? This conversation moves to Deleted, and new email from this address won't show up in Messages. You can undo it from Deleted.`
+      : `Delete the conversation with ${what}? It moves to Deleted, where you can bring it back.`);
+    if (!ok) return;
+    if (block) {
+      const { error } = await supabase.from('client_message_blocks').upsert({ email: c.email }, { onConflict: 'email', ignoreDuplicates: true });
+      if (error) { setActionError(`Could not block: ${error.message}`); return; }
+      setBlocked(b => new Set([...b, c.email]));
+    }
+    if (await setDeleted(c.messages.map(m => m.id), new Date().toISOString())) setSelected(null);
+  };
+
+  const restoreConversation = async (c) => {
+    if (blocked.has(c.email)) {
+      const { error } = await supabase.from('client_message_blocks').delete().eq('email', c.email);
+      if (error) { setActionError(`Could not unblock: ${error.message}`); return; }
+      setBlocked(b => { const n = new Set(b); n.delete(c.email); return n; });
+    }
+    if (await setDeleted(c.messages.map(m => m.id), null)) setSelected(null);
+  };
+
+  const deleteAllOther = async () => {
+    const ids = visible.flatMap(c => c.messages.map(m => m.id));
+    const ok = await confirm(`Delete all ${visible.length} conversation${visible.length === 1 ? '' : 's'} in Other? They move to Deleted, where you can bring them back.`);
+    if (ok && await setDeleted(ids, new Date().toISOString())) setSelected(null);
+  };
 
   const open = async (c) => {
     setSelected(c.email);
@@ -117,16 +176,23 @@ export default function MessagesView({ onUnreadChange, onOpenSettings }) {
               <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
                 {FILTERS.map(f => (
                   <button key={f.id} onClick={() => setFilter(f.id)}
-                    className={`flex-1 px-2 py-1 rounded-md text-xs font-medium ${filter === f.id ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-                    {f.label}{f.id === 'unread' && totalUnread > 0 ? ` (${totalUnread})` : ''}
+                    className={`flex-1 px-1 py-1 rounded-md text-xs font-medium ${filter === f.id ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+                    {f.label}{f.id === 'unread' && totalUnread > 0 ? ` (${totalUnread})` : ''}{f.id === 'other' && otherUnread > 0 ? ` (${otherUnread})` : ''}
                   </button>
                 ))}
               </div>
+              {filter === 'other' && (
+                <p className="text-xs text-gray-500">Email from people who aren't a lead or client yet (newsletters, vendors, or a client writing from a new address).
+                  {canDelete && visible.length > 0 && <> <button onClick={deleteAllOther} className="text-red-900 hover:underline">Delete all {visible.length}</button></>}
+                </p>
+              )}
+              {filter === 'deleted' && <p className="text-xs text-gray-500">Deleted conversations. Open one to bring it back.</p>}
+              {actionError && <p className="text-xs text-red-700">{actionError}</p>}
             </div>
             {visible.length === 0 ? (
               <div className="p-8 text-center text-sm text-gray-500">
                 <Inbox size={28} className="mx-auto text-gray-300 mb-2" />
-                {conversations.length === 0 ? 'No emails yet. Client emails show up here once the sales@ forwarding rule is on.' : 'Nothing matches.'}
+                {rows.length === 0 ? 'No emails yet. Client emails show up here once the sales@ forwarding rule is on.' : filter === 'deleted' ? 'Nothing deleted.' : filter === 'other' ? 'No other email.' : 'Nothing matches.'}
               </div>
             ) : (
               <ul className="divide-y max-h-[70vh] overflow-y-auto">
@@ -141,7 +207,8 @@ export default function MessagesView({ onUnreadChange, onOpenSettings }) {
                       <p className="text-xs text-gray-400 truncate">{c.last.direction === 'out' ? (c.last.kind === 'reply' && c.last.sent_by && c.last.sent_by !== sig.myId ? `${sig.team[c.last.sent_by] || 'Team'}: ` : 'You: ') : ''}{preview(c.last.body_text, 90)}</p>
                       <div className="flex gap-1 mt-1">
                         {c.unread > 0 && <span className="text-xs bg-red-900 text-white px-1.5 rounded-full">{c.unread} new</span>}
-                        {!c.matched && <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-1.5 rounded-full">Not linked</span>}
+                        {!c.matched && filter !== 'other' && <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-1.5 rounded-full">Not linked</span>}
+                        {blocked.has(c.email) && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded-full">Blocked</span>}
                       </div>
                     </button>
                   </li>
@@ -157,8 +224,24 @@ export default function MessagesView({ onUnreadChange, onOpenSettings }) {
                   <div className="min-w-0">
                     <button onClick={() => setSelected(null)} className="lg:hidden text-xs text-red-900 hover:underline mb-1">‹ All messages</button>
                     <p className="font-bold text-gray-900 truncate">{current.name || current.email}</p>
-                    <p className="text-xs text-gray-500 truncate">{current.email}{!current.matched && ' · not linked to a lead or client (no one has this email)'}</p>
+                    <p className="text-xs text-gray-500 truncate">{current.email}{!current.matched && ' · not linked to a lead or client (no one has this email)'}{blocked.has(current.email) && ' · blocked'}</p>
                   </div>
+                  {canDelete && (filter === 'deleted' ? (
+                    <button onClick={() => restoreConversation(current)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-xs flex-shrink-0">
+                      <RotateCcw size={13} /><span>{blocked.has(current.email) ? 'Restore and unblock' : 'Restore'}</span>
+                    </button>
+                  ) : (
+                    <div className="flex space-x-1 flex-shrink-0">
+                      <button onClick={() => deleteConversation(current)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-xs">
+                        <Trash2 size={13} /><span>Delete</span>
+                      </button>
+                      {!current.matched && (
+                        <button onClick={() => deleteConversation(current, true)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-1 text-xs">
+                          <Ban size={13} /><span>Block sender</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 <MessageThread key={current.email} conversation={current} onSent={load} team={sig.team} myId={sig.myId}
                   signature={sig.mine?.signature || ''} logoUrl={sig.mine?.logo_url || ''} onEditSignature={sig.needsSql ? null : () => setEditingSig(true)} />

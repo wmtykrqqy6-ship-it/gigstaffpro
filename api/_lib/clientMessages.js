@@ -102,6 +102,13 @@ export async function matchContact(call, email) {
   return out;
 }
 
+// Senders an admin blocked in Messages (client_message_blocks). Before that
+// SQL is run the table is missing, which counts as "not blocked".
+export async function isBlocked(call, email) {
+  const rows = await call(`client_message_blocks?select=email&email=eq.${encodeURIComponent(email)}&limit=1`).catch(() => []);
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 const contactNow = (now) => ({ last_contact_at: now, followup_sent_at: null, updated_at: now });
 
 export async function handleInboundEmail(req, res, { env = process.env, fetchImpl = fetch, now = new Date() } = {}) {
@@ -129,6 +136,7 @@ export async function handleInboundEmail(req, res, { env = process.env, fetchImp
 
   try {
     const call = rest(env, fetchImpl);
+    if (await isBlocked(call, from.email)) return res.status(200).json({ ok: true, ignored: 'blocked' });
     const who = await matchContact(call, from.email);
     const saved = await call('client_messages?on_conflict=resend_id', {
       method: 'POST',

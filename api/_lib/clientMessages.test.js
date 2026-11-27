@@ -9,7 +9,7 @@ function fakeRes() {
   return { code: 0, data: null, status(c) { this.code = c; return this; }, json(d) { this.data = d; return this; } };
 }
 
-function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved = [{ id: 'm1' }], resendOk = true, signature = null, logo = null } = {}) {
+function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved = [{ id: 'm1' }], resendOk = true, signature = null, logo = null, blocked = [] } = {}) {
   const calls = [];
   const fn = vi.fn(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
@@ -17,6 +17,7 @@ function fakeFetch({ email, emailStatus = 200, leads = [], clients = [], saved =
     if (url.includes('/leads?select=')) return { ok: true, json: async () => leads };
     if (url.includes('/clients?select=')) return { ok: true, json: async () => clients };
     if (url.includes('/client_contacts?select=')) return { ok: true, json: async () => [] };
+    if (url.includes('/client_message_blocks?')) return { ok: true, json: async () => blocked.filter(b => url.includes(`eq.${encodeURIComponent(b)}`)).map(email => ({ email })) };
     if (url.includes('/client_messages?')) return { ok: true, json: async () => saved };
     if (url.includes('/leads?id=')) return { ok: true, status: 204, json: async () => null };
     if (url.includes('/settings?')) return { ok: true, json: async () => [] };
@@ -81,6 +82,18 @@ describe('handleInboundEmail', () => {
     await handleInboundEmail(req(event), res, { env, fetchImpl: f, now: NOW });
     expect(res.data).toMatchObject({ saved: true, matched: false });
     expect(f.calls.some(c => c.method === 'PATCH')).toBe(false);
+  });
+
+  it('skips blocked senders', async () => {
+    const f = fakeFetch({ email: inbound(), blocked: ['pat@example.com'] });
+    const res = fakeRes();
+    await handleInboundEmail(req(event), res, { env, fetchImpl: f, now: NOW });
+    expect(res.data.ignored).toBe('blocked');
+    expect(f.calls.some(c => c.url.includes('/client_messages?'))).toBe(false);
+    const f2 = fakeFetch({ email: inbound(), blocked: ['lee@example.com'] });
+    const res2 = fakeRes();
+    await handleInboundEmail(req(event), res2, { env, fetchImpl: f2, now: NOW });
+    expect(res2.data).toMatchObject({ saved: true });
   });
 
   it('ignores forged ids, other addresses and our own mail', async () => {

@@ -231,9 +231,22 @@ GigStaffPro, show up; emails typed directly in Outlook don't (Dylan,
   attachments. Admin-only read; admins can only mark read or re-link
   (column-level grant); only the server inserts. Viewing the Messages tab is
   logged in the client access log (`where: messages_tab`).
-- **Screens:** Messages tab (conversations by contact, All / Unread / Not
-  linked, search, reply), and an "Emails" section on each lead card and
-  client page.
+- **Screens:** Messages tab (conversations by contact, Inbox / Unread / Mine /
+  Other / Deleted, search, reply), and an "Emails" section on each lead card
+  and client page.
+- **Other, Delete and Block (Dylan, 2026-11-26: the sales@ rule copies every
+  email, so non-client mail was piling up):** Inbox and Unread show only
+  conversations linked to a lead or client; everyone else's email goes to
+  **Other** (a client writing from a new address lands there too). Mine shows
+  every conversation you replied in. **Delete** moves a conversation to
+  **Deleted** (sets `client_messages.deleted_at`; nothing is erased, Restore
+  brings it back); Other has "Delete all". **Block sender** (Other only)
+  also adds the address to `public.client_message_blocks`, and the inbound
+  webhook then skips that sender's email (`isBlocked` in
+  `api/_lib/clientMessages.js`); restoring a blocked conversation unblocks it.
+  Deleted emails are hidden from the lead/client "Emails" section too.
+  Migration `20261127120000_add_message_delete_and_block.sql`; until it's
+  run, Other works but the Delete / Block buttons are hidden.
 - **Set up (live 2026-11-26):** the Outlook rule "GigStaffPro copy" on
   sales@ redirects all mail to `inbox@in.vegasonwheels.com` (any address on
   the subdomain works). Microsoft 365 blocks outside auto-forwarding by
