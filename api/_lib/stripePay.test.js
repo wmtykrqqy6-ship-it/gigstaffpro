@@ -61,6 +61,7 @@ describe('stripe helpers', () => {
     expect(stripeEnabled({})).toBe(false);
     expect(stripeEnabled({ STRIPE_SECRET_KEY: 'pk_test_x' })).toBe(false);
     expect(stripeEnabled({ STRIPE_SECRET_KEY: 'rk_live_x' })).toBe(true);
+    expect(stripeEnabled({ STRIPE_SECRET_KEY: '  sk_test_x\n' })).toBe(true);
   });
 
   it('next payment: deposit, then balance, then nothing', () => {

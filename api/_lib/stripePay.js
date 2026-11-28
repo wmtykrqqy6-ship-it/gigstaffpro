@@ -30,8 +30,10 @@ const MIN_PAYMENT = 1; // dollars; Stripe's minimum is $0.50
 
 // A secret key (sk_) or a restricted key (rk_) with Checkout Sessions: Write
 // and Events: Read.
-export const stripeEnabled = (env = process.env) => /^(sk|rk)_(test|live)_/.test(String(env.STRIPE_SECRET_KEY || ''));
-export const isTestKey = (env = process.env) => /^(sk|rk)_test_/.test(String(env.STRIPE_SECRET_KEY || ''));
+// Trimmed: a key pasted with a stray space or line break still works.
+const stripeKey = (env) => String(env.STRIPE_SECRET_KEY || '').trim();
+export const stripeEnabled = (env = process.env) => /^(sk|rk)_(test|live)_/.test(stripeKey(env));
+export const isTestKey = (env = process.env) => /^(sk|rk)_test_/.test(stripeKey(env));
 
 // Stripe takes form-encoded bodies with bracketed keys: a[b][0][c]=1.
 export function encodeForm(obj, prefix = '') {
@@ -54,7 +56,7 @@ export function encodeForm(obj, prefix = '') {
 }
 
 export async function stripeCall(env, fetchImpl, method, path, params, idempotencyKey) {
-  const headers = { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` };
+  const headers = { Authorization: `Bearer ${stripeKey(env)}` };
   let body;
   if (method === 'POST') {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
