@@ -30,6 +30,7 @@ import { recordClientMessage } from './recordClientMessage.js';
 import { withSignature, cleanSignature, cleanLogoUrl, DEFAULT_LOGO_URL } from './emailSignatures.js';
 import { priceQuote, partyHours, formatTime12 } from './quotePricing.js';
 import { DEFAULT_TERMS } from './quoteTerms.js';
+import { stripeEnabled, isTestKey, nextOnlinePayment, createCheckout, recordSession, stripeCall, SESSION_ID_REGEX } from './stripePay.js';
 
 export { DEFAULT_TERMS };
 
@@ -379,7 +380,26 @@ export function renderMessagePage(title, text) {
   return shell(title, `<div class="card"><img src="${escapeHtml(DEFAULT_LOGO_URL)}" alt="Vegas on Wheels" style="max-width:180px"><h1 style="margin-top:12px">${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p><p class="muted">Vegas on Wheels · ${escapeHtml(BUSINESS_PHONE)} · ${escapeHtml(DEFAULT_LEAD_EMAIL)}</p></div>`);
 }
 
-export function renderQuotePage({ quote, settings, state, notice = '', error = '' }) {
+// "Payments" box on a signed quote: what's paid and owed, and the button to
+// pay the next amount on Stripe's checkout page (docs/PAYMENTS.md).
+export function paymentBox(pay, s = {}) {
+  const sum = pay.summary || {};
+  const lines = [];
+  if (sum.paid > 0) lines.push(`Paid so far: <strong>${money(sum.paid)}</strong>`);
+  if (sum.pending > 0) lines.push(`Bank payment clearing: ${money(sum.pending)} (this can take a few business days)`);
+  if (sum.owed > 0) lines.push(`Still owed: <strong>${money(sum.owed)}</strong>`);
+  if (sum.status === 'paid' || sum.status === 'overpaid') lines.push('<strong>Paid in full. Thank you!</strong>');
+  let button = '';
+  if (pay.next?.kind && !(sum.pending > 0)) {
+    const label = pay.next.kind === 'deposit' ? `Pay ${money(pay.next.amount)} deposit to book` : `Pay ${money(pay.next.amount)} balance`;
+    const when = pay.next.kind === 'deposit' ? 'The deposit confirms your booking.' : (s.balance_due ? `The balance is due ${escapeHtml(longDate(s.balance_due))}.` : '');
+    button = `<form method="post"><input type="hidden" name="action" value="pay"><button type="submit">${escapeHtml(label)}</button></form>
+      <p class="muted" style="margin-top:8px">${when} You can pay by card or bank account (ACH) on Stripe's secure checkout page. Prefer a check? Call or email us.</p>`;
+  }
+  return `<div style="margin-top:16px"><h2>Payments</h2>${lines.length ? `<p>${lines.join('<br>')}</p>` : ''}${button}${pay.test ? '<p class="muted">Test mode: no real money is charged.</p>' : ''}</div>`;
+}
+
+export function renderQuotePage({ quote, settings, state, notice = '', error = '', pay = null }) {
   const s = quote.sent_snapshot || {};
   const ev = s.event || {};
   const c = s.contact || {};
@@ -393,9 +413,11 @@ export function renderQuotePage({ quote, settings, state, notice = '', error = '
   const due = s.balance_due ? ` due ${escapeHtml(longDate(s.balance_due))}` : '';
   let action = '';
   if (state === 'accepted') {
+    const thanks = pay ? 'Thank you!' : "Thank you! We'll be in touch about your deposit and the details.";
     action = sig
-      ? `<div class="ok"><strong>Signed electronically</strong><br>${signatureLines(sig).map(l => escapeHtml(l)).join('<br>')}<br><br>Thank you! We'll be in touch about your deposit and the details. A signed copy was emailed to you.</div>`
-      : `<div class="ok">Accepted${quote.accepted_name ? ` by ${escapeHtml(quote.accepted_name)}` : ''}${quote.accepted_at ? ` on ${escapeHtml(new Date(quote.accepted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' }))}` : ''}. Thank you! We'll be in touch about your deposit and the details.</div>`;
+      ? `<div class="ok"><strong>Signed electronically</strong><br>${signatureLines(sig).map(l => escapeHtml(l)).join('<br>')}<br><br>${thanks} A signed copy was emailed to you.</div>`
+      : `<div class="ok">Accepted${quote.accepted_name ? ` by ${escapeHtml(quote.accepted_name)}` : ''}${quote.accepted_at ? ` on ${escapeHtml(new Date(quote.accepted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' }))}` : ''}. ${thanks}</div>`;
+    if (pay) action += paymentBox(pay, s);
   } else if (state === 'open') {
     action = `
       <form method="post"><input type="hidden" name="action" value="accept">
@@ -444,7 +466,7 @@ function setPageHeaders(res) {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; form-action 'self' https://checkout.stripe.com; base-uri 'none'; frame-ancestors 'none'");
 }
 
 const send = (res, status, html) => { setPageHeaders(res); return res.status(status).send(html); };
@@ -473,15 +495,58 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
   let state = quoteState(quote, now);
   if (state === 'missing') return send(res, 404, renderMessagePage('Quote not found', 'Please check the link in your email, or contact us.'));
 
+  // Online payments (CRM Phase 3, docs/PAYMENTS.md): signed quotes only,
+  // only with a Stripe key set, and only once quote_payments exists.
+  const loadPay = async () => {
+    if (state !== 'accepted' || !stripeEnabled(env)) return null;
+    const rows = await call(`quote_payments?quote_id=eq.${quote.id}&select=kind,amount,status`).catch(() => null);
+    if (!Array.isArray(rows)) return null;
+    const snap = quote.sent_snapshot || {};
+    const next = nextOnlinePayment({ ...quote, total: snap.total, deposit: snap.deposit }, rows, today(now));
+    return next ? { next, summary: next.summary, test: isTestKey(env) } : null;
+  };
+
   if (req.method === 'GET') {
     if (!quote.viewed_at) {
       await call(`quotes?id=eq.${quote.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ viewed_at: now.toISOString() }) }).catch(() => {});
     }
-    return send(res, 200, renderQuotePage({ quote, settings, state }));
+    // Back from Stripe's checkout: record the payment from Stripe's own copy.
+    let notice = '';
+    const paid = String(req.query?.paid || '');
+    if (state === 'accepted' && stripeEnabled(env) && SESSION_ID_REGEX.test(paid)) {
+      try {
+        const session = await stripeCall(env, fetchImpl, 'GET', `/checkout/sessions/${paid}`);
+        if (session?.metadata?.quote_id === quote.id) {
+          await recordSession({ call, session });
+          if (session.payment_status === 'paid') notice = 'Thank you! Your payment went through. A receipt is on its way to your email.';
+          else if (session.status === 'complete') notice = 'Thank you! Your bank payment is processing. It can take a few business days to clear.';
+        }
+      } catch (err) {
+        console.error('stripe return check failed:', err.message);
+      }
+    }
+    return send(res, 200, renderQuotePage({ quote, settings, state, notice, pay: await loadPay() }));
   }
 
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const s = quote.sent_snapshot || {};
+
+  if (body.action === 'pay') {
+    const pay = await loadPay();
+    if (!pay?.next?.kind || pay.summary.pending > 0) return send(res, 409, renderQuotePage({ quote, settings, state, pay }));
+    try {
+      const session = await createCheckout({
+        env, fetchImpl, quote, snapshot: s, kind: pay.next.kind, amount: pay.next.amount,
+        pageUrl: quoteUrl(settings.link_base, token), now
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Location', session.url);
+      return res.status(303).end();
+    } catch (err) {
+      console.error('stripe checkout failed:', err.message);
+      return send(res, 502, renderQuotePage({ quote, settings, state, pay, error: "We couldn't open the payment page. Please try again, or call us." }));
+    }
+  }
   if (body.action === 'question') {
     const text = String(body.message || '').replace(/\r\n/g, '\n').trim().slice(0, 3000);
     if (!text) return send(res, 400, renderQuotePage({ quote, settings, state, error: 'Type your question first.' }));
