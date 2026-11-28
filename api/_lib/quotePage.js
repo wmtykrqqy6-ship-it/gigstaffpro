@@ -30,7 +30,7 @@ import { recordClientMessage } from './recordClientMessage.js';
 import { withSignature, cleanSignature, cleanLogoUrl, DEFAULT_LOGO_URL } from './emailSignatures.js';
 import { priceQuote, partyHours, formatTime12 } from './quotePricing.js';
 import { DEFAULT_TERMS } from './quoteTerms.js';
-import { stripeEnabled, isTestKey, nextOnlinePayment, createCheckout, recordSession, stripeCall, SESSION_ID_REGEX } from './stripePay.js';
+import { stripeEnabled, isTestKey, nextOnlinePayment, createCheckout, recordSession, stripeCall, SESSION_ID_REGEX, parseTipAmount, TIP_MIN, TIP_MAX, TIP_PRESETS } from './stripePay.js';
 
 export { DEFAULT_TERMS };
 
@@ -396,7 +396,24 @@ export function paymentBox(pay, s = {}) {
     button = `<form method="post"><input type="hidden" name="action" value="pay"><button type="submit">${escapeHtml(label)}</button></form>
       <p class="muted" style="margin-top:8px">${when} You can pay by card or bank account (ACH) on Stripe's secure checkout page. Prefer a check? Call or email us.</p>`;
   }
-  return `<div style="margin-top:16px"><h2>Payments</h2>${lines.length ? `<p>${lines.join('<br>')}</p>` : ''}${button}${pay.test ? '<p class="muted">Test mode: no real money is charged.</p>' : ''}</div>`;
+  return `<div style="margin-top:16px"><h2>Payments</h2>${lines.length ? `<p>${lines.join('<br>')}</p>` : ''}${button}${pay.test ? '<p class="muted">Test mode: no real money is charged.</p>' : ''}</div>${pay.tip ? tipBox(pay) : ''}`;
+}
+
+// "Tip your crew" box, shown from the event day on (docs/PAYMENTS.md step 4).
+// No script: one button per preset amount, and a box for any other amount.
+export function tipBox(pay) {
+  const sum = pay.summary || {};
+  const thanks = sum.tips > 0 ? `<p class="ok">Thank you for your tip of ${money(sum.tips)}! It goes to the crew who worked your event.</p>` : '';
+  const presets = TIP_PRESETS.map(n => `<button type="submit" name="amount" value="${n}" style="margin-right:8px">$${n}</button>`).join('');
+  return `<div id="tip" style="margin-top:24px"><h2>Tip your crew</h2>${thanks}
+    <p>If our dealers and setup team made your night, you can leave them a tip. Every dollar is shared with the crew who worked your event.</p>
+    <form method="post"><input type="hidden" name="action" value="tip">${presets}</form>
+    <form method="post" style="margin-top:8px"><input type="hidden" name="action" value="tip">
+      <label for="tipamt">Or another amount ($${TIP_MIN} to $${TIP_MAX.toLocaleString('en-US')})</label>
+      <input id="tipamt" name="amount" inputmode="decimal" maxlength="9" placeholder="$" style="max-width:160px">
+      <button type="submit" class="alt">Leave a tip</button>
+    </form>
+    <p class="muted" style="margin-top:8px">You'll pay on Stripe's secure checkout page by card or bank account.${pay.test ? ' Test mode: no real money is charged.' : ''}</p></div>`;
 }
 
 export function renderQuotePage({ quote, settings, state, notice = '', error = '', pay = null }) {
@@ -503,7 +520,10 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
     if (!Array.isArray(rows)) return null;
     const snap = quote.sent_snapshot || {};
     const next = nextOnlinePayment({ ...quote, total: snap.total, deposit: snap.deposit }, rows, today(now));
-    return next ? { next, summary: next.summary, test: isTestKey(env) } : null;
+    // Tips are asked for only after the event (Dylan): from the event day on.
+    const eventDay = quote.event_date || snap.event?.date;
+    const tip = Boolean(eventDay && today(now) >= eventDay);
+    return next ? { next, summary: next.summary, test: isTestKey(env), tip } : null;
   };
 
   if (req.method === 'GET') {
@@ -518,7 +538,8 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
         const session = await stripeCall(env, fetchImpl, 'GET', `/checkout/sessions/${paid}`);
         if (session?.metadata?.quote_id === quote.id) {
           await recordSession({ call, session });
-          if (session.payment_status === 'paid') notice = 'Thank you! Your payment went through. A receipt is on its way to your email.';
+          if (session.metadata?.kind === 'tip') notice = 'Thank you for the tip! It goes to the crew who worked your event.';
+          else if (session.payment_status === 'paid') notice = 'Thank you! Your payment went through. A receipt is on its way to your email.';
           else if (session.status === 'complete') notice = 'Thank you! Your bank payment is processing. It can take a few business days to clear.';
         }
       } catch (err) {
@@ -544,6 +565,24 @@ export async function handleQuotePage(req, res, { env = process.env, fetchImpl =
       return res.status(303).end();
     } catch (err) {
       console.error('stripe checkout failed:', err.message);
+      return send(res, 502, renderQuotePage({ quote, settings, state, pay, error: "We couldn't open the payment page. Please try again, or call us." }));
+    }
+  }
+  if (body.action === 'tip') {
+    const pay = await loadPay();
+    if (!pay?.tip) return send(res, 409, renderQuotePage({ quote, settings, state, pay }));
+    const amount = parseTipAmount(body.amount);
+    if (amount === null) return send(res, 400, renderQuotePage({ quote, settings, state, pay, error: `Enter a tip from $${TIP_MIN} to $${TIP_MAX.toLocaleString('en-US')}.` }));
+    try {
+      const session = await createCheckout({
+        env, fetchImpl, quote, snapshot: s, kind: 'tip', amount,
+        pageUrl: quoteUrl(settings.link_base, token), now
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Location', session.url);
+      return res.status(303).end();
+    } catch (err) {
+      console.error('stripe tip checkout failed:', err.message);
       return send(res, 502, renderQuotePage({ quote, settings, state, pay, error: "We couldn't open the payment page. Please try again, or call us." }));
     }
   }

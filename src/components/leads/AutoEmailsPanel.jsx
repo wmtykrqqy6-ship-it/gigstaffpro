@@ -208,6 +208,7 @@ export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
             </label>
             <label className="block text-gray-700">Online tip link (optional)
               <input className={`${inputClass} w-full mt-1`} placeholder="https://..." value={settings.tip_url} onChange={setText('tip_url')} />
+              <span className="block text-xs text-gray-500 mt-1">Clients with a signed quote get their own tip page instead (it needs online payments), so their tip shows on the booking. This link is only for the others.</span>
             </label>
           </div>
           <p className="text-xs text-gray-500">

@@ -75,6 +75,20 @@ export async function stripeCall(env, fetchImpl, method, path, params, idempoten
   return data;
 }
 
+// Tips (step 4): the client can tip the crew from the quote page once the
+// event day has come. Any amount from TIP_MIN to TIP_MAX dollars.
+export const TIP_MIN = 5;
+export const TIP_MAX = 2000;
+export const TIP_PRESETS = [50, 100, 150, 200];
+
+// "$100", "100.50", "1,000" -> dollars, or null if not a valid tip.
+export function parseTipAmount(value) {
+  const s = String(value ?? '').replace(/[$,\s]/g, '');
+  if (!/^\d{1,5}(\.\d{1,2})?$/.test(s)) return null;
+  const n = Math.round(Number(s) * 100) / 100;
+  return n >= TIP_MIN && n <= TIP_MAX ? n : null;
+}
+
 // The next payment the client can make online: the deposit first, then the
 // balance. null when nothing is owed (or the quote isn't signed).
 export function nextOnlinePayment(quote, payments, today = centralToday()) {
@@ -89,7 +103,7 @@ const toCents = (dollars) => Math.round(Number(dollars) * 100);
 
 // Checkout Session parameters for one payment.
 export function checkoutParams({ quote, snapshot, kind, amount, pageUrl }) {
-  const label = kind === 'deposit' ? '50% deposit' : 'Balance';
+  const label = kind === 'deposit' ? '50% deposit' : kind === 'tip' ? 'Tip for the crew' : 'Balance';
   const eventName = String(snapshot?.name || 'Casino party').slice(0, 120);
   const date = snapshot?.event?.date ? ` (${snapshot.event.date})` : '';
   const email = String(snapshot?.contact?.email || '').trim();
@@ -135,7 +149,7 @@ export function paymentRowFromSession(session, { failed = false, async: asyncEve
   if (!session || session.object !== 'checkout.session' || !SESSION_ID_REGEX.test(String(session.id || ''))) return null;
   const quoteId = session.metadata?.quote_id;
   const kind = session.metadata?.kind;
-  if (!UUID_REGEX.test(String(quoteId || '')) || !['deposit', 'balance'].includes(kind)) return null;
+  if (!UUID_REGEX.test(String(quoteId || '')) || !['deposit', 'balance', 'tip'].includes(kind)) return null;
   if (session.status !== 'complete' && !failed) return null; // not finished at Stripe
   const amount = Math.round(Number(session.amount_total || 0)) / 100;
   if (!(amount > 0)) return null;

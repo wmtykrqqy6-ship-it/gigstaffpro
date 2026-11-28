@@ -19,6 +19,7 @@ export default function ClientTipsModal({ events, assignments, workers, initialE
   const [shares, setShares] = useState({});     // assignmentId -> string as typed
   const [noShowWorkerIds, setNoShowWorkerIds] = useState(new Set());
   const [saving, setSaving] = useState(false);
+  const [onlineTips, setOnlineTips] = useState([]); // [{ name, amount }] paid online for this date
 
   // Events that have someone on them, most recent first.
   const eventOptions = useMemo(() => {
@@ -52,6 +53,33 @@ export default function ClientTipsModal({ events, assignments, workers, initialE
       });
     return () => { cancelled = true; };
   }, [eventId]);
+
+  // Tips clients paid online on their quote page (docs/PAYMENTS.md step 4)
+  // for a booking on this event's date, so the total can be filled in.
+  // Quotes aren't linked to events yet, so this matches by date.
+  useEffect(() => {
+    setOnlineTips([]);
+    const day = String(event?.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+    let cancelled = false;
+    supabase
+      .from('quote_payments')
+      .select('amount, quote_id, quotes!inner(name, event_date)')
+      .eq('kind', 'tip')
+      .eq('status', 'paid')
+      .eq('quotes.event_date', day)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const byQuote = new Map();
+        for (const r of data || []) {
+          const cur = byQuote.get(r.quote_id) || { name: r.quotes?.name || 'Booking', amount: 0 };
+          cur.amount = sumDollars([cur.amount, Number(r.amount) || 0]);
+          byQuote.set(r.quote_id, cur);
+        }
+        setOnlineTips([...byQuote.values()]);
+      });
+    return () => { cancelled = true; };
+  }, [event?.date]);
 
   // When the event changes, start from what's saved: the client total and
   // each person's current tip. With nothing saved yet, everyone (except
@@ -192,6 +220,18 @@ export default function ClientTipsModal({ events, assignments, workers, initialE
               </div>
             </label>
           </div>
+
+          {event && onlineTips.length > 0 && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-900 space-y-1">
+              <p className="font-medium">Paid online by the client on this date:</p>
+              {onlineTips.map((t, i) => (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span>{t.name}: ${t.amount.toFixed(2)}</span>
+                  <button type="button" onClick={() => onTotalChange(t.amount.toFixed(2))} className="text-red-900 hover:underline font-medium">Use this amount</button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {event && crew.length === 0 && (
             <p className="text-sm text-gray-500">Nobody is on this event yet.</p>

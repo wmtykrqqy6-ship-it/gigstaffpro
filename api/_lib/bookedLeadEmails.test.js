@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { dueBookedEmails, dueCustomEmails, buildBookedEmail, sendBookedLeadEmails } from './bookedLeadEmails.js';
+import { dueBookedEmails, dueCustomEmails, buildBookedEmail, sendBookedLeadEmails, clientTipUrls } from './bookedLeadEmails.js';
 import { normalizeClientEmailSettings } from './clientEmailSettings.js';
 
 const ALL_ON = normalizeClientEmailSettings({
@@ -137,5 +137,27 @@ describe('custom emails', () => {
     const e = buildBookedEmail('custom:abcd1234', lead(), custom(), { today: '2026-12-31' });
     expect(e.subject).toBe('Hi Pat');
     expect(e.text).toContain('Party on Saturday, January 30!');
+  });
+});
+
+describe('client tip pages', () => {
+  const T1 = 'abcdefghijklmnopqrstuvwxyz012345';
+  it('links each client with a signed quote to their own tip page', async () => {
+    const call = async () => [{ lead_id: 'L1', public_token: T1 }, { lead_id: 'L1', public_token: 'older' }, { lead_id: 'L2', public_token: 'bad' }];
+    const urls = await clientTipUrls({ call, leadIds: ['L1', 'L2'], linkBase: 'https://quotes.vegasonwheels.com' });
+    expect(urls.get('L1')).toBe(`https://quotes.vegasonwheels.com/q/${T1}#tip`);
+    expect(urls.has('L2')).toBe(false);
+  });
+
+  it('falls back quietly when the lookup fails', async () => {
+    const urls = await clientTipUrls({ call: async () => { throw new Error('x'); }, leadIds: ['L1'], linkBase: 'https://x.com' });
+    expect(urls.size).toBe(0);
+  });
+
+  it('the review email uses the tip page link', () => {
+    const settings = { ...ALL_ON, tip_url: `https://quotes.vegasonwheels.com/q/${T1}#tip` };
+    const e = buildBookedEmail('review', lead(), settings, { today: '2027-02-01' });
+    expect(e.html).toContain(`/q/${T1}#tip`);
+    expect(e.html).toContain('Write a review');
   });
 });
