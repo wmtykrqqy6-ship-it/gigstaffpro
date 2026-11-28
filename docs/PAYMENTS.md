@@ -56,7 +56,9 @@ e-signing are in `docs/QUOTES.md`.
 ## Pay online with Stripe (step 2)
 
 - `api/_lib/stripePay.js`. Needs `STRIPE_SECRET_KEY` in Vercel (Secret,
-  Production): `sk_test_...` while testing, `sk_live_...` when live. Without
+  Production): `sk_test_...` while testing, `sk_live_...` when live. A
+  restricted key (`rk_...`) with Checkout Sessions: Write and Events: Read
+  also works and is safer. Without
   it the page shows no Pay button (and says "we'll be in touch about your
   deposit", as before). Test mode adds "no real money is charged".
 - On a signed quote (`/q/<code>`), a **Payments** box shows paid / owed and
