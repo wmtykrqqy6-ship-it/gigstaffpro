@@ -66,7 +66,9 @@ e-signing are in `docs/QUOTES.md`.
   "Pay $X balance". The amount is worked out on the server from
   `quote_payments` (server copy `api/_lib/quotePayments.js`); the browser
   sends only `action=pay`. The server creates a Stripe Checkout Session
-  (card or US bank account), and redirects to Stripe's page. No button while
+  and redirects to Stripe's page. The payment methods offered are the ones
+  turned on in Stripe (Settings > Payment methods): turn on Cards and ACH
+  Direct Debit (US bank account). No button while
   a bank payment is still clearing.
 - Recording, once per session (`provider_ref` = the Checkout Session id):
   - back from Stripe (`/q/<code>?paid=<session>`): the server fetches the

@@ -77,7 +77,7 @@ describe('stripe helpers', () => {
     expect(p.metadata).toEqual({ quote_id: QID, kind: 'deposit' });
     expect(p.customer_email).toBe('pat@example.com');
     expect(p.success_url).toBe(`https://quotes.vegasonwheels.com/q/${TOKEN}?paid={CHECKOUT_SESSION_ID}`);
-    expect(p.payment_method_types).toEqual(['card', 'us_bank_account']);
+    expect(p.payment_method_types).toBeUndefined();
   });
 
   it('turns a session into a payment row', () => {
