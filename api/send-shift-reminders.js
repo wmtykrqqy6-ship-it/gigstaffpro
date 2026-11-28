@@ -11,6 +11,7 @@ import { renderEmailShell, htmlToPlainText } from './_lib/emailShell.js';
 import { sendRouteReminders } from './_lib/routeReminders.js';
 import { sendLeadFollowups } from './_lib/leadFollowups.js';
 import { sendBookedLeadEmails } from './_lib/bookedLeadEmails.js';
+import { sendPaymentReminders } from './_lib/paymentReminders.js';
 import { businessNow } from './_lib/routeActions.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushFromCron, shiftReminderNotification } from './_lib/push.js';
@@ -189,6 +190,16 @@ async function withRouteReminders(body) {
       : { message: 'Client emails only go out 9 AM to 6 PM' };
   } catch (err) {
     body.clientEmails = { error: err.message };
+  }
+  // Balance reminders to clients and late-payment notes to the team
+  // (api/_lib/paymentReminders.js), same hours.
+  try {
+    const bn = businessNow();
+    body.paymentEmails = bn.hour >= 9 && bn.hour < 18
+      ? await sendPaymentReminders({ today: bn.date })
+      : { message: 'Payment emails only go out 9 AM to 6 PM' };
+  } catch (err) {
+    body.paymentEmails = { error: err.message };
   }
   return body;
 }

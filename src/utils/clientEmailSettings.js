@@ -14,11 +14,13 @@ export const CLIENT_EMAIL_DEFAULTS = {
   upsell: { on: false, days: 21 },    // days before the event
   prep: { on: false, days: 7 },       // days before the event
   review: { on: false, days: null },  // days after the event; null = the Monday after
+  balance: { on: false, days: 3 },    // days before the balance is due (signed quotes, deposit paid)
+  late_alert: { on: false },          // note to the team when a deposit or balance is late
   google_review_url: '',
   tip_url: ''
 };
 
-const LIMITS = { followup: [1, 60], upsell: [1, 120], prep: [1, 60], review: [1, 30] };
+const LIMITS = { followup: [1, 60], upsell: [1, 120], prep: [1, 60], review: [1, 30], balance: [0, 30] };
 
 const clampDays = (v, [lo, hi], fallback) => {
   if (v === null || v === undefined || v === '') return fallback;
@@ -40,7 +42,7 @@ export const MAX_SUBJECT = 150;
 export const MAX_MESSAGE = 4000;
 export const MAX_NAME = 60;
 export const MAX_CUSTOM_EMAILS = 10;
-export const BUILT_IN_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review'];
+export const BUILT_IN_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review', 'balance'];
 
 // When a custom email goes out, and to whom.
 export const CUSTOM_TRIGGERS = {
@@ -59,7 +61,10 @@ export const TEMPLATE_VARS = [
   { key: 'days_away', about: 'e.g. 3 weeks (emails before the event)' },
   { key: 'phone', about: 'our phone number' },
   { key: 'review_link', about: 'Google review link (line left out if not set)' },
-  { key: 'tip_link', about: 'tip link (line left out if not set)' }
+  { key: 'tip_link', about: 'tip link (line left out if not set)' },
+  { key: 'amount_owed', about: 'balance still owed (balance reminder)' },
+  { key: 'balance_due_date', about: 'when the balance is due (balance reminder)' },
+  { key: 'pay_link', about: 'link to pay online (balance reminder; line left out if online payments are off)' }
 ];
 
 // The built-in wording, written as templates: what the editor starts from.
@@ -84,6 +89,10 @@ export const DEFAULT_WORDING = {
   review: {
     subject: 'Thank you for having us!',
     message: "Hi {first_name},\n\nThank you for having Vegas on Wheels at your event! We hope you and your guests had a great time.\n\nIf you have a minute:\n- **Leave us a Google review:** it helps other hosts find us. {review_link}\n- **Tip your crew:** if our dealers and setup team made your night, you can leave them a tip. Tips are shared with the whole crew. {tip_link}\n\nPlanning another event? Reply anytime. We'd love to deal you in again.\n\nThanks,\nVegas on Wheels"
+  },
+  balance: {
+    subject: 'Your balance for {event_date} is due {balance_due_date}',
+    message: "Hi {first_name},\n\nWe're looking forward to your casino party on {event_date}! Your remaining balance of **{amount_owed}** is due on {balance_due_date}, one week before the event.\n\n{pay_link}\n\nYou can also pay by check or call us at {phone}. If you've already sent it, thank you, and please ignore this email.\n\nThanks,\nVegas on Wheels"
   }
 };
 
@@ -144,6 +153,8 @@ export function normalizeClientEmailSettings(value) {
     upsell: withWording({ on: on('upsell'), days: clampDays(v.upsell?.days, LIMITS.upsell, d.upsell.days) }, v.upsell),
     prep: withWording({ on: on('prep'), days: clampDays(v.prep?.days, LIMITS.prep, d.prep.days) }, v.prep),
     review: withWording({ on: on('review'), days: clampDays(v.review?.days, LIMITS.review, null) }, v.review),
+    balance: withWording({ on: on('balance'), days: clampDays(v.balance?.days, LIMITS.balance, d.balance.days) }, v.balance),
+    late_alert: { on: on('late_alert') },
     google_review_url: cleanUrl(v.google_review_url),
     tip_url: cleanUrl(v.tip_url),
     custom: normalizeCustom(v.custom)
@@ -163,7 +174,8 @@ export function awayText(days) {
 }
 
 // The {blank} values for one lead. Plain text; links are full URLs.
-export function templateValues(lead, { settings, eventDateText, daysAway, phone }) {
+// `payment` (balance reminder only): { owed, dueDateText, payUrl }.
+export function templateValues(lead, { settings, eventDateText, daysAway, phone, payment = null }) {
   const first = String(lead?.name || '').trim().split(/\s+/)[0] || 'there';
   return {
     first_name: first,
@@ -174,11 +186,14 @@ export function templateValues(lead, { settings, eventDateText, daysAway, phone 
     days_away: daysAway == null ? 'just a few weeks' : awayText(daysAway),
     phone: phone || '',
     review_link: settings?.google_review_url || '',
-    tip_link: settings?.tip_url || ''
+    tip_link: settings?.tip_url || '',
+    amount_owed: payment?.owed || 'your balance',
+    balance_due_date: payment?.dueDateText || 'one week before the event',
+    pay_link: payment?.payUrl || ''
   };
 }
 
-const LINK_TEXT = { review_link: 'Write a review', tip_link: 'Leave a tip' };
+const LINK_TEXT = { review_link: 'Write a review', tip_link: 'Leave a tip', pay_link: 'Pay your balance online' };
 const LINK_STYLE = 'color:#7c0a02';
 
 // A subject with its blanks filled in (one line).

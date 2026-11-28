@@ -19,7 +19,9 @@ const EMAILS = [
   { key: 'prep', title: 'Get-ready checklist', who: 'Booked clients', unit: 'days before the event',
     about: 'Balance reminder, final guest count, space, access and parking, day-of contact, prizes.' },
   { key: 'review', title: 'Review and tip request', who: 'Booked clients', unit: 'days after the event',
-    about: 'Leave the days empty to send it the Monday after the event.' }
+    about: 'Leave the days empty to send it the Monday after the event.' },
+  { key: 'balance', title: 'Balance reminder', who: 'Booked clients with a signed quote', unit: 'days before the balance is due', min: 0,
+    about: 'The balance is due 7 days before the event. Goes only when the deposit is paid and a balance is still owed, with a link to pay online.' }
 ];
 
 const inputClass = 'px-2 py-1 border border-gray-300 rounded-md text-sm';
@@ -94,8 +96,8 @@ export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
     }
   };
 
-  const onCount = EMAILS.filter(e => settings[e.key].on).length + settings.custom.filter(c => c.on).length;
-  const total = EMAILS.length + settings.custom.length;
+  const onCount = EMAILS.filter(e => settings[e.key].on).length + (settings.late_alert.on ? 1 : 0) + settings.custom.filter(c => c.on).length;
+  const total = EMAILS.length + 1 + settings.custom.length;
 
   return (
     <div className="bg-white rounded-lg shadow text-sm">
@@ -118,7 +120,7 @@ export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
                   {e.unit && (
                     <label className="flex items-center space-x-2 mt-2 text-gray-700">
                       <span>Send</span>
-                      <input type="number" min="1" className={`${inputClass} w-20`}
+                      <input type="number" min={e.min ?? 1} className={`${inputClass} w-20`}
                         value={s.days ?? ''} placeholder={e.key === 'review' ? 'Mon' : ''}
                         onChange={ev => update(e.key, { days: ev.target.value === '' ? (e.key === 'review' ? null : CLIENT_EMAIL_DEFAULTS[e.key].days) : ev.target.value })} />
                       <span>{e.unit}</span>
@@ -131,7 +133,8 @@ export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
                     <EmailWordingEditor settings={settings}
                       subject={s.subject ?? DEFAULT_WORDING[e.key].subject}
                       message={s.message ?? DEFAULT_WORDING[e.key].message}
-                      daysAway={e.key === 'upsell' ? s.days : e.key === 'prep' ? s.days : null}
+                      daysAway={e.key === 'upsell' ? s.days : e.key === 'prep' ? s.days : e.key === 'balance' ? 7 + Number(s.days || 0) : null}
+                      payment={e.key === 'balance'}
                       onChange={patch => update(e.key, patch)}
                       onReset={() => update(e.key, { subject: undefined, message: undefined })} />
                   )}
@@ -143,6 +146,16 @@ export default function AutoEmailsPanel({ onChange, defaultOpen = false }) {
               </div>
             );
           })}
+          <div className="flex items-start justify-between gap-3 flex-wrap border-b pb-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-gray-900">Late payment note <span className="font-normal text-gray-500">· Your team</span></p>
+              <p className="text-xs text-gray-500 mt-0.5">Emails the quote-request address when a deposit is more than 3 days late or a balance is past due. Once per booking.</p>
+            </div>
+            <button onClick={() => update('late_alert', { on: !settings.late_alert.on })}
+              className={`px-3 py-1.5 rounded-full font-medium ${settings.late_alert.on ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              {settings.late_alert.on ? 'On' : 'Off'}
+            </button>
+          </div>
           <div className="pt-1">
             <p className="font-medium text-gray-900">Your own emails</p>
             <p className="text-xs text-gray-500">Add an email of your own and pick when it goes out. Up to {MAX_CUSTOM_EMAILS}.</p>

@@ -6,21 +6,26 @@ const inputClass = 'px-2 py-1 border border-gray-300 rounded-md text-sm';
 const SAMPLE_PHONE = '(262) 549-3559';
 
 // A made-up client for the preview, with the event `daysAway` days out.
-function sampleValues(settings, daysAway) {
+// `payment`: also fill in a sample balance (balance reminder).
+function sampleValues(settings, daysAway, payment = false) {
   const today = new Date().toISOString().slice(0, 10);
   const eventDate = addDays(today, daysAway > 0 ? daysAway : 30);
   const dt = new Date(`${eventDate}T12:00:00Z`);
+  const fmt = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const sample = payment
+    ? { owed: '$1,250.00', dueDateText: fmt(new Date(`${addDays(eventDate, -7)}T12:00:00Z`)), payUrl: 'https://quotes.vegasonwheels.com/q/sample' }
+    : null;
   return templateValues(
     { name: 'Pat Lee', event_date: eventDate, start_time: '7:00 PM', event_location: 'Elm Grove Community Center' },
-    { settings, eventDateText: dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }), daysAway: daysAway > 0 ? daysAway : null, phone: SAMPLE_PHONE }
+    { settings, eventDateText: dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }), daysAway: daysAway > 0 ? daysAway : null, phone: SAMPLE_PHONE, payment: sample }
   );
 }
 
 // Subject + message boxes with the list of {blanks} and a preview.
 // The message text is escaped by renderMessageHtml before it's shown.
-export default function EmailWordingEditor({ subject, message, onChange, settings, daysAway = null, onReset }) {
+export default function EmailWordingEditor({ subject, message, onChange, settings, daysAway = null, onReset, payment = false }) {
   const [preview, setPreview] = useState(false);
-  const values = sampleValues(settings, daysAway);
+  const values = sampleValues(settings, daysAway, payment);
   return (
     <div className="mt-2 space-y-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
       <label className="block text-gray-700 text-xs">Subject
