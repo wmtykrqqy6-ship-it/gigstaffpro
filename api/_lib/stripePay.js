@@ -17,8 +17,8 @@
 // A payment is recorded once per Checkout Session (quote_payments.provider_ref
 // is unique), however many of these paths see it.
 //
-// Needs STRIPE_SECRET_KEY in the Vercel environment (sk_test_... while
-// testing, sk_live_... when live). Without it, no Pay button is shown.
+// Needs STRIPE_SECRET_KEY in the Vercel environment (sk_test_... or a
+// restricted rk_test_... while testing, sk_live_/rk_live_ when live). Without it, no Pay button is shown.
 
 import { summarizePayments, centralToday } from './quotePayments.js';
 
@@ -28,8 +28,10 @@ const EVENT_ID_REGEX = /^evt_[A-Za-z0-9]{10,200}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_PAYMENT = 1; // dollars; Stripe's minimum is $0.50
 
-export const stripeEnabled = (env = process.env) => /^sk_(test|live)_/.test(String(env.STRIPE_SECRET_KEY || ''));
-export const isTestKey = (env = process.env) => String(env.STRIPE_SECRET_KEY || '').startsWith('sk_test_');
+// A secret key (sk_) or a restricted key (rk_) with Checkout Sessions: Write
+// and Events: Read.
+export const stripeEnabled = (env = process.env) => /^(sk|rk)_(test|live)_/.test(String(env.STRIPE_SECRET_KEY || ''));
+export const isTestKey = (env = process.env) => /^(sk|rk)_test_/.test(String(env.STRIPE_SECRET_KEY || ''));
 
 // Stripe takes form-encoded bodies with bracketed keys: a[b][0][c]=1.
 export function encodeForm(obj, prefix = '') {
