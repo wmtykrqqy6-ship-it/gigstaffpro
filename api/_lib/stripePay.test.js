@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { encodeForm, nextOnlinePayment, checkoutParams, paymentRowFromSession, recordSession, handleStripeWebhook, stripeEnabled } from './stripePay.js';
+import { encodeForm, nextOnlinePayment, checkoutParams, paymentRowFromSession, recordSession, handleStripeWebhook, stripeEnabled, parseTipAmount } from './stripePay.js';
 import { buildSnapshot, handleQuotePage } from './quotePage.js';
 
 const QID = '56761188-7520-42d8-8898-ff6fc54ce618';
@@ -87,7 +87,7 @@ describe('stripe helpers', () => {
     expect(paymentRowFromSession(session({ payment_status: 'unpaid' }), { failed: true, async: true })).toMatchObject({ status: 'failed' });
     expect(paymentRowFromSession(session({ status: 'open' }))).toBe(null);
     expect(paymentRowFromSession(session({ metadata: { quote_id: 'nope', kind: 'deposit' } }))).toBe(null);
-    expect(paymentRowFromSession(session({ metadata: { quote_id: QID, kind: 'tip' } }))).toBe(null);
+    expect(paymentRowFromSession(session({ metadata: { quote_id: QID, kind: 'extra' } }))).toBe(null);
     expect(paymentRowFromSession(session({ id: 'pi_123' }))).toBe(null);
   });
 });
@@ -194,5 +194,56 @@ describe('quote page payments', () => {
     await handleQuotePage(req('GET', { query: { paid: SID } }), res, { env, fetchImpl: f, now: NOW });
     expect(f.calls.some(c => c.url.includes('quote_payments?on_conflict'))).toBe(false);
     expect(res.html).not.toContain('went through');
+  });
+});
+
+describe('tips', () => {
+  const AFTER = new Date('2026-12-21T18:00:00Z'); // the day after the event
+  const paidUp = [{ kind: 'deposit', amount: 525, status: 'paid' }, { kind: 'balance', amount: 525, status: 'paid' }];
+
+  it('reads tip amounts', () => {
+    expect(parseTipAmount('100')).toBe(100);
+    expect(parseTipAmount('$1,250.50')).toBe(1250.5);
+    expect(parseTipAmount('4')).toBe(null);
+    expect(parseTipAmount('2500')).toBe(null);
+    expect(parseTipAmount('abc')).toBe(null);
+    expect(parseTipAmount('10.555')).toBe(null);
+  });
+
+  it('shows the tip box only from the event day on', async () => {
+    let res = fakeRes();
+    await handleQuotePage(req('GET'), res, { env, fetchImpl: fakeFetch({ payments: paidUp }), now: NOW });
+    expect(res.html).not.toContain('Tip your crew');
+    res = fakeRes();
+    await handleQuotePage(req('GET'), res, { env, fetchImpl: fakeFetch({ payments: paidUp }), now: AFTER });
+    expect(res.html).toContain('Tip your crew');
+    expect(res.html).toContain('id="tip"');
+    expect(res.html).toContain('value="100"');
+  });
+
+  it('tip redirects to Stripe for the chosen amount, and not before the event', async () => {
+    let f = fakeFetch({ payments: paidUp });
+    let res = fakeRes();
+    await handleQuotePage(req('POST', { body: { action: 'tip', amount: '150' } }), res, { env, fetchImpl: f, now: AFTER });
+    expect(res.code).toBe(303);
+    const create = f.calls.find(c => c.url === 'https://api.stripe.com/v1/checkout/sessions');
+    expect(create.body).toContain('unit_amount%5D=15000');
+    expect(create.body).toContain('metadata%5Bkind%5D=tip');
+    f = fakeFetch({ payments: paidUp });
+    res = fakeRes();
+    await handleQuotePage(req('POST', { body: { action: 'tip', amount: '150' } }), res, { env, fetchImpl: f, now: NOW });
+    expect(res.code).toBe(409);
+    res = fakeRes();
+    await handleQuotePage(req('POST', { body: { action: 'tip', amount: '3' } }), res, { env, fetchImpl: fakeFetch({ payments: paidUp }), now: AFTER });
+    expect(res.code).toBe(400);
+  });
+
+  it('records a tip when the client comes back', async () => {
+    const f = fakeFetch({ payments: paidUp, sessionObj: session({ amount_total: 10000, metadata: { quote_id: QID, kind: 'tip' } }) });
+    const res = fakeRes();
+    await handleQuotePage(req('GET', { query: { paid: SID } }), res, { env, fetchImpl: f, now: AFTER });
+    expect(res.html).toContain('Thank you for the tip');
+    const insert = f.calls.find(c => c.url.includes('quote_payments?on_conflict'));
+    expect(JSON.parse(insert.body)).toMatchObject({ kind: 'tip', amount: 100, status: 'paid' });
   });
 });

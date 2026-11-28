@@ -19,6 +19,8 @@ import { renderEmailShell, htmlToPlainText } from './emailShell.js';
 import { CLIENT_EMAILS_KEY, normalizeClientEmailSettings, addDays, emailDueDate, DEFAULT_WORDING, templateValues, fillSubject, renderMessageHtml } from './clientEmailSettings.js';
 import { firstName, fmtLeadDate, lastContactTime, BUSINESS_PHONE, DEFAULT_LEAD_EMAIL, CLIENT_FROM } from './leadFollowups.js';
 import { recordClientMessage } from './recordClientMessage.js';
+import { QUOTE_SETTINGS_KEY, parseQuoteSettings, quoteUrl, TOKEN_REGEX } from './quotePage.js';
+import { stripeEnabled } from './stripePay.js';
 
 export const KINDS = ['thankyou', 'upsell', 'prep', 'review'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -226,7 +228,7 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
     return opts.method === 'DELETE' ? null : r.json();
   };
 
-  const rows = await call(`settings?select=setting_key,setting_value&setting_key=in.(${CLIENT_EMAILS_KEY},lead_email)`);
+  const rows = await call(`settings?select=setting_key,setting_value&setting_key=in.(${CLIENT_EMAILS_KEY},lead_email,${QUOTE_SETTINGS_KEY})`);
   const byKey = Object.fromEntries((rows || []).map(s => [s.setting_key, s.setting_value]));
   const settings = normalizeClientEmailSettings(byKey[CLIENT_EMAILS_KEY]);
   const anyCustom = settings.custom.some(c => c.on);
@@ -244,6 +246,11 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
 
   const due = [...dueBookedEmails(leads, settings, { now, today, sent }), ...dueCustomEmails(leads, settings, { today, sent })];
   results.due = due.length;
+  // Each client's own tip page (their signed quote, docs/PAYMENTS.md step 4)
+  // replaces the shared tip link, so online tips are recorded on the booking.
+  const tipUrls = due.length && stripeEnabled(env)
+    ? await clientTipUrls({ call, leadIds: [...new Set(due.map(d => d.lead.id))], linkBase: parseQuoteSettings(byKey[QUOTE_SETTINGS_KEY]).link_base })
+    : new Map();
   for (const { lead, kind } of due) {
     try {
       // Claim first: the unique (lead_id, kind) row means one email, ever.
@@ -253,7 +260,8 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
         body: JSON.stringify([{ lead_id: lead.id, kind }])
       });
       if (!claimed.length) continue;
-      const { subject, html, text } = buildBookedEmail(kind, lead, settings, { today });
+      const tipUrl = tipUrls.get(lead.id);
+      const { subject, html, text } = buildBookedEmail(kind, lead, tipUrl ? { ...settings, tip_url: tipUrl } : settings, { today });
       const r = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
@@ -277,4 +285,19 @@ export async function sendBookedLeadEmails({ now = new Date(), today, env = proc
     }
   }
   return results;
+}
+
+// lead id -> that client's tip page (/q/<code>#tip) for leads with a signed
+// quote. Best effort: an empty map if the lookup fails.
+export async function clientTipUrls({ call, leadIds, linkBase }) {
+  const out = new Map();
+  if (!leadIds?.length) return out;
+  try {
+    const quotes = await call(`quotes?select=lead_id,public_token,accepted_at&status=eq.accepted&lead_id=in.(${leadIds.map(encodeURIComponent).join(',')})&order=accepted_at.desc`);
+    for (const q of quotes || []) {
+      if (!q.lead_id || out.has(q.lead_id) || !TOKEN_REGEX.test(String(q.public_token || ''))) continue;
+      out.set(q.lead_id, `${quoteUrl(linkBase, q.public_token)}#tip`);
+    }
+  } catch { /* fall back to the shared tip link */ }
+  return out;
 }

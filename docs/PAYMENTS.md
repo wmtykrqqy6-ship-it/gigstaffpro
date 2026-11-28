@@ -29,7 +29,7 @@ e-signing are in `docs/QUOTES.md`.
    client's quote page after signing. Done (see below).
 3. **Balance reminder and late-payment note**: done (see below; SQL
    `20261128130000_add_quote_emails_sent.sql`).
-4. Tip link in the Monday-after email, feeding the crew tip split.
+4. **Tip page**: done (see below). No SQL needed.
 5. QuickBooks sync of payments.
 
 ## Payment record (step 1)
@@ -110,3 +110,22 @@ e-signing are in `docs/QUOTES.md`.
   the same as the client's page. Each email goes once per quote
   (`quote_emails_sent`, unique per quote and kind, claimed before sending and
   given back if the send fails).
+
+## Tip your crew (step 4)
+
+- From the event day on, a signed quote's page (`/q/<code>`) shows a **Tip
+  your crew** box (`#tip`): buttons for $50, $100, $150, $200 and a box for
+  any amount from $5 to $2,000. It goes to Stripe Checkout like the other
+  payments and is recorded in `quote_payments` as kind `tip` (counted
+  separately; it never changes what's owed). Before the event day there is
+  no tip box (Dylan: tips are asked for only after the event). Needs the
+  Stripe key.
+- The Monday-after review email links each client with a signed quote to
+  their own tip page (`/q/<code>#tip`) instead of the shared "Online tip
+  link" in Settings > Email, which is still used for clients without one.
+  The Google review link is the one in Settings > Email.
+- Crew split: Payments > Client Tips shows "Paid online by the client on
+  this date" for bookings on the chosen event's date, with "Use this
+  amount" to fill in the total, which is then split as before
+  (`docs/PAY_RULES.md`). Quotes aren't linked to events yet, so the match is
+  by date.
