@@ -66,7 +66,9 @@ export async function stripeCall(env, fetchImpl, method, path, params, idempoten
   const r = await fetchImpl(`${STRIPE_API}${path}`, { method, headers, body });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const err = new Error(`stripe ${path.split('?')[0]}: HTTP ${r.status} ${data?.error?.code || ''}`.trim());
+    // Stripe's error type/param/message say what was wrong; none of them hold secrets.
+    const e = data?.error || {};
+    const err = new Error(`stripe ${path.split('?')[0]}: HTTP ${r.status} ${[e.type, e.code, e.param, e.message].filter(Boolean).join(' | ')}`.trim().slice(0, 500));
     err.status = r.status;
     throw err;
   }
@@ -93,7 +95,8 @@ export function checkoutParams({ quote, snapshot, kind, amount, pageUrl }) {
   const email = String(snapshot?.contact?.email || '').trim();
   return {
     mode: 'payment',
-    'payment_method_types': ['card', 'us_bank_account'],
+    // No payment_method_types: Stripe offers the methods turned on in the
+    // Dashboard (Settings > Payment methods), e.g. cards and US bank account.
     line_items: [{
       quantity: 1,
       price_data: {
