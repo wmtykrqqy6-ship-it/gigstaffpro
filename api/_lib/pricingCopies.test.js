@@ -8,7 +8,7 @@ const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)),
 const body = (text) => text.split('\n').slice(2).join('\n');
 
 describe('pricing copies', () => {
-  for (const name of ['priceList', 'quotePricing', 'quoteTerms']) {
+  for (const name of ['priceList', 'quotePricing', 'quoteTerms', 'quotePayments']) {
     it(`${name}.js matches src/utils`, () => {
       expect(body(read(`./${name}.js`))).toBe(read(`../../src/utils/${name}.js`));
     });

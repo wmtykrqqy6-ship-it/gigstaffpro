@@ -8,12 +8,12 @@ e-signing are in `docs/QUOTES.md`.
 
 - Start now, in the payment provider's **test mode**; go live once Dylan
   has connected the real account.
-- Provider: Square (Dylan already has an account) or Stripe (no account
-  yet). Fees compared 2026-11-27: both ~2.9% + 30¢ per online card payment
+- Provider: **Stripe** (Dylan opened an account 2026-11-27). Considered
+  Square (he has one) too. Fees compared 2026-11-27: both ~2.9% + 30¢ per online card payment
   (Square's "Online API" rate; its own invoices cost 3.3% on the free plan);
   bank (ACH) payments 0.8% capped at $5 (Stripe) or 1% capped at $5 (Square
   payment links). Goodshuffle today: Stripe's 2.9% + 30¢ plus a 0.25%
-  transfer fee on cards, and ACH 1% capped at $60. Decision pending.
+  transfer fee on cards, and ACH 1% capped at $60.
 - Card details never touch the app: clients pay on the provider's own
   hosted page. API keys live only in Vercel environment variables, set by
   Dylan.
@@ -22,13 +22,11 @@ e-signing are in `docs/QUOTES.md`.
 
 ## Build order
 
-1. **Payment record on each booking** (this step): what's been paid and
+1. **Payment record on each booking**: what's been paid and
    what's owed, recorded by hand for checks, cash and phone payments. Done
-   (PR, SQL `20261128120000_add_quote_payments.sql`).
-2. Pay online: a "Pay deposit" button on the client's quote page after
-   signing, and "Pay balance" links, through the provider's hosted checkout.
-   A webhook records each payment here automatically (`provider_ref` keeps
-   it from being recorded twice).
+   (PR #36, SQL `20261128120000_add_quote_payments.sql`).
+2. **Pay online with Stripe**: "Pay deposit" / "Pay balance" on the
+   client's quote page after signing. Done (see below).
 3. Balance reminder email 7 days before the event (and a note to the team
    when a deposit or balance is late).
 4. Tip link in the Monday-after email, feeding the crew tip split.
@@ -54,3 +52,35 @@ e-signing are in `docs/QUOTES.md`.
   reduce what's owed; pending and failed payments don't count. The deposit
   is late 3 days after signing; the balance is late after its due date
   (7 days before the event).
+
+## Pay online with Stripe (step 2)
+
+- `api/_lib/stripePay.js`. Needs `STRIPE_SECRET_KEY` in Vercel (Secret,
+  Production): `sk_test_...` while testing, `sk_live_...` when live. Without
+  it the page shows no Pay button (and says "we'll be in touch about your
+  deposit", as before). Test mode adds "no real money is charged".
+- On a signed quote (`/q/<code>`), a **Payments** box shows paid / owed and
+  one button: "Pay $X deposit to book" until the deposit is paid, then
+  "Pay $X balance". The amount is worked out on the server from
+  `quote_payments` (server copy `api/_lib/quotePayments.js`); the browser
+  sends only `action=pay`. The server creates a Stripe Checkout Session
+  (card or US bank account), and redirects to Stripe's page. No button while
+  a bank payment is still clearing.
+- Recording, once per session (`provider_ref` = the Checkout Session id):
+  - back from Stripe (`/q/<code>?paid=<session>`): the server fetches the
+    session from Stripe, checks it belongs to this quote, records it;
+  - webhook `https://www.gigstaffpro.com/api/stripe-webhook` (rewritten to
+    `api/send-email.js?route=stripe-webhook`; the Vercel plan is at its
+    function limit). Only the event id in the body is used: the event is
+    fetched back from Stripe with the secret key, so no signing secret is
+    needed and a forged call can't record anything. Events used:
+    `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+    `checkout.session.async_payment_failed`.
+  - Cards are recorded paid right away; bank payments are "pending" until
+    Stripe says they cleared (or "failed"). A paid payment is never changed
+    back.
+- Webhook setup (Dylan, in Stripe > Developers > Webhooks, test mode first):
+  add endpoint `https://www.gigstaffpro.com/api/stripe-webhook` with the
+  three events above. Repeat in live mode when going live.
+- Stripe emails the client a receipt (turn on Settings > Customer emails >
+  Successful payments in Stripe).

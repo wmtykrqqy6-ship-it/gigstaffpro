@@ -10,6 +10,7 @@ import { handleAdminPush } from './_lib/push.js';
 import { handleQuoteRequest } from './_lib/quoteRequest.js';
 import { handleInboundEmail, handleClientReply } from './_lib/clientMessages.js';
 import { handleQuotePage, handleQuoteSend } from './_lib/quotePage.js';
+import { handleStripeWebhook } from './_lib/stripePay.js';
 
 export const config = {
   api: {
@@ -27,6 +28,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_RECIPIENT_LENGTH = 254;
 const MAX_SUBJECT_LENGTH = 300;
 const MAX_HTML_LENGTH = 200000;
+
+// Minimal Supabase REST caller for the Stripe webhook (service role).
+function supabaseRest(url, key) {
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  return async (path, opts = {}) => {
+    const r = await fetch(`${url}/rest/v1/${path}`, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
+    if (!r.ok) { const err = new Error(`${path.split('?')[0]}: HTTP ${r.status}`); err.status = r.status; throw err; }
+    if (r.status === 204 || r.status === 201) return null;
+    return r.json().catch(() => null);
+  };
+}
 
 export default async function handler(req, res) {
   // Public website quote form (/api/quote-request, rewritten here in
@@ -52,6 +64,16 @@ export default async function handler(req, res) {
   // the copy frozen when the quote was sent. See api/_lib/quotePage.js.
   if (req.query?.route === 'quote') {
     return handleQuotePage(req, res);
+  }
+
+  // Stripe's webhook for online payments (/api/stripe-webhook, rewritten
+  // here). Not admin-checked: only the event id is read, and the event is
+  // fetched back from Stripe with our key. See api/_lib/stripePay.js.
+  if (req.query?.route === 'stripe-webhook') {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return res.status(500).json({ ok: false });
+    return handleStripeWebhook(req, res, { call: supabaseRest(url, key) });
   }
 
   if (req.method !== 'POST') {
