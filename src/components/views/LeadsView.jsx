@@ -13,7 +13,7 @@ import EmailHistory from '../messages/EmailHistory';
 import QuoteBuilder from '../quotes/QuoteBuilder';
 import { summarizePayments, paymentStatusLabel } from '../../utils/quotePayments';
 
-const AUTO_EMAIL_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review'];
+const AUTO_EMAIL_KINDS = ['followup', 'thankyou', 'upsell', 'prep', 'review', 'balance', 'late_alert'];
 const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm';
 
 // Leads tab (CRM Phase 1). Quote requests from the website form land here

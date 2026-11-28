@@ -27,8 +27,8 @@ e-signing are in `docs/QUOTES.md`.
    (PR #36, SQL `20261128120000_add_quote_payments.sql`).
 2. **Pay online with Stripe**: "Pay deposit" / "Pay balance" on the
    client's quote page after signing. Done (see below).
-3. Balance reminder email 7 days before the event (and a note to the team
-   when a deposit or balance is late).
+3. **Balance reminder and late-payment note**: done (see below; SQL
+   `20261128130000_add_quote_emails_sent.sql`).
 4. Tip link in the Monday-after email, feeding the crew tip split.
 5. QuickBooks sync of payments.
 
@@ -88,3 +88,25 @@ e-signing are in `docs/QUOTES.md`.
   three events above. Repeat in live mode when going live.
 - Stripe emails the client a receipt (turn on Settings > Customer emails >
   Successful payments in Stripe).
+
+## Balance reminder and late-payment note (step 3)
+
+- `api/_lib/paymentReminders.js`, run by the hourly shift-reminder cron
+  between 9 AM and 6 PM. Both are **off** until turned on in Settings >
+  Email (settings row `client_emails`: `balance`, `late_alert`).
+- **Balance reminder** (to the client, from sales@): N days (default 3)
+  before the balance is due, so 10 days before the event by default, and
+  until the due date if a day is missed. Only for signed quotes whose deposit
+  is paid, with at least $1 still owed and nothing still clearing. Not sent
+  when the lead has "Don't send auto emails". Says the amount owed and the
+  due date, and links to the quote page to pay online (the link line is left
+  out when Stripe isn't set up). Wording can be changed in Settings > Email
+  (blanks `{amount_owed}`, `{balance_due_date}`, `{pay_link}`). Saved in
+  Messages as "Auto: balance reminder".
+- **Late payment note** (to the team, at the quote-request address): when a
+  deposit is more than 3 days late or the balance is past due, before the
+  event. Everything that became late in the same run goes in one email.
+- Amounts are the signed quote's (`sent_snapshot`) minus `quote_payments`,
+  the same as the client's page. Each email goes once per quote
+  (`quote_emails_sent`, unique per quote and kind, claimed before sending and
+  given back if the send fails).
